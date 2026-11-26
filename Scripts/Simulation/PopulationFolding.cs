@@ -240,6 +240,8 @@ public static class PopulationFolding
     /// <summary>One thread's scratch: the region's groups numbered by people, faith and the pair of them.</summary>
     private sealed class Scratch
     {
+        public const int RetainedCapacity = 256;
+
         public readonly Dictionary<string, int> Cultures = new(StringComparer.OrdinalIgnoreCase);
         public readonly Dictionary<string, int> Faiths = new(StringComparer.OrdinalIgnoreCase);
         public readonly Dictionary<long, int> Pairs = new();
@@ -255,23 +257,29 @@ public static class PopulationFolding
         public int[] CultureBest, FaithBest;
         public bool[] CultureKept;
 
-        /// <summary>Rent pooled scratch buffers for one FoldRegion pass so large modded regions never pin &gt;8 KB arrays.</summary>
-        public void Rent(int groups)
+        public Scratch(bool retainBuffers)
         {
-            var size = Math.Max(256, groups);
-            Size = ArrayPool<long>.Shared.Rent(size);
-            Pair = ArrayPool<int>.Shared.Rent(size);
-            Next = ArrayPool<int>.Shared.Rent(size);
-            PairCulture = ArrayPool<int>.Shared.Rent(size);
-            PairFaith = ArrayPool<int>.Shared.Rent(size);
-            PairFirst = ArrayPool<int>.Shared.Rent(size);
-            PairLast = ArrayPool<int>.Shared.Rent(size);
-            PairBest = ArrayPool<int>.Shared.Rent(size);
-            PairTotal = ArrayPool<long>.Shared.Rent(size);
-            CultureTotal = ArrayPool<long>.Shared.Rent(size);
-            CultureBest = ArrayPool<int>.Shared.Rent(size);
-            FaithBest = ArrayPool<int>.Shared.Rent(size);
-            CultureKept = ArrayPool<bool>.Shared.Rent(size);
+            if (retainBuffers) Allocate(RetainedCapacity, pooled: false);
+        }
+
+        public void Rent(int groups) => Allocate(groups, pooled: true);
+
+        private void Allocate(int size, bool pooled)
+        {
+            T[] Buffer<T>() => pooled ? ArrayPool<T>.Shared.Rent(size) : new T[size];
+            Size = Buffer<long>();
+            Pair = Buffer<int>();
+            Next = Buffer<int>();
+            PairCulture = Buffer<int>();
+            PairFaith = Buffer<int>();
+            PairFirst = Buffer<int>();
+            PairLast = Buffer<int>();
+            PairBest = Buffer<int>();
+            PairTotal = Buffer<long>();
+            CultureTotal = Buffer<long>();
+            CultureBest = Buffer<int>();
+            FaithBest = Buffer<int>();
+            CultureKept = Buffer<bool>();
         }
 
         public void Return()
@@ -293,8 +301,9 @@ public static class PopulationFolding
         }
     }
 
-    // One per thread: regions are worked side by side (DemographicCycle.Stages).
+    // Keep ordinary buffers on the worker. Large regions rent their arrays for one pass.
     [ThreadStatic] private static Scratch _scratch;
+    [ThreadStatic] private static Scratch _largeScratch;
 
     /// <summary>
     /// Every region now, in the campaign's order, and every kind of sliver whatever week it is:
@@ -354,8 +363,11 @@ public static class PopulationFolding
         var peopleLimit = peoplesToo ? Math.Min(PeopleCap(defines), (long)(defines.FoldPeopleSliverShare * (double)population)) : 0;
         if (smallest > tradeLimit && smallest > peopleLimit) return false;
 
-        var s = _scratch ??= new Scratch();
-        s.Rent(count);
+        var pooled = count > Scratch.RetainedCapacity;
+        var s = pooled
+            ? _largeScratch ??= new Scratch(retainBuffers: false)
+            : _scratch ??= new Scratch(retainBuffers: true);
+        if (pooled) s.Rent(count);
         try
         {
             s.Cultures.Clear(); s.Faiths.Clear(); s.Pairs.Clear(); s.CultureNames.Clear();
@@ -547,7 +559,7 @@ public static class PopulationFolding
         }
         finally
         {
-            s.Return();
+            if (pooled) s.Return();
         }
     }
 

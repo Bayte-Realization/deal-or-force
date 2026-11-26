@@ -51,8 +51,19 @@ public static class DealNegotiations
 {
     public const int MaxActiveOffers = 256;
 
-    public static int Incoming(Campaign c, int nationId) => c?.DealOffers.Count(o =>
-        o.Pending && o.ToId == nationId && o.ExpiresDay > c.ElapsedDays) ?? 0;
+    public static int Incoming(Campaign c, int nationId)
+    {
+        if (c is null) return 0;
+        var offers = c.DealOffers;
+        var day = c.ElapsedDays;
+        var count = 0;
+        for (var i = 0; i < offers.Count; i++)
+        {
+            var o = offers[i];
+            if (o.Pending && o.ToId == nationId && o.ExpiresDay > day) count++;
+        }
+        return count;
+    }
 
     public static Ultimatum.Side Copy(Ultimatum.Side side) => new()
     {
@@ -83,19 +94,33 @@ public static class DealNegotiations
         Ultimatum.Deal terms, int parentId = 0)
     {
         if (!Ultimatum.ValidateNegotiatedDeal(c, from, to, terms, out var refusal)) return new(false, refusal);
-        var parent = parentId == 0 ? null : c.DealOffers.FirstOrDefault(o => o.Id == parentId);
-        if (parentId != 0 && (parent is null || !parent.Pending || parent.ToId != from.Id || parent.FromId != to.Id))
-            return new(false, Loc.Get("This offer is no longer available for a counterproposal."));
-        if (parent is not null && parent.ExpiresDay <= c.ElapsedDays)
-            return new(false, Loc.Get("The offer has expired."));
+        var offers = c.DealOffers;
+        DealOffer parent = null;
+        if (parentId != 0)
+        {
+            for (var i = 0; i < offers.Count; i++)
+                if (offers[i].Id == parentId) { parent = offers[i]; break; }
+            if (parent is null || !parent.Pending || parent.ToId != from.Id || parent.FromId != to.Id)
+                return new(false, Loc.Get("This offer is no longer available for a counterproposal."));
+            if (parent.ExpiresDay <= c.ElapsedDays)
+                return new(false, Loc.Get("The offer has expired."));
+        }
         var depth = parent is null ? 0 : parent.CounterDepth + 1;
         if (depth > Math.Clamp(c.Defines.DealCounterLimit, 0, 16))
             return new(false, Loc.Get("The negotiation has reached its counterproposal limit. Answer or withdraw it."));
-        if (c.DealOffers.Any(o => o.Pending && o.ExpiresDay > c.ElapsedDays && o.Id != parentId &&
-            ((o.FromId == from.Id && o.ToId == to.Id) || (o.FromId == to.Id && o.ToId == from.Id))))
-            return new(false, Loc.Get("An offer between these countries already awaits a reply."));
+        var day = c.ElapsedDays;
+        var pendingTotal = 0;
+        for (var i = 0; i < offers.Count; i++)
+        {
+            var o = offers[i];
+            if (!o.Pending) continue;
+            pendingTotal++;
+            if (o.ExpiresDay > day && o.Id != parentId &&
+                ((o.FromId == from.Id && o.ToId == to.Id) || (o.FromId == to.Id && o.ToId == from.Id)))
+                return new(false, Loc.Get("An offer between these countries already awaits a reply."));
+        }
         if (to.IsHuman && (Incoming(c, to.Id) - (parent?.ToId == to.Id ? 1 : 0) >= Math.Clamp(c.Defines.DealInboxLimit, 1, 32) ||
-            c.DealOffers.Count(o => o.Pending) - (parent is null ? 0 : 1) >= MaxActiveOffers))
+            pendingTotal - (parent is null ? 0 : 1) >= MaxActiveOffers))
             return new(false, Loc.Get("Their diplomatic inbox is full. Wait for a reply."));
         if (c.NextDealOfferId <= 0 || c.NextDealOfferId == int.MaxValue)
             return new(false, Loc.Get("No more offers can be made in this campaign."));

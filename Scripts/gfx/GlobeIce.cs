@@ -24,6 +24,10 @@ public sealed partial class GlobePresentation
     private ShaderMaterial _iceMaterial, _iceFlatMaterial;
     private readonly System.Collections.Generic.List<MeshInstance3D> _iceSheets = new();
     private float _iceSpread = -1f;
+    private ShaderMaterial _cachedIceMat;
+    private float _cachedIceSpreadParam = float.NaN;
+    private bool? _cachedIceShellVisible;
+    private bool? _cachedIceSheetsVisible;
 
     /// <summary>Start the ice from a place on the map, the front running out from it over a few seconds.</summary>
     public void BeginIce(float latitude, float longitude)
@@ -65,8 +69,15 @@ public sealed partial class GlobePresentation
         var frozen = curse == Simulation.WorldCurses.Snowgrave && Simulation.WorldLayers.On("ice");
         if (!frozen)
         {
-            if (_iceShell is not null) { _iceShell.Visible = false; foreach (var sheet in _iceSheets) sheet.Visible = false; }
+            if (_iceShell is not null && (_cachedIceShellVisible != false || _cachedIceSheetsVisible != false))
+            {
+                _cachedIceShellVisible = false;
+                _cachedIceSheetsVisible = false;
+                _iceShell.Visible = false;
+                foreach (var sheet in _iceSheets) sheet.Visible = false;
+            }
             _iceSpread = -1f;
+            _cachedIceSpreadParam = float.NaN;
             return;
         }
         EnsureIce();
@@ -75,11 +86,26 @@ public sealed partial class GlobePresentation
         if (_iceSpread < 0f) _iceSpread = 1f;
         _iceSpread = Mathf.Min(1f, _iceSpread + (float)delta / 7f);
         var spread = 1f - Mathf.Pow(1f - _iceSpread, 2.2f);
-        _iceMaterial.SetShaderParameter("spread", spread);
-        _iceFlatMaterial.SetShaderParameter("spread", spread);
-        _iceShell.Visible = !_flatMap;
-        foreach (var sheet in _iceSheets)
-            if (IsInstanceValid(sheet)) sheet.Visible = _flatMap;
+        if (!ReferenceEquals(_cachedIceMat, _iceMaterial) || spread != _cachedIceSpreadParam)
+        {
+            _cachedIceMat = _iceMaterial;
+            _cachedIceSpreadParam = spread;
+            _iceMaterial.SetShaderParameter("spread", spread);
+            _iceFlatMaterial.SetShaderParameter("spread", spread);
+        }
+        var wantShell = !_flatMap;
+        if (_cachedIceShellVisible != wantShell)
+        {
+            _cachedIceShellVisible = wantShell;
+            _iceShell.Visible = wantShell;
+        }
+        var wantSheets = _flatMap;
+        if (_cachedIceSheetsVisible != wantSheets)
+        {
+            _cachedIceSheetsVisible = wantSheets;
+            foreach (var sheet in _iceSheets)
+                if (IsInstanceValid(sheet)) sheet.Visible = wantSheets;
+        }
     }
 
     private const string IceShader = @"

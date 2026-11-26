@@ -9,16 +9,17 @@ $displayVersion = $version + $(if ($suffixMatch.Success) { $suffixMatch.Groups[1
 $expectedDisplay = [regex]::Escape($displayVersion)
 $checks = @{
     'Tools/FormableTests/VersionLabelTests.cs' = 'string\.Equals\(version, "' + $expected + '"'
-    "docs/CHANGELOG_${version}_EN.md" = '(?m)^# Deal or Force — EntertAlpha ' + $expectedDisplay + '\s*$'
-    "docs/CHANGELOG_${version}_RU.md" = '(?m)^# Deal or Force — EntertAlpha ' + $expectedDisplay + '\s*$'
+    "docs/CHANGELOG_${version}_EN.md" = '(?m)^# Deal or Force — PortAlpha ' + $expectedDisplay + '\s*$'
+    "docs/CHANGELOG_${version}_RU.md" = '(?m)^# Deal or Force — PortAlpha ' + $expectedDisplay + '\s*$'
     'Scripts/Simulation/GameBuildInfo.cs' = 'public const string Version = "' + $expected + '";'
     'Scripts/Simulation/SaveSystem.cs' = 'public const string GameVersion = GameBuildInfo\.Version;'
     'project.godot' = 'config/version="' + $expected + '"'
     'export_presets.cfg' = 'application/file_version="' + $expected + '"'
-    'README.md' = 'Version \*\*' + $expectedDisplay + '\*\*'
-    'README.ru.md' = 'Версия \*\*' + $expectedDisplay + '\*\*'
-    'docs/BUILDING.md' = 'Current game release: \*\*EntertAlpha ' + $expectedDisplay + '\*\*'
-    'docs/BUILDING_RU.md' = 'Актуальный выпуск игры: \*\*EntertAlpha ' + $expectedDisplay + '\*\*'
+    'README.md' = 'Version \*\*PortAlpha ' + $expectedDisplay + '\*\*'
+    'README.ru.md' = 'Версия \*\*PortAlpha ' + $expectedDisplay + '\*\*'
+    'docs/BUILDING.md' = 'Current game release: \*\*PortAlpha ' + $expectedDisplay + '\*\*'
+    'docs/BUILDING_RU.md' = 'Актуальный выпуск игры: \*\*PortAlpha ' + $expectedDisplay + '\*\*'
+    'Tools/Launcher/MainWindow.xaml.cs' = 'NewsReleaseChip\.Text = GameBuildInfo\.VersionLabel;'
 }
 foreach ($file in $checks.Keys | Sort-Object) {
     if ([IO.File]::ReadAllText((Join-Path $ProjectRoot $file)) -notmatch $checks[$file]) {

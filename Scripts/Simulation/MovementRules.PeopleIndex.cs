@@ -145,12 +145,18 @@ public static partial class MovementRules
     {
         count = ids.Length;
         if (count == 0) return existing ?? Array.Empty<int>();
-        var arr = existing is not null && existing.Length >= count ? existing : new int[Math.Max(8, count)];
+        var arr = existing is not null && existing.Length >= count ? existing : new int[Math.Max(16, count + (count >> 1))];
         ids.CopyTo(arr);
         return arr;
     }
 
     private const int PeopleIndexChunkSize = 128;
+
+    /// <summary>Regions one bounded stage of an index build or patch reads before it asks the frame budget.</summary>
+    private const int PeopleIndexStageStates = 128;
+
+    /// <summary>Cultures or faiths one bounded stage of a patch merges before it asks the frame budget.</summary>
+    private const int PeopleIndexMergeBatch = 128;
 
     private sealed class PeopleWorkerScratch
     {
@@ -216,8 +222,10 @@ public static partial class MovementRules
             var slot = slots[idx - start];
             if (slot.NeedsMainThread)
             {
-                BuildPeopleIndexBatch(cache, orderedStates, idx, end);
-                break;
+                // Only this region goes the serial way (see AccumulatePatchSlotsChunk): the ones
+                // after it were read against names this region's canonicalisation cannot change.
+                BuildPeopleIndexBatch(cache, orderedStates, idx, idx + 1);
+                continue;
             }
             cache.StateDemographySigs[idx] = slot.Sig;
             var region = orderedStates[idx];
@@ -248,9 +256,9 @@ public static partial class MovementRules
         ScenarioState region, MovementPeopleCache.ParallelStateSlot slot)
     {
         slot.NeedsMainThread = false;
-        slot.Sig = StateDemographySignature(cache, region);
         if (region is null || region.PopulationGroups.Count == 0)
         {
+            slot.Sig = StateDemographySignature(cache, region);
             slot.CultCount = 0;
             slot.RelCultCount = 0;
             slot.NewRelCount = 0;
@@ -268,6 +276,9 @@ public static partial class MovementRules
         worker.NewRelIds.Clear();
         worker.RelCultList.Clear();
 
+        ulong sig = Mix(14695981039346656037UL, (ulong)(uint)region.MapIndex);
+        sig = Mix(sig, (ulong)region.Population);
+        uint cultureHash = 0, religionHash = 0;
         var rows = 0;
         string lastCulture = null, lastRawCulture = null, lastReligion = null;
         var lastCultId = -1;
@@ -276,6 +287,7 @@ public static partial class MovementRules
         var rawCultureIds = cache.RawCultureId;
         var rawReligionIds = cache.RawReligionId;
         var rawRanks = cache.RawRank;
+        var rawHash = cache.RawHash;
 
         for (var gi = 0; gi < groups.Length; gi++)
         {
@@ -292,6 +304,7 @@ public static partial class MovementRules
                 }
                 lastRawCulture = lastCulture ?? "";
                 lastCultRank = rawRanks[raw];
+                cultureHash = (uint)rawHash[raw];
             }
             if (lastRelId < 0 || !ReferenceEquals(group.Religion, lastReligion))
             {
@@ -302,7 +315,12 @@ public static partial class MovementRules
                     slot.NeedsMainThread = true;
                     return;
                 }
+                religionHash = (uint)rawHash[raw];
             }
+            sig = Mix(sig, (ulong)group.Size);
+            sig = Mix(sig, cultureHash);
+            sig = Mix(sig, religionHash);
+
             var cultId = lastCultId;
             var relId = lastRelId;
             if (worker.CultureStamp[cultId] != stamp)
@@ -343,6 +361,7 @@ public static partial class MovementRules
             worker.RowNext[row] = worker.CultureRowHead[cultId];
             worker.CultureRowHead[cultId] = row;
         }
+        slot.Sig = sig;
 
         if (rows > 1)
         {
@@ -515,6 +534,141 @@ public static partial class MovementRules
                 cache.StateHeaderPop[slot] = region?.Population ?? 0L;
                 cache.StateHeaderGroupCount[slot] = region?.PopulationGroups.Count ?? 0;
             }
+        }
+    }
+
+    /// <summary>
+    /// The dirty regions of an incremental patch, read side by side and applied in order.
+    ///
+    /// Reading a region's people (who lives there, under which names, in which order) is the
+    /// expensive half of a patch and touches nothing but that region and the index's own name
+    /// tables, which nobody writes while it runs - the same read <see cref="BuildPeopleIndexChunk"/>
+    /// already does side by side for a full build. The writes - the per-culture and per-faith
+    /// operations, the stored ids, the stamps - are then made on this thread, slot by slot in the
+    /// same ascending order <see cref="AccumulatePatchSlotsBatch"/> makes them, so the operation
+    /// lists, and therefore every bucket list after the merge, are the serial ones. A region whose
+    /// names the tables have not met yet (a new name, a string to be made canonical) is handed,
+    /// with every region after it, to the serial batch, exactly as the full build does.
+    /// </summary>
+    private static void AccumulatePatchSlotsChunk(Campaign campaign, MovementPeopleCache cache,
+        IReadOnlyList<ScenarioState> orderedStates, int patchTick, int start, int end)
+    {
+        var count = end - start;
+        if (count < 48 || !CanonicalPeopleOrder || !DeterministicParallel.Enabled(campaign))
+        {
+            AccumulatePatchSlotsBatch(cache, orderedStates, patchTick, start, end);
+            return;
+        }
+        if (cache.RawRanksStale) RankRawRows(cache);
+        if (cache.ParallelSlots.Length < count)
+        {
+            var oldLen = cache.ParallelSlots.Length;
+            Array.Resize(ref cache.ParallelSlots, Math.Max(PeopleIndexChunkSize, count));
+            for (var i = oldLen; i < cache.ParallelSlots.Length; i++)
+                cache.ParallelSlots[i] = new MovementPeopleCache.ParallelStateSlot();
+        }
+        var slots = cache.ParallelSlots;
+        var dirty = cache.DirtySlots;
+        var cultCap = cache.CanonicalCultures.Count;
+        var relCap = cache.ReligionBucketsById.Count;
+
+        DeterministicParallel.ForRange(campaign, start, end, (from, to) =>
+        {
+            var worker = _peopleWorkerScratch ??= new PeopleWorkerScratch();
+            if (worker.CultureStamp.Length < cultCap)
+            {
+                var nextCap = Math.Max(64, cultCap * 2);
+                worker.CultureStamp = new int[nextCap];
+                worker.CultureSum = new long[nextCap];
+                worker.CultureRowHead = new int[nextCap];
+            }
+            if (worker.NewRelStamp.Length < relCap)
+                worker.NewRelStamp = new int[Math.Max(64, relCap * 2)];
+
+            for (var di = from; di < to; di++)
+                AccumulateWorkerSlot(cache, worker, orderedStates[dirty[di]], slots[di - start]);
+        }, minItems: 32);
+
+        for (var di = start; di < end; di++)
+        {
+            var read = slots[di - start];
+            if (read.NeedsMainThread)
+            {
+                // This one region carries a name object the tables have not met (a group made
+                // today by a migration or an assimilation carries its own string): it is read
+                // here, by the serial path, which makes the name canonical and resolves it. The
+                // regions after it keep their side-by-side reading - a name they did not carry
+                // cannot change what they read, and one they did carry sent them here too.
+                AccumulatePatchSlotsBatch(cache, orderedStates, patchTick, di, di + 1);
+                continue;
+            }
+            ApplyPatchSlot(cache, orderedStates, patchTick, dirty[di], read);
+        }
+    }
+
+    /// <summary>
+    /// One region's patch from a slot read beside the others: the same operations, in the same
+    /// order, that <see cref="AccumulatePatchSlotsBatch"/> writes for it from the shared scratch.
+    /// </summary>
+    private static void ApplyPatchSlot(MovementPeopleCache cache, IReadOnlyList<ScenarioState> orderedStates,
+        int patchTick, int slot, MovementPeopleCache.ParallelStateSlot read)
+    {
+        var region = orderedStates[slot];
+        var stamp = ++cache.CultureStampTick;
+        if (stamp == 0)
+        {
+            Array.Clear(cache.CultureStamp);
+            Array.Clear(cache.NewRelStamp);
+            stamp = cache.CultureStampTick = 1;
+        }
+        var cultIds = read.CultIds;
+        var cultCount = read.CultCount;
+        for (var i = 0; i < cultCount; i++) cache.CultureStamp[cultIds[i]] = stamp;
+        var relIds = read.NewRelIds;
+        var relCount = read.NewRelCount;
+        for (var i = 0; i < relCount; i++) cache.NewRelStamp[relIds[i]] = stamp;
+        var mapIndex = region.MapIndex;
+
+        var oldCults = cache.StateCultIds[slot];
+        var oldCultCount = cache.StateCultCounts[slot];
+        if (oldCults is not null)
+        {
+            for (var oi = 0; oi < oldCultCount; oi++)
+            {
+                var oldCultId = oldCults[oi];
+                if (cache.CultureStamp[oldCultId] != stamp)
+                    AddPatchCultOp(cache, patchTick, oldCultId, mapIndex, region, 0L);
+            }
+        }
+        var sums = read.CultSums;
+        for (var ti = 0; ti < cultCount; ti++)
+            AddPatchCultOp(cache, patchTick, cultIds[ti], mapIndex, region, sums[ti]);
+
+        var relCults = read.RelCults;
+        for (var ri = 0; ri < read.RelCultCount; ri++)
+        {
+            var item = relCults[ri];
+            AddPatchRelOp(cache, patchTick, item.RelId, mapIndex, region, item.RawCulture, item.Size);
+        }
+        var oldRels = cache.StateRelIds[slot];
+        var oldRelCount = cache.StateRelCounts[slot];
+        if (oldRels is not null)
+        {
+            for (var oi = 0; oi < oldRelCount; oi++)
+            {
+                var oldRelId = oldRels[oi];
+                if (cache.NewRelStamp[oldRelId] != stamp)
+                    AddPatchRelOp(cache, patchTick, oldRelId, mapIndex, region, null, 0L);
+            }
+        }
+
+        cache.StateCultIds[slot] = StorePeopleIds(cache.StateCultIds[slot], cultIds.AsSpan(0, cultCount), out cache.StateCultCounts[slot]);
+        cache.StateRelIds[slot] = StorePeopleIds(cache.StateRelIds[slot], relIds.AsSpan(0, relCount), out cache.StateRelCounts[slot]);
+        cache.StateDemographySigs[slot] = read.Sig;
+        if (slot < cache.StateHeaderPop.Length)
+        {
+            cache.StateHeaderPop[slot] = region?.Population ?? 0L;
+            cache.StateHeaderGroupCount[slot] = region?.PopulationGroups.Count ?? 0;
         }
     }
 
@@ -782,33 +936,38 @@ public static partial class MovementRules
             cache.ScratchRelOps.Clear();
             cache.ScratchRelOpsNext.Clear();
 
+            // Coarse batches, and a yield only when the frame's slice is spent: a yield decides when
+            // a frame ends and nothing else, and the forced one every 32 regions was 24 trips a day
+            // through five nested stages (and their profiler scopes) for nothing.
             var dirtyCount = cache.DirtySlots.Count;
+            var dirtyBatch = Campaign.IsUnboundedStep ? Math.Max(1, dirtyCount) : PeopleIndexStageStates;
             var di = 0;
             while (di < dirtyCount)
             {
-                var batchEnd = Math.Min(dirtyCount, di + 32);
+                var batchEnd = Math.Min(dirtyCount, di + dirtyBatch);
                 if (insideMovRules)
                 {
                     using (SimProfiler.Measure("movements"))
                     using (SimProfiler.Measure("  mov:rules"))
                     using (SimProfiler.Measure("    mov:people"))
                     using (SimProfiler.Measure("      mov:people:index"))
-                        AccumulatePatchSlotsBatch(cache, orderedStates, patchTick, di, batchEnd);
+                        AccumulatePatchSlotsChunk(campaign, cache, orderedStates, patchTick, di, batchEnd);
                 }
                 else
                 {
                     using (SimProfiler.Measure("        mov:people:index"))
-                        AccumulatePatchSlotsBatch(cache, orderedStates, patchTick, di, batchEnd);
+                        AccumulatePatchSlotsChunk(campaign, cache, orderedStates, patchTick, di, batchEnd);
                 }
                 di = batchEnd;
-                if (di < dirtyCount) yield return 0;
+                if (di < dirtyCount && Campaign.StageOverdue()) yield return 0;
             }
 
             var ci = 0;
             var cultCount = cache.TouchedPatchCults.Count;
+            var cultBatch = Campaign.IsUnboundedStep ? Math.Max(1, cultCount) : PeopleIndexMergeBatch;
             while (ci < cultCount)
             {
-                var batchEnd = Math.Min(cultCount, ci + 48);
+                var batchEnd = Math.Min(cultCount, ci + cultBatch);
                 if (insideMovRules)
                 {
                     using (SimProfiler.Measure("movements"))
@@ -823,14 +982,15 @@ public static partial class MovementRules
                         MergePatchCultBatch(cache, ci, batchEnd);
                 }
                 ci = batchEnd;
-                if (ci < cultCount || cache.TouchedPatchRels.Count > 0) yield return 0;
+                if ((ci < cultCount || cache.TouchedPatchRels.Count > 0) && Campaign.StageOverdue()) yield return 0;
             }
 
             var ri = 0;
             var relCount = cache.TouchedPatchRels.Count;
+            var relBatch = Campaign.IsUnboundedStep ? Math.Max(1, relCount) : PeopleIndexMergeBatch;
             while (ri < relCount)
             {
-                var batchEnd = Math.Min(relCount, ri + 32);
+                var batchEnd = Math.Min(relCount, ri + relBatch);
                 if (insideMovRules)
                 {
                     using (SimProfiler.Measure("movements"))
@@ -845,7 +1005,7 @@ public static partial class MovementRules
                         MergePatchRelBatch(cache, ri, batchEnd);
                 }
                 ri = batchEnd;
-                if (ri < relCount) yield return 0;
+                if (ri < relCount && Campaign.StageOverdue()) yield return 0;
             }
 
             cache.DirtySlots.Clear();
@@ -860,11 +1020,17 @@ public static partial class MovementRules
 
         if (cache.StateDemographySigs.Length != totalStates)
         {
+            var oldCultIds = cache.StateCultIds;
+            var oldRelIds = cache.StateRelIds;
             cache.StateDemographySigs = new ulong[totalStates];
             cache.StateHeaderPop = new long[totalStates];
             cache.StateHeaderGroupCount = new int[totalStates];
             cache.StateCultIds = new int[totalStates][];
             cache.StateRelIds = new int[totalStates][];
+            if (oldCultIds is not null)
+                Array.Copy(oldCultIds, cache.StateCultIds, Math.Min(oldCultIds.Length, totalStates));
+            if (oldRelIds is not null)
+                Array.Copy(oldRelIds, cache.StateRelIds, Math.Min(oldRelIds.Length, totalStates));
             cache.StateCultCounts = new int[totalStates];
             cache.StateRelCounts = new int[totalStates];
         }
@@ -887,7 +1053,7 @@ public static partial class MovementRules
         for (var i = 0; i < cache.CultureBucketsById.Count; i++) cache.CultureBucketsById[i].Clear();
         for (var i = 0; i < cache.ReligionBucketsById.Count; i++) cache.ReligionBucketsById[i].Clear();
 
-        var chunkSize = Campaign.IsUnboundedStep ? Math.Max(totalStates, PeopleIndexChunkSize) : PeopleIndexChunkSize;
+        var chunkSize = Campaign.IsUnboundedStep ? Math.Max(totalStates, PeopleIndexChunkSize) : PeopleIndexStageStates;
         var idx = 0;
         while (idx < totalStates)
         {

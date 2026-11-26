@@ -119,10 +119,11 @@ public static partial class LongRangeMovement
         var battles = BattleProvincesPooled(c, pool);
         var controls = c.ProvinceController ?? map.ProvinceToNation;
         var scratch = c.Caches.RepositionScratch;
+        scratch.HasStrikeSides = false;
+        scratch.HasAllStrikers = false;
+        scratch.HasStatesByOwnerMap = false;
         Dictionary<ushort, List<int>> landByController = null;
-        Dictionary<int, LongRangeStrikes.Sides> strikeSides = null;
-        List<(ushort OwnerMap, int Province, float Reach, float Lat)> allStrikers = null;
-        Dictionary<int, List<ScenarioState>> statesByOwnerMap = null;
+        MilitaryAccess.RouteRelations routeRelations = null;
         var grounds = pool.WithdrawGrounds;
         try
         {
@@ -131,7 +132,13 @@ public static partial class LongRangeMovement
                 if (ni > 0 && Campaign.StageOverdue()) yield return 0;
                 var nation = nations[ni];
                 if (!byNation.TryGetValue(nation.Id, out var own)) continue;
-                var g = GroundOf(c, nation.Id, grounds, battles, pool);
+                if (routeRelations is null && grounds.Count >= 4 && !grounds.ContainsKey(nation.Id))
+                {
+                    routeRelations = pool.AdvanceRelations;
+                    routeRelations.Rebuild(c);
+                    if (Campaign.StageOverdue()) yield return 0;
+                }
+                var g = GroundOf(c, nation.Id, grounds, battles, pool, routeRelations);
                 if (g is null) continue;
                 if (Campaign.StageOverdue()) yield return 0;
                 if (landByController is null)
@@ -139,10 +146,7 @@ public static partial class LongRangeMovement
                     landByController = BuildLandByControllerPooled(map, controls, pool);
                     if (Campaign.StageOverdue()) yield return 0;
                 }
-                foreach (var _ in RepositionNationStages(c, g, own, wars, battlesByWar, landByController, grounds, battles, byId, scratch, pool,
-                             () => strikeSides ??= ResetStrikeSides(scratch.StrikeSides),
-                             () => allStrikers ??= FillAllStrikers(c, map, scratch.AllStrikers),
-                             () => statesByOwnerMap ??= FillStatesByOwnerMap(c, scratch.StatesByOwnerMap, scratch.StatesListPool)))
+                foreach (var _ in RepositionNationStages(c, g, own, wars, battlesByWar, landByController, grounds, battles, byId, scratch, pool))
                     yield return 0;
             }
         }
@@ -152,26 +156,54 @@ public static partial class LongRangeMovement
             pool.ReturnFormationLists(byNation);
             byId.Clear();
             pool.ReturnIntLists(battlesByWar);
-            if (landByController is not null) pool.ReturnIntLists(landByController);
+            if (landByController is not null)
+                foreach (var list in landByController.Values) list.Clear();
             nations.Clear();
-            if (strikeSides is not null) strikeSides.Clear();
-            if (allStrikers is not null) allStrikers.Clear();
-            if (statesByOwnerMap is not null)
+            if (scratch.HasStrikeSides) { scratch.StrikeSides.Clear(); scratch.HasStrikeSides = false; }
+            if (scratch.HasAllStrikers) { scratch.AllStrikers.Clear(); scratch.HasAllStrikers = false; }
+            if (scratch.HasStatesByOwnerMap)
             {
-                foreach (var list in statesByOwnerMap.Values)
+                foreach (var list in scratch.StatesByOwnerMap.Values)
                 {
                     list.Clear();
                     if (scratch.StatesListPool.Count < 256) scratch.StatesListPool.Push(list);
                 }
-                statesByOwnerMap.Clear();
+                scratch.StatesByOwnerMap.Clear();
+                scratch.HasStatesByOwnerMap = false;
             }
         }
     }
 
-    private static Dictionary<int, LongRangeStrikes.Sides> ResetStrikeSides(Dictionary<int, LongRangeStrikes.Sides> dict)
+    private static Dictionary<int, LongRangeStrikes.Sides> EnsureStrikeSides(RepositionScratch scratch)
     {
-        dict.Clear();
-        return dict;
+        if (!scratch.HasStrikeSides)
+        {
+            scratch.StrikeSides.Clear();
+            scratch.HasStrikeSides = true;
+        }
+        return scratch.StrikeSides;
+    }
+
+    private static List<(ushort OwnerMap, int Province, float Reach, float Lat)> EnsureAllStrikers(
+        Campaign c, ProvinceTopology map, RepositionScratch scratch)
+    {
+        if (!scratch.HasAllStrikers)
+        {
+            FillAllStrikers(c, map, scratch.AllStrikers);
+            scratch.HasAllStrikers = true;
+        }
+        return scratch.AllStrikers;
+    }
+
+    private static Dictionary<int, List<ScenarioState>> EnsureStatesByOwnerMap(
+        Campaign c, RepositionScratch scratch)
+    {
+        if (!scratch.HasStatesByOwnerMap)
+        {
+            FillStatesByOwnerMap(c, scratch.StatesByOwnerMap, scratch.StatesListPool);
+            scratch.HasStatesByOwnerMap = true;
+        }
+        return scratch.StatesByOwnerMap;
     }
 
     private static List<(ushort OwnerMap, int Province, float Reach, float Lat)> FillAllStrikers(
@@ -215,14 +247,14 @@ public static partial class LongRangeMovement
     private static Dictionary<ushort, List<int>> BuildLandByControllerPooled(ProvinceTopology map, ushort[] controls, SupportStepCache pool)
     {
         var byController = pool.RepositionLandByController;
-        pool.ReturnIntLists(byController);
+        foreach (var list in byController.Values) list.Clear();
         var limit = Math.Min(map.ProvinceCount, controls.Length - 1);
         for (var p = 1; p <= limit; p++)
         {
             if (map.IsWater(p)) continue;
             var code = controls[p];
             if (code == 0) continue;
-            if (!byController.TryGetValue(code, out var list)) byController[code] = list = pool.RentIntList();
+            if (!byController.TryGetValue(code, out var list)) byController[code] = list = new List<int>(64);
             list.Add(p);
         }
         return byController;
@@ -246,10 +278,7 @@ public static partial class LongRangeMovement
     private static IEnumerable<int> RepositionNationStages(Campaign c, Ground g, List<SupportFormation> own,
         IReadOnlyList<StrategicWar> wars, Dictionary<int, List<int>> battlesByWar,
         Dictionary<ushort, List<int>> landByController, Dictionary<int, Ground> grounds, BattleSet battles,
-        Dictionary<int, SupportFormation> byId, RepositionScratch scratch, SupportStepCache pool,
-        Func<Dictionary<int, LongRangeStrikes.Sides>> getStrikeSides,
-        Func<List<(ushort OwnerMap, int Province, float Reach, float Lat)>> getAllStrikers,
-        Func<Dictionary<int, List<ScenarioState>>> getStatesByOwnerMap)
+        Dictionary<int, SupportFormation> byId, RepositionScratch scratch, SupportStepCache pool)
     {
         var map = g.Map;
         var d = c.Defines;
@@ -260,8 +289,9 @@ public static partial class LongRangeMovement
         var targets = scratch.Targets;
         targets.Clear();
 
-        foreach (var war in wars)
+        for (var wi = 0; wi < wars.Count; wi++)
         {
+            var war = wars[wi];
             if (war.Ended || !war.Involves(g.Nation.Id) || !battlesByWar.TryGetValue(war.Id, out var list)) continue;
             for (var i = 0; i < list.Count; i++)
             {
@@ -294,7 +324,7 @@ public static partial class LongRangeMovement
         var sams = scratch.Sams;
         idle.Clear();
         sams.Clear();
-        scratch.PlanMemo.Clear();
+        scratch.ResetPlanMemo();
         LongRangeStrikes.Sides mySides = null;
         for (var oi = 0; oi < own.Count; oi++)
         {
@@ -311,7 +341,7 @@ public static partial class LongRangeMovement
             {
                 if (mySides is null)
                 {
-                    var strikeSides = getStrikeSides();
+                    var strikeSides = EnsureStrikeSides(scratch);
                     if (!strikeSides.TryGetValue(g.Nation.Id, out mySides))
                         strikeSides[g.Nation.Id] = mySides = LongRangeStrikes.SidesOf(c, g.Nation.Id);
                 }
@@ -339,7 +369,7 @@ public static partial class LongRangeMovement
         if (sams.Count > 0)
         {
             foreach (var _ in CoverWithSamsStages(c, g, own, sams, landByController, grounds, battles, byId, scratch, pool,
-                         getAllStrikers(), getStatesByOwnerMap()))
+                         EnsureAllStrikers(c, map, scratch), EnsureStatesByOwnerMap(c, scratch)))
                 yield return 0;
             var spare = scratch.CoverSpare;
             for (var si = 0; si < spare.Count; si++)
@@ -373,7 +403,7 @@ public static partial class LongRangeMovement
             var compByProv = NeighborComponentsOf(map);
             scratch.RoadMemo.Clear();
             scratch.SeaMemo.Clear();
-            scratch.AirMemo.Clear();
+            scratch.ResetAirMemo();
             scratch.CompSuitMemo.Clear();
             scratch.SuitSummaryMemo.Clear();
             for (var i = 0; i < idle.Count; i++)
@@ -522,7 +552,8 @@ public static partial class LongRangeMovement
         {
             if (ti > 0 && Campaign.StageOverdue()) yield return 0;
             var province = ti switch { 0 => c0, 1 => c1, 2 => c2, _ => c3 };
-            if (!PreviewOneInto(c, scratch.PreviewScratch, g.Nation.Id, f.Id, province, false, grounds, battles, byId, includeBasing: false, planMemo: scratch.PlanMemo).Accepted)
+            if (!PreviewOneInto(c, scratch.PreviewScratch, g.Nation.Id, f.Id, province, false, grounds, battles, byId,
+                    includeBasing: false, planMemo: scratch.PlanMemo, planPool: scratch.PlanPool, wantArgs: false).Accepted)
                 continue;
             scratch.LastSeaChosen = province;
             yield break;
@@ -542,14 +573,15 @@ public static partial class LongRangeMovement
         scratch.LastAirOrdered = -1;
         var ferry = FerryKm(c, type);
         var airKey = (origin, standoff, mayTouch, ferry);
-        if (!scratch.AirMemo.TryGetValue(airKey, out var hopsArr))
+        if (!scratch.AirMemo.TryGetValue(airKey, out var hops))
         {
+            hops = scratch.RentAirHops();
             foreach (var _ in NearestByAirStages(c, g, type, origin, within, near, standoff, mayTouch, scratch))
                 yield return 0;
             var chosen = scratch.LastAirNearest;
             if (chosen > 0 && chosen != origin)
             {
-                hopsArr = new[] { chosen };
+                hops.Add(chosen);
             }
             else
             {
@@ -562,16 +594,10 @@ public static partial class LongRangeMovement
                     var km = SupportCore.DistanceKm(c, origin, province);
                     if (km < goalKm) { goal = province; goalKm = km; }
                 }
-                if (goal <= 0)
-                {
-                    hopsArr = Array.Empty<int>();
-                }
-                else
+                if (goal > 0)
                 {
                     var map = g.Map;
                     var goalLat = map.CenterOf(goal).Latitude;
-                    var hops = scratch.AirHopsScratch;
-                    hops.Clear();
                     var at = origin;
                     var reachable = true;
                     // Six legs is a wing across a continent; a war further than that is not this wing's.
@@ -599,25 +625,18 @@ public static partial class LongRangeMovement
                         if (Campaign.StageOverdue()) yield return 0;
                     }
                     if (!reachable || SupportCore.DistanceKm(c, at, goal) > ferry)
-                    {
-                        hopsArr = Array.Empty<int>();
-                    }
+                        hops.Clear();
                     else
-                    {
                         hops.Add(goal);
-                        hopsArr = hops.ToArray();
-                    }
-                    hops.Clear();
                 }
             }
-            scratch.AirMemo[airKey] = hopsArr;
+            scratch.AirMemo[airKey] = hops;
         }
-        if (hopsArr.Length == 0) yield break;
-        if (!OrderFast(c, g.Nation.Id, f.Id, hopsArr[0], grounds, battles, byId, null)) yield break;
-        for (var leg = 1; leg < hopsArr.Length; leg++)
-            new RelocateSupportCommand { IssuerId = g.Nation.Id, FormationIds = new[] { f.Id }, ProvinceId = hopsArr[leg], Append = true }
-                .ApplyFast(c, grounds, battles, byId, null);
-        scratch.LastAirOrdered = hopsArr[^1];
+        if (hops.Count == 0) yield break;
+        if (!OrderFormationFast(c, g, f, type, hops[0], grounds, battles, byId, scratch, append: false, usePlanMemo: false)) yield break;
+        for (var leg = 1; leg < hops.Count; leg++)
+            OrderFormationFast(c, g, f, type, hops[leg], grounds, battles, byId, scratch, append: true, usePlanMemo: false);
+        scratch.LastAirOrdered = hops[^1];
     }
 
     /// <summary>
@@ -637,25 +656,15 @@ public static partial class LongRangeMovement
 
     private static bool OrderFormationFast(Campaign c, Ground g, SupportFormation formation, SupportTypeDefinition type,
         int province, Dictionary<int, Ground> grounds, BattleSet battles, Dictionary<int, SupportFormation> byId,
-        RepositionScratch scratch)
+        RepositionScratch scratch, bool append = false, bool usePlanMemo = true)
     {
         if (!MechanicFeatures.Allows(c, FeatureProbe)) return false;
-        var plan = PreviewOneInto(c, scratch.PreviewScratch, g.Nation.Id, formation.Id, province, false,
-            grounds, battles, byId, includeBasing: false, planMemo: scratch.PlanMemo);
+        var plan = PreviewOneInto(c, scratch.PreviewScratch, g.Nation.Id, formation.Id, province, append,
+            grounds, battles, byId, includeBasing: false, planMemo: usePlanMemo ? scratch.PlanMemo : null,
+            planPool: usePlanMemo ? scratch.PlanPool : null, wantArgs: false);
         if (!plan.Accepted) return false;
         if (!Commit(c, formation, type, plan)) return false;
         c.MarkStrategicChange();
-        AiOrders++;
-        return true;
-    }
-
-    private static bool OrderFast(Campaign c, int nationId, int formationId, int province,
-        Dictionary<int, Ground> grounds, BattleSet battles, Dictionary<int, SupportFormation> byId,
-        Dictionary<(int, int), CachedGroundPlan> planMemo)
-    {
-        var order = new RelocateSupportCommand { IssuerId = nationId, FormationIds = new[] { formationId }, ProvinceId = province };
-        order.ApplyFast(c, grounds, battles, byId, planMemo);
-        if (order.Moved == 0) return false;
         AiOrders++;
         return true;
     }
@@ -842,9 +851,6 @@ public static partial class LongRangeMovement
         scratch.LastAirNearest = best;
     }
 
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<RepositionScratch, Dictionary<int, (int Anchor, float Lat, bool Eligible)>>
-        CoverRegionAnchorsTable = new();
-
     /// <summary>
     /// SAM brigades go where the enemy's strike arm can hit and nobody covers yet - the most
     /// populous such region first - unless the brigade already stands under that threat.
@@ -874,16 +880,6 @@ public static partial class LongRangeMovement
             for (var si = 0; si < sams.Count; si++) spare.Add(sams[si]);
             yield break;
         }
-        bool Threatened(int province, float plat)
-        {
-            for (var si = 0; si < strikers.Count; si++)
-            {
-                var (at, reach, slat) = strikers[si];
-                if (MathF.Abs(plat - slat) * 111.0f <= reach && SupportCore.DistanceKm(c, at, province) <= reach)
-                    return true;
-            }
-            return false;
-        }
 
         // The regions in danger, most people first; each named by the province its bases take.
         var held = scratch.CoverHeld;
@@ -894,7 +890,7 @@ public static partial class LongRangeMovement
         guarded.Clear();
         var anchors = scratch.CoverAnchors;
         anchors.Clear();
-        var anchorInfo = CoverRegionAnchorsTable.GetOrCreateValue(scratch);
+        var anchorInfo = scratch.CoverRegionAnchors;
         anchorInfo.Clear();
         try
         {
@@ -942,7 +938,7 @@ public static partial class LongRangeMovement
             {
                 if (si > 0 && Campaign.StageOverdue()) yield return 0;
                 var (f, type) = sams[si];
-                if (Threatened(f.BaseProvinceId, map.CenterOf(f.BaseProvinceId).Latitude)) continue;
+                if (IsProvinceThreatened(c, strikers, f.BaseProvinceId, map.CenterOf(f.BaseProvinceId).Latitude)) continue;
                 var sent = false;
                 for (var ri = 0; ri < regions.Count; ri++)
                 {
@@ -959,7 +955,7 @@ public static partial class LongRangeMovement
                         else
                         {
                             var lat = map.CenterOf(chosenAnchor).Latitude;
-                            var eligible = Threatened(chosenAnchor, lat) && g.Enterable(chosenAnchor) && !g.Battles.Contains(chosenAnchor);
+                            var eligible = IsProvinceThreatened(c, strikers, chosenAnchor, lat) && g.Enterable(chosenAnchor) && !g.Battles.Contains(chosenAnchor);
                             info = (chosenAnchor, lat, eligible);
                         }
                         anchorInfo[region.MapIndex] = info;
@@ -976,7 +972,7 @@ public static partial class LongRangeMovement
                         { covered = true; break; }
                     }
                     if (covered) continue;
-                    if (OrderFast(c, g.Nation.Id, f.Id, anchor, grounds, battles, byId, scratch.PlanMemo))
+                    if (OrderFormationFast(c, g, f, type, anchor, grounds, battles, byId, scratch))
                     {
                         guarded.Add((anchor, SupportCore.ReachKm(c, type), anchorLat));
                         AiCityCover++;
@@ -996,6 +992,17 @@ public static partial class LongRangeMovement
             anchors.Clear();
             anchorInfo.Clear();
         }
+    }
+
+    private static bool IsProvinceThreatened(Campaign c, List<(int Province, float Reach, float Lat)> strikers, int province, float plat)
+    {
+        for (var si = 0; si < strikers.Count; si++)
+        {
+            var (at, reach, slat) = strikers[si];
+            if (MathF.Abs(plat - slat) * 111.0f <= reach && SupportCore.DistanceKm(c, at, province) <= reach)
+                return true;
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------ the fingerprint

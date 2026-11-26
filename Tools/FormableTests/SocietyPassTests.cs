@@ -168,15 +168,19 @@ static class SocietyPassTests
         Check(table is not null, "the table is read when the mechanic is on");
         var regions = 0;
         var alienated = 0;
+        var storedRegions = 0;
         for (var place = 0; place < c.Nations.Count; place++)
         {
             var nation = c.Nations[place];
             var states = c.StatesOf(nation);
             if (!table.Holds(place, nation, states)) throw new Exception("society passes: a fresh table refused a row");
+            var row = table.RowOf(place);
+            if (row != -2) storedRegions += states.Length;
             for (var i = 0; i < states.Length; i++)
             {
                 var walked = StateIdentity.RegionAlienation(c, nation, states[i]);
-                if (BitConverter.SingleToInt32Bits(table.Values[table.RowOf(place) + i]) != BitConverter.SingleToInt32Bits(walked))
+                var tableValue = row == -2 ? 0f : table.Values[row + i];
+                if (BitConverter.SingleToInt32Bits(tableValue) != BitConverter.SingleToInt32Bits(walked))
                     throw new Exception($"society passes: alienation of {states[i].Id} differs from the walk");
                 regions++;
                 if (walked > 0f) alienated++;
@@ -184,12 +188,14 @@ static class SocietyPassTests
         }
         Check(regions == 240 && alienated > 20 && alienated < regions, "every region's number is the walk's, to the bit");
 
+        Check(storedRegions > 0 && storedRegions < regions, "the table stores rows only where a declared identity can cause alienation");
+
         var was = DeterministicParallel.ForceSerial;
         DeterministicParallel.ForceSerial = true;
         float[] alone;
-        try { alone = PoliticalCohorts.ReadAlienation(c).Values.Take(regions).ToArray(); }
+        try { alone = PoliticalCohorts.ReadAlienation(c).Values.Take(storedRegions).ToArray(); }
         finally { DeterministicParallel.ForceSerial = was; }
-        var together = PoliticalCohorts.ReadAlienation(c).Values.Take(regions).ToArray();
+        var together = PoliticalCohorts.ReadAlienation(c).Values.Take(storedRegions).ToArray();
         Check(alone.Select(BitConverter.SingleToInt32Bits).SequenceEqual(together.Select(BitConverter.SingleToInt32Bits)),
             "read on one thread or on several, it is the same table");
 

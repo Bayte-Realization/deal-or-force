@@ -47,6 +47,7 @@ internal static class ExclaveSupplyTests
 
     internal static void Run()
     {
+        AdmiralSummonsThroughControlledLand();
         foreach (var barracks in new[] { false, true })
         {
             var c = Rack(barracks); var army = c.Armies[0]; var rng = c.Random.State;
@@ -63,6 +64,36 @@ internal static class ExclaveSupplyTests
             c.SetProvinceController(5, 100); SetDay(c, 6); LogisticsSystem.Tick(c);
             Check(!army.CutOff && army.DaysCutOff == 0, "recapturing the coastal entry restores the same inland route");
         }
+    }
+
+    private static void AdmiralSummonsThroughControlledLand()
+    {
+        var c = Rack();
+        var home = c.Nations[0];
+        var army = c.Armies[0];
+        var fleet = new Fleet { NationId = home.Id, Hulls = 20, HomeProvinceId = 1 };
+
+        void Summon()
+        {
+            foreach (var _ in AiAdmiralty.SummonToPortStages(c, fleet, home)) { }
+        }
+
+        Summon();
+        Check(army.Route.Count == 0, "admiralty does not order an inland unit to an unreachable home port");
+
+        fleet.HomeProvinceId = 5;
+        var expected = c.ProvinceMap.FindRoute(army.ProvinceId, 5, (ushort)home.MapIndex, c.ProvinceController);
+        Check(expected.Length > 0, "fixture offers a land route to the local port");
+        c.SetProvinceController(5, (ushort)c.Nations[1].MapIndex);
+        Summon();
+        Check(army.Route.Count == 0, "admiralty uses live control of the port instead of its legal owner");
+
+        c.SetProvinceController(5, (ushort)home.MapIndex);
+        Summon();
+        Check(army.OrderProvinceId == 5 && army.Route.SequenceEqual(expected),
+            "admiralty summons a reachable unit and preserves the ordinary move route");
+        Summon();
+        Check(army.Route.SequenceEqual(expected), "an existing order to port keeps the same route on the next review");
     }
 
     internal static void RealKaliningrad()

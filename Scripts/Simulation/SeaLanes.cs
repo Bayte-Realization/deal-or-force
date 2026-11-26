@@ -216,6 +216,18 @@ public static class SeaLanes
     private static readonly List<int> PathNodes = new();
     private static readonly List<(float Latitude, float Longitude)> PathPoints = new();
 
+    private const int GraphPathCacheSize = 256;
+    private const int CachedGraphPathLimit = 256;
+    // Count zero marks an empty slot. A count of -1 records a search that found no path.
+    private static (ulong Endpoints, ulong Closures, int[] Nodes, int Count)[] GraphPaths;
+
+    private const int GraphLegCacheSize = 32768;
+    private const ulong GraphLegBlocked = 1UL << 63;
+    private const ulong UncacheableGraphClosures = ulong.MaxValue;
+    // A bounded cache on the prepared sea graph. Exact port and arrival coordinates
+    // aren't graph nodes and never go here.
+    private static (ulong Endpoints, ulong State)[] GraphLegChecks;
+
     // And a flood fill's, the size of one square.
     private static int[] _fillStamp = Array.Empty<int>();
     private static int _fillGeneration;
@@ -536,7 +548,8 @@ public static class SeaLanes
                 return true;
             }
 
-            if (!Search(start, goal, closed)) return false;
+            var closureMask = GraphClosureMask(closed);
+            if (!FindGraphPath(start, goal, closed, closureMask)) return false;
 
             PathPoints.Clear();
             PathPoints.Add(from);
@@ -556,7 +569,7 @@ public static class SeaLanes
                 var misses = 0;
                 for (var ahead = anchor + 2; ahead <= last && misses < 8; ahead++)
                 {
-                    if (Clear(PathPoints[anchor], PathPoints[ahead], anchor == 0, closed))
+                    if (PathLegClear(anchor, ahead, last, closed, closureMask))
                     {
                         next = ahead;
                         misses = 0;
@@ -569,7 +582,7 @@ public static class SeaLanes
                 // between them can cut the headland the pieces wrap round: Cape Maisí on the
                 // way to Panama, the Lyakhov islands on the way along Siberia. Such a leg is
                 // walked pixel by pixel instead, and pulled straight again.
-                if (next == anchor + 1 && !Clear(PathPoints[anchor], point, anchor == 0, closed))
+                if (next == anchor + 1 && !PathLegClear(anchor, next, last, closed, closureMask))
                 {
                     Refine(PathPoints[anchor], point, closed, Refined);
                     foreach (var step in Refined)
@@ -590,6 +603,38 @@ public static class SeaLanes
             }
             return true;
         }
+    }
+
+    private static ulong GraphClosureMask(bool[] closed)
+    {
+        if (closed is null) return 0;
+        if (closed.Length > 62) return UncacheableGraphClosures;
+        ulong mask = 0;
+        for (var i = 0; i < closed.Length; i++)
+            if (closed[i]) mask |= 1UL << i;
+        return mask;
+    }
+
+    private static bool PathLegClear(int from, int to, int last, bool[] closed, ulong closureMask)
+    {
+        if (from == 0 || to == last || closureMask == UncacheableGraphClosures)
+            return Clear(PathPoints[from], PathPoints[to], from == 0, closed);
+
+        // Retain direction: reverse sampling can round differently at raster cell edges.
+        var start = (uint)PathNodes[from - 1];
+        var end = (uint)PathNodes[to - 1];
+        var endpoints = ((ulong)start << 32 | end) + 1;
+        var hash = unchecked(start * 0x9E3779B9u + end * 0x85EBCA6Bu);
+        hash ^= (uint)closureMask ^ (uint)(closureMask >> 32);
+        hash ^= hash >> 16;
+        var cache = GraphLegChecks ??= new (ulong, ulong)[GraphLegCacheSize];
+        ref var entry = ref cache[hash & (GraphLegCacheSize - 1)];
+        if (entry.Endpoints == endpoints && (entry.State & ~GraphLegBlocked) == closureMask)
+            return (entry.State & GraphLegBlocked) == 0;
+
+        var clear = Clear(PathPoints[from], PathPoints[to], false, closed);
+        entry = (endpoints, clear ? closureMask : closureMask | GraphLegBlocked);
+        return clear;
     }
 
     private static readonly List<(float Latitude, float Longitude)> Refined = new();
@@ -763,6 +808,8 @@ public static class SeaLanes
         public float[] NodeLatitude, NodeLongitude, Cost;
         public short[] NodePassage;
         public Dictionary<long, int[]> ComponentsByMask;
+        public (ulong Endpoints, ulong State)[] GraphLegChecks;
+        public (ulong Endpoints, ulong Closures, int[] Nodes, int Count)[] GraphPaths;
     }
 
     private static readonly ConditionalWeakTable<ProvinceTopology, Kept> Seas = new();
@@ -776,7 +823,8 @@ public static class SeaLanes
         Nodes = _nodes, NodePixel = _nodePixel, NodeLatitude = _nodeLatitude, NodeLongitude = _nodeLongitude,
         NodePassage = _nodePassage, NodeBasin = _nodeBasin, BasinSize = _basinSize, CellFirst = CellFirst,
         LinkStart = _linkStart, Links = _links, Basins = _basins, HarbourPixel = _harbourPixel, HarbourNode = _harbourNode,
-        Coastal = _coastal, Holders = _holders, ComponentsByMask = ComponentsByMask,
+        Coastal = _coastal, Holders = _holders, ComponentsByMask = ComponentsByMask, GraphLegChecks = GraphLegChecks,
+        GraphPaths = GraphPaths,
         Cost = _cost, Came = _came, Seen = _seen, Done = _done, Generation = _generation,
         FillStamp = _fillStamp, FillGeneration = _fillGeneration
     };
@@ -793,6 +841,8 @@ public static class SeaLanes
         _linkStart = sea.LinkStart; _links = sea.Links; _basins = sea.Basins;
         _harbourPixel = sea.HarbourPixel; _harbourNode = sea.HarbourNode; _coastal = sea.Coastal; _holders = sea.Holders;
         ComponentsByMask = sea.ComponentsByMask;
+        GraphLegChecks = sea.GraphLegChecks;
+        GraphPaths = sea.GraphPaths;
         _cost = sea.Cost; _came = sea.Came; _seen = sea.Seen; _done = sea.Done; _generation = sea.Generation;
         _fillStamp = sea.FillStamp; _fillGeneration = sea.FillGeneration;
     }
@@ -809,6 +859,8 @@ public static class SeaLanes
         ShutPixels = new HashSet<int>();
         Overridden = new bool[Cells];
         ComponentsByMask = new Dictionary<long, int[]>();
+        GraphLegChecks = null;
+        GraphPaths = null;
         var rasterWidth = _rasterWidth;
         var rasterHeight = _rasterHeight;
 
@@ -1522,6 +1574,39 @@ public static class SeaLanes
             return false;
         }
         return true;
+    }
+
+    private static bool FindGraphPath(int start, int goal, bool[] closed, ulong closureMask)
+    {
+        if (closureMask == UncacheableGraphClosures) return Search(start, goal, closed);
+
+        // A search depends on the directed node pair and the shut passages. The exact
+        // departure and arrival pixels still get their own checks and smoothing.
+        var endpoints = ((ulong)(uint)start << 32) | (uint)goal;
+        var hash = unchecked((uint)start * 0x9E3779B1u ^ (uint)goal * 0x85EBCA77u ^
+                             (uint)closureMask ^ (uint)(closureMask >> 32) * 0xC2B2AE3Du);
+        var cache = GraphPaths ??= new (ulong, ulong, int[], int)[GraphPathCacheSize];
+        ref var entry = ref cache[hash & (GraphPathCacheSize - 1)];
+        if (entry.Count != 0 && entry.Endpoints == endpoints && entry.Closures == closureMask)
+        {
+            PathNodes.Clear();
+            if (entry.Count < 0) return false;
+            for (var index = 0; index < entry.Count; index++) PathNodes.Add(entry.Nodes[index]);
+            return true;
+        }
+
+        var found = Search(start, goal, closed);
+        if (PathNodes.Count <= CachedGraphPathLimit)
+        {
+            var nodes = entry.Nodes;
+            if (found)
+            {
+                if (nodes is null || nodes.Length < PathNodes.Count) nodes = new int[PathNodes.Count];
+                PathNodes.CopyTo(nodes);
+            }
+            entry = (endpoints, closureMask, nodes, found ? PathNodes.Count : -1);
+        }
+        return found;
     }
 
     private static bool Search(int start, int goal, bool[] closed)

@@ -67,12 +67,14 @@ public static class FormableRestorations
             cache.Building.Clear();
 
             cache.LivingTags.Clear();
-            cache.FormedIds.Clear();
+            cache.ReunitedTags.Clear();
             var nations = campaign.Nations;
             for (var i = 0; i < nations.Count; i++)
             {
                 var other = nations[i];
-                if (!string.IsNullOrEmpty(other.FormedNationId)) cache.FormedIds.Add(other.FormedNationId);
+                var formedId = other.FormedNationId;
+                if (!string.IsNullOrEmpty(formedId) && formedId.StartsWith(ReunionPrefix, StringComparison.OrdinalIgnoreCase))
+                    cache.ReunitedTags.Add(formedId[ReunionPrefix.Length..]);
                 if (campaign.HasOwnedLand(other) || other.Movement is { Exile: true, Dissolved: false })
                 {
                     if (!string.IsNullOrEmpty(other.Tag)) cache.LivingTags.Add(other.Tag);
@@ -83,53 +85,27 @@ public static class FormableRestorations
             for (var i = 0; i < nations.Count; i++)
             {
                 var gone = nations[i];
-                if (string.IsNullOrEmpty(gone.Tag) || Authored(campaign, gone.Tag).Length == 0 ||
-                    cache.LivingTags.Contains(gone.Tag)) continue;
+                if (string.IsNullOrEmpty(gone.Tag) || cache.LivingTags.Contains(gone.Tag) ||
+                    Authored(campaign, gone.Tag).Length == 0) continue;
                 if (Restoration(campaign, gone) is { } definition) cache.Building.Add(definition);
             }
 
             if (campaign.ProvinceMap is not null)
             {
-                foreach (var list in cache.StatesByRegion.Values)
-                {
-                    list.Clear();
-                    cache.StateListPool.Push(list);
-                }
-                cache.StatesByRegion.Clear();
-                var states = campaign.States;
-                for (var i = 0; i < states.Count; i++)
-                {
-                    var s = states[i];
-                    if (!cache.StatesByRegion.TryGetValue(s.MapIndex, out var list))
-                        cache.StatesByRegion[s.MapIndex] = list = cache.StateListPool.Count > 0 ? cache.StateListPool.Pop() : new List<ScenarioState>();
-                    list.Add(s);
-                    if (s.ParentMapIndex > 0 && s.ParentMapIndex != s.MapIndex)
-                    {
-                        if (!cache.StatesByRegion.TryGetValue(s.ParentMapIndex, out var plist))
-                            cache.StatesByRegion[s.ParentMapIndex] = plist = cache.StateListPool.Count > 0 ? cache.StateListPool.Pop() : new List<ScenarioState>();
-                        plist.Add(s);
-                    }
-                }
-
-                var toState = campaign.ProvinceMap.ProvinceToState;
+                PrepareRegionIndex(campaign, cache);
                 var rumpShare = (double)campaign.Defines.ReunionRumpShare;
                 for (var i = 0; i < nations.Count; i++)
                 {
                     var broken = nations[i];
                     if (broken.Movement is not null || string.IsNullOrEmpty(broken.Tag)) continue;
                     if (!campaign.HasOwnedLand(broken)) continue;
-                    if (ContainsReunionFormedId(cache.FormedIds, broken.Tag)) continue;
+                    if (cache.ReunitedTags.Contains(broken.Tag)) continue;
                     var authored = Authored(campaign, broken.Tag);
                     if (authored.Length == 0) continue;
-                    cache.BrokenRegions.Clear();
-                    for (var pi = 0; pi < authored.Length; pi++)
-                    {
-                        var province = authored[pi];
-                        if (province > 0 && province < toState.Length) cache.BrokenRegions.Add(toState[province]);
-                    }
+                    var regions = RegionsOnAuthoredGround(campaign, cache, broken.Tag, authored);
                     cache.SeenStates.Clear();
                     long all = 0, own = 0;
-                    foreach (var regionId in cache.BrokenRegions)
+                    foreach (var regionId in regions)
                     {
                         if (!cache.StatesByRegion.TryGetValue(regionId, out var matched)) continue;
                         for (var si = 0; si < matched.Count; si++)
@@ -149,16 +125,64 @@ public static class FormableRestorations
         }
     }
 
-    private static bool ContainsReunionFormedId(HashSet<string> formedIds, string tag)
+    private static void PrepareRegionIndex(Campaign campaign, CampaignCaches.FormableRestorationCache cache)
     {
-        foreach (var id in formedIds)
+        var states = campaign.States;
+        if (cache.RegionIndexMap == campaign.ProvinceMap &&
+            cache.RegionIndexOwnershipRevision == campaign.OwnershipRevision &&
+            cache.RegionIndexStateCount == states.Count) return;
+
+        // A transfer also invalidates the state index. Keep the projections if every
+        // province is still in the same region, and rebuild them on an actual carve or merge.
+        var toState = campaign.ProvinceMap.ProvinceToState.AsSpan();
+        if (!toState.SequenceEqual(cache.RegionOfProvince))
         {
-            if (id.Length == ReunionPrefix.Length + tag.Length &&
-                id.StartsWith(ReunionPrefix, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(id.Substring(ReunionPrefix.Length), tag, StringComparison.OrdinalIgnoreCase))
-                return true;
+            if (cache.RegionOfProvince.Length != toState.Length)
+                cache.RegionOfProvince = new ushort[toState.Length];
+            toState.CopyTo(cache.RegionOfProvince);
+            cache.AuthoredRegions.Clear();
         }
-        return false;
+        cache.RegionIndexMap = campaign.ProvinceMap;
+        cache.RegionIndexOwnershipRevision = campaign.OwnershipRevision;
+        cache.RegionIndexStateCount = states.Count;
+        foreach (var list in cache.StatesByRegion.Values)
+        {
+            list.Clear();
+            cache.StateListPool.Push(list);
+        }
+        cache.StatesByRegion.Clear();
+        for (var i = 0; i < states.Count; i++)
+        {
+            var state = states[i];
+            AddRegionIndexEntry(cache, state.MapIndex, state);
+            if (state.ParentMapIndex > 0 && state.ParentMapIndex != state.MapIndex)
+                AddRegionIndexEntry(cache, state.ParentMapIndex, state);
+        }
+    }
+
+    private static void AddRegionIndexEntry(CampaignCaches.FormableRestorationCache cache, int index, ScenarioState state)
+    {
+        if (!cache.StatesByRegion.TryGetValue(index, out var states))
+            cache.StatesByRegion[index] = states = cache.StateListPool.Count > 0 ? cache.StateListPool.Pop() : new List<ScenarioState>();
+        states.Add(state);
+    }
+
+    private static int[] RegionsOnAuthoredGround(Campaign campaign, CampaignCaches.FormableRestorationCache cache, string tag, int[] authored)
+    {
+        if (cache.AuthoredRegions.TryGetValue(tag, out var entry) && ReferenceEquals(entry.Authored, authored))
+            return entry.Regions;
+
+        var toState = campaign.ProvinceMap.ProvinceToState;
+        var regions = cache.BrokenRegions;
+        regions.Clear();
+        for (var i = 0; i < authored.Length; i++)
+        {
+            var province = authored[i];
+            if (province > 0 && province < toState.Length) regions.Add(toState[province]);
+        }
+        var result = regions.ToArray();
+        cache.AuthoredRegions[tag] = (authored, result);
+        return result;
     }
 
     /// <summary>One restoration by id, if that country has vanished.</summary>
@@ -387,13 +411,20 @@ public static class FormableRestorations
     /// Reunion is not a licence to take the smaller name. A holder that is already a larger
     /// state, or is pursuing one, is refused by <see cref="FormableNations.SmallerThanCountry"/>.
     /// </summary>
+    [ThreadStatic] private static HashSet<int> _restoreGroundScratch;
+
     public static bool MayRestore(Campaign campaign, Nation founder, string tag)
     {
         if (founder is null || string.IsNullOrEmpty(tag) || string.Equals(founder.Tag, tag, StringComparison.OrdinalIgnoreCase)) return false;
         var cultures = DemographyCatalog.PrimaryCultures(tag);
-        foreach (var culture in cultures)
-            if (DemographyCatalog.IsPrimary(founder.Tag, culture) ||
-                founder.FoundedCultures.Contains(culture, StringComparer.OrdinalIgnoreCase)) return true;
+        var founded = founder.FoundedCultures;
+        for (var ci = 0; ci < cultures.Count; ci++)
+        {
+            var culture = cultures[ci];
+            if (DemographyCatalog.IsPrimary(founder.Tag, culture)) return true;
+            for (var fi = 0; fi < founded.Count; fi++)
+                if (string.Equals(founded[fi], culture, StringComparison.OrdinalIgnoreCase)) return true;
+        }
         if (campaign is null || campaign.ProvinceMap is null) return false;
         // Founded on its ground: a revolt or successor state whose regions stand inside the old borders.
         if (!string.IsNullOrEmpty(founder.FoundedInRevolt) || founder.Movement is { Landless: false } || founder.SecededFromId >= 0)
@@ -403,9 +434,14 @@ public static class FormableRestorations
             // people (RestorationGroundShare) must live on the ground the country held.
             var toState = campaign.ProvinceMap.ProvinceToState;
             var held = campaign.StatesOf(founder);
-            var oldGround = new HashSet<int>();
-            foreach (var province in Authored(campaign, tag))
+            var oldGround = _restoreGroundScratch ??= new HashSet<int>();
+            oldGround.Clear();
+            var authored = Authored(campaign, tag);
+            for (var i = 0; i < authored.Length; i++)
+            {
+                var province = authored[i];
                 if (province > 0 && province < toState.Length) oldGround.Add(toState[province]);
+            }
             long onIt = 0, all = 0;
             foreach (var state in held)
             {

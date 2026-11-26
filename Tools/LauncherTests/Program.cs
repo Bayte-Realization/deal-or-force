@@ -132,7 +132,7 @@ try
     string Sha(string text) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     File.WriteAllText(Path.Combine(build, BuildManifest.FileName), JsonSerializer.Serialize(new
     {
-        release = "EntertAlpha test", build_id = "b1", engine = "Godot test",
+        release = "PortAlpha test", build_id = "b1", engine = "Godot test",
         sha256 = new Dictionary<string, string>
         {
             ["game.exe"] = Sha("game").ToLowerInvariant(), ["data/lib.dll"] = Sha("original"),
@@ -158,7 +158,7 @@ try
     Check(Changelog.Find(notes, false, "9.9") == Path.Combine(notes, "docs", "CHANGELOG_9.9_EN.md"), "The project's notes for this version come first");
     Check(Changelog.Find(Path.Combine(temporary, "nowhere"), false, "9.9") is null, "No notes anywhere: nothing is invented");
 
-    // Real 0.8.5.3 RU & EN changelogs + LauncherNotes FlowDocument rendering on STA thread.
+    // Real PortAlpha 0.8.7.3 RU & EN changelogs + LauncherNotes FlowDocument rendering on STA thread.
     static string? FindRepoRoot(string? start)
     {
         var dir = start;
@@ -180,13 +180,17 @@ try
         $"Changelog.Find resolves real English changelog for {version}");
     var ruMarkdown = File.ReadAllText(ruChangelogPath!);
     var enMarkdown = File.ReadAllText(enChangelogPath!);
-    Check(ruMarkdown.Contains("24 ноября 2026", StringComparison.Ordinal) &&
-          enMarkdown.Contains("24 November 2026", StringComparison.Ordinal) &&
-          ruMarkdown.Contains("RBush", StringComparison.Ordinal) &&
-          enMarkdown.Contains("RBush", StringComparison.Ordinal) &&
-          ruMarkdown.Contains("gl_compatibility", StringComparison.Ordinal) &&
-          enMarkdown.Contains("gl_compatibility", StringComparison.Ordinal),
-        "Both 0.8.5.3 changelogs carry the 24 November 2026 release date and 0.8.5.3 technical sections");
+    Check(DealOrForce.Simulation.GameBuildInfo.VersionLabel == "PortAlpha " + version,
+        "Shared VersionLabel uses PortAlpha prefix");
+    Check(ruMarkdown.Contains("PortAlpha 0.8.7.3", StringComparison.Ordinal) &&
+          enMarkdown.Contains("PortAlpha 0.8.7.3", StringComparison.Ordinal) &&
+          ruMarkdown.Contains("26 ноября 2026", StringComparison.Ordinal) &&
+          enMarkdown.Contains("26 November 2026", StringComparison.Ordinal) &&
+          ruMarkdown.Contains("AdaptiveStepPacing", StringComparison.Ordinal) &&
+          enMarkdown.Contains("AdaptiveStepPacing", StringComparison.Ordinal) &&
+          ruMarkdown.Contains("GLES3", StringComparison.Ordinal) &&
+          enMarkdown.Contains("GLES3", StringComparison.Ordinal),
+        "Both PortAlpha 0.8.7.3 changelogs carry the 26 November 2026 date and technical sections");
 
     Exception? staFailure = null;
     var staThread = new Thread(() =>

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using DealOrForce.Simulation;
 
 static class RegionReunionTests
@@ -29,9 +30,41 @@ static class RegionReunionTests
         c.InvalidateStateIndex(); return c;
     }
 
+    static void VerifySavedMembershipBeforeHeadquartersPlacement()
+    {
+        var saved = Fixture();
+        saved.LandArrangements.Add(new LandArrangement { Regions = new() { 4002 } });
+        saved.Nations[1].CapitalProvinceId = 2;
+        var exile = saved.AddNation(new Nation { Tag = "RUM", MapIndex = 503, Name = "Exile" });
+        exile.Movement = new MovementState { Landless = true, HeadquartersStateMapIndex = 4002 };
+        saved.ConfigureSinglePlayer(saved.Nations[0].Id);
+        var loaded = SaveSystem.ImportNetworkSnapshot(SaveSystem.ExportNetworkSnapshot(saved, "reunion-map"), "reunion-map");
+        Check(loaded.Success, "a saved movement and the region geography can be loaded");
+
+        var stale = saved.ProvinceMap.CloneForOverrides();
+        stale.ProvinceToState[3] = 4001;
+        Check(stale.ProvincesOfState(4002).IsEmpty, "the cached map before loading lacks the saved headquarters region");
+        loaded.Campaign.AttachProvinceTopology(stale);
+        Check(loaded.Campaign.NationById(exile.Id).Movement.HeadquartersProvinceId > 0,
+            "headquarters placement during attachment reads the saved membership rather than the cached map");
+    }
+
     public static void Run()
     {
+        VerifySavedMembershipBeforeHeadquartersPlacement();
         var c = Fixture(); var root = c.States[0]; var child = c.States[1];
+        var map = c.ProvinceMap;
+        var originalRoot = Enumerable.Range(1, map.ProvinceCount).Where(p => map.ProvinceToState[p] == 3001).ToArray();
+        var originalChild = new[] { 1 };
+        Parallel.For(0, 64, iteration =>
+        {
+            if (iteration % 8 == 0) map.InvalidateStateProvinces();
+            if (!map.ProvincesOfState(3001).SequenceEqual(originalRoot) ||
+                !map.ProvincesOfState(4000).SequenceEqual(originalChild))
+                throw new Exception("a concurrent lookup saw an incomplete province membership row");
+        });
+        Check(map.ProvincesOfState(4000).SequenceEqual(originalChild), "concurrent lookups publish complete sorted province rows");
+        var oldChildProvinces = map.ProvincesOfState(4000);
         root.Buildings[BuildingKind.Infrastructure] = 2; child.Buildings[BuildingKind.Infrastructure] = 1;
         child.WarDamage = .8f; child.Displaced["english"] = 17;
         child.PopulationGroups.Add(new PopulationGroup { Culture = "english", Size = 100 });
@@ -48,6 +81,8 @@ static class RegionReunionTests
         Check(StatePartition.Reunify(c) == 2, "recovered shard joins home while same-owner foreign shards join each other");
         Check(c.States.Count == 2 && c.ProvinceMap.ProvinceToState[1] == 3001 && c.ProvinceMap.ProvinceToState[2] == 4001 &&
             c.ProvinceMap.ProvinceToState[3] == 4001, "each flag keeps its own surviving region identity");
+        Check(map.ProvincesOfState(4000).IsEmpty && map.ProvincesOfState(4001).SequenceEqual(new[] { 2, 3 }) &&
+            oldChildProvinces.SequenceEqual(originalChild), "reunion publishes new rows while an earlier reader keeps its complete old row");
         Check(c.States.Sum(s => s.Population) == 1000 && root.Population == 800 && root.Buildings[BuildingKind.Infrastructure] == 3 &&
             root.Displaced["english"] == 17 && Math.Abs(root.WarDamage - .1f) < .00001f, "people, buildings, displacement and weighted damage survive");
         Check(owners.SequenceEqual(c.ProvinceMap.ProvinceToNation) && controllers.SequenceEqual(c.ProvinceController) && rng == c.Random.State,

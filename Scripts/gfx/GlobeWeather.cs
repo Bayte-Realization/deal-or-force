@@ -37,6 +37,28 @@ public sealed partial class GlobePresentation
     private bool _weatherEnabled = true;
     private bool _cloudsShown = !(Platform.PlatformProfile.Current?.IsTouchPrimary == true);
     private bool _mistShown = true;
+    private ShaderMaterial _wCachedCloudMat;
+    private ShaderMaterial _wCachedCloudShadeMat;
+    private float _wCloudRealistic = float.NaN;
+    private float _wCloudPresence = float.NaN;
+    private float _wCloudOpacity = float.NaN;
+    private float _wCloudEdgeSoftness = float.NaN;
+    private float _wCloudDetailStrength = float.NaN;
+    private float _wCloudWind = float.NaN;
+    private Vector3 _wCloudSunDir = new(float.NaN, float.NaN, float.NaN);
+    private float _wCloudFlatMap = float.NaN;
+    private ShaderMaterial _wCachedMistMat;
+    private float _wMistPresence = float.NaN;
+    private float _wMistOpacity = float.NaN;
+    private float _wMistWind = float.NaN;
+    private object _wMistPackedIds;
+    private object _wMistPackedLookups;
+    private object _wMistVision;
+    private ShaderMaterial _wMistGlobeMat;
+    private bool _wMistMapApplied;
+    private Simulation.Campaign _wMistCampaign;
+    private GodotObject _wMistProvinceIdsObj;
+    private GodotObject _wMistPoliticalMapObj;
 
     /// <summary>Visual clouds only; a legacy WeatherEnabled master never overwrites this preference.</summary>
     public bool CloudsShown
@@ -259,8 +281,7 @@ public sealed partial class GlobePresentation
         var distance = ViewDistance;
 
         // A mod's own sky (the crossover's moving clouds) replaces this one rather than doubling it.
-        var replaced = IsInstanceValid(_weatherWorld) &&
-                       _weatherWorld.GetNodeOrNull<Node3D>("MovingClouds") is { Visible: true };
+        var replaced = IsInstanceValid(_cloudLayer) && _cloudLayer.Visible;
         var cloudFull = defines?.CloudFullDistance ?? 10.5f;
         var cloudClear = defines?.CloudClearDistance ?? 7.6f;
         var realisticCumulus = _mapLookRealistic && _packedLookups is null && QualityWeather;
@@ -297,46 +318,12 @@ public sealed partial class GlobePresentation
             var readability = Simulation.WeatherReadability.Read(defines);
 
             if (cloudsVisible)
-            {
-                _cloudMaterial.SetShaderParameter("realistic_cumulus", realisticCumulus ? 1f : 0f);
-                _cloudShadeMaterial.SetShaderParameter("realistic_cumulus", realisticCumulus ? 1f : 0f);
-                _cloudMaterial.SetShaderParameter("presence", clouds);
-                _cloudShadeMaterial.SetShaderParameter("presence", clouds);
-                _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale * 0.38f);
-                _cloudShadeMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale * 0.38f);
-                _cloudMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
-                _cloudShadeMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
-                _cloudMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);
-                _cloudShadeMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);
-                _cloudMaterial.SetShaderParameter("wind", clock);
-                _cloudShadeMaterial.SetShaderParameter("wind", clock);
-                var sun = IsInstanceValid(_weatherSun) ? _weatherSun.GlobalBasis.Z.Normalized() : new Vector3(0.4f, 0.5f, 0.75f);
-                _cloudMaterial.SetShaderParameter("sun_dir", sun);
-                _cloudMaterial.SetShaderParameter("flat_map", _flatMap ? 1f : 0f);
-                _cloudShadeMaterial.SetShaderParameter("flat_map", _flatMap ? 1f : 0f);
-            }
+                ApplyCloudUniforms(clouds, clock, realisticCumulus,
+                    readability.CloudOpacity * _cloudOpacityScale * 0.38f,
+                    readability.EdgeSoftness, readability.DetailStrength);
 
             if (mistVisible)
-            {
-                _mistMaterial.SetShaderParameter("presence", mist);
-                _mistMaterial.SetShaderParameter("opacity", readability.MistOpacity);
-                _mistMaterial.SetShaderParameter("wind", clock);
-                if (mist > 0.001f && _globeMaterial is not null)
-                {
-                    // The ground's own maps, read where the ground reads them.
-                    if (_packedLookups is not null)
-                    {
-                        _mistMaterial.SetShaderParameter("packed_ids", _packedIds);
-                        _mistMaterial.SetShaderParameter("packed_lookups", _packedLookups);
-                    }
-                    else
-                    {
-                        _mistMaterial.SetShaderParameter("fog_visibility", _visionTexture);
-                        _mistMaterial.SetShaderParameter("province_ids", _globeMaterial.GetShaderParameter("province_ids"));
-                    }
-                    _mistMaterial.SetShaderParameter("political_map", _globeMaterial.GetShaderParameter("political_map"));
-                }
-            }
+                ApplyMistUniforms(mist, readability.MistOpacity, clock);
         }
 
         if (IsInstanceValid(_airGlow))
@@ -354,6 +341,104 @@ public sealed partial class GlobePresentation
             if (!IsInstanceValid(sheet)) continue;
             var want = sheet.MaterialOverride == _mistMaterial ? mistVisible : cloudsVisible;
             if (sheet.Visible != want) sheet.Visible = want;
+        }
+    }
+
+    private void SyncCloudFloat(string name, float value, ref float cached)
+    {
+        if (cached == value) return;
+        cached = value;
+        _cloudMaterial.SetShaderParameter(name, value);
+        _cloudShadeMaterial.SetShaderParameter(name, value);
+    }
+
+    private void ApplyCloudUniforms(float clouds, float clock, bool realisticCumulus, float opacity, float edgeSoftness, float detailStrength)
+    {
+        if (!ReferenceEquals(_wCachedCloudMat, _cloudMaterial) || !ReferenceEquals(_wCachedCloudShadeMat, _cloudShadeMaterial))
+        {
+            _wCachedCloudMat = _cloudMaterial;
+            _wCachedCloudShadeMat = _cloudShadeMaterial;
+            _wCloudRealistic = _wCloudPresence = _wCloudOpacity = _wCloudEdgeSoftness = float.NaN;
+            _wCloudDetailStrength = _wCloudWind = _wCloudFlatMap = float.NaN;
+            _wCloudSunDir = new Vector3(float.NaN, float.NaN, float.NaN);
+        }
+        SyncCloudFloat("realistic_cumulus", realisticCumulus ? 1f : 0f, ref _wCloudRealistic);
+        SyncCloudFloat("presence", clouds, ref _wCloudPresence);
+        SyncCloudFloat("opacity", opacity, ref _wCloudOpacity);
+        SyncCloudFloat("edge_softness", edgeSoftness, ref _wCloudEdgeSoftness);
+        SyncCloudFloat("detail_strength", detailStrength, ref _wCloudDetailStrength);
+        SyncCloudFloat("wind", clock, ref _wCloudWind);
+        SyncCloudFloat("flat_map", _flatMap ? 1f : 0f, ref _wCloudFlatMap);
+        var sun = IsInstanceValid(_weatherSun) ? _weatherSun.GlobalBasis.Z.Normalized() : new Vector3(0.4f, 0.5f, 0.75f);
+        if (!sun.IsEqualApprox(_wCloudSunDir))
+        {
+            _wCloudSunDir = sun;
+            _cloudMaterial.SetShaderParameter("sun_dir", sun);
+        }
+    }
+
+    private void SyncMistFloat(string name, float value, ref float cached)
+    {
+        if (cached == value) return;
+        cached = value;
+        _mistMaterial.SetShaderParameter(name, value);
+    }
+
+    private void ApplyMistUniforms(float mist, float mistOpacity, float clock)
+    {
+        if (!ReferenceEquals(_wCachedMistMat, _mistMaterial))
+        {
+            _wCachedMistMat = _mistMaterial;
+            _wMistPresence = _wMistOpacity = _wMistWind = float.NaN;
+            _wMistPackedIds = _wMistPackedLookups = _wMistVision = null;
+            _wMistGlobeMat = null;
+            _wMistProvinceIdsObj = _wMistPoliticalMapObj = null;
+        }
+        SyncMistFloat("presence", mist, ref _wMistPresence);
+        SyncMistFloat("opacity", mistOpacity, ref _wMistOpacity);
+        SyncMistFloat("wind", clock, ref _wMistWind);
+        if (mist <= 0.001f || _globeMaterial is null) return;
+        if (_packedLookups is not null)
+        {
+            if (!ReferenceEquals(_wMistPackedIds, _packedIds))
+            {
+                _wMistPackedIds = _packedIds;
+                _mistMaterial.SetShaderParameter("packed_ids", _packedIds);
+            }
+            if (!ReferenceEquals(_wMistPackedLookups, _packedLookups))
+            {
+                _wMistPackedLookups = _packedLookups;
+                _mistMaterial.SetShaderParameter("packed_lookups", _packedLookups);
+            }
+        }
+        else if (!ReferenceEquals(_wMistVision, _visionTexture))
+        {
+            _wMistVision = _visionTexture;
+            _mistMaterial.SetShaderParameter("fog_visibility", _visionTexture);
+        }
+        if (ReferenceEquals(_wMistGlobeMat, _globeMaterial) && _wMistMapApplied == _mapApplied &&
+            ReferenceEquals(_wMistCampaign, _campaign) && _wMistPoliticalMapObj is not null &&
+            (_packedLookups is not null || _wMistProvinceIdsObj is not null))
+            return;
+        _wMistGlobeMat = _globeMaterial;
+        _wMistMapApplied = _mapApplied;
+        _wMistCampaign = _campaign;
+        if (_packedLookups is null)
+        {
+            var provVariant = _globeMaterial.GetShaderParameter("province_ids");
+            var provObj = provVariant.AsGodotObject();
+            if (!ReferenceEquals(_wMistProvinceIdsObj, provObj))
+            {
+                _wMistProvinceIdsObj = provObj;
+                _mistMaterial.SetShaderParameter("province_ids", provVariant);
+            }
+        }
+        var polVariant = _globeMaterial.GetShaderParameter("political_map");
+        var polObj = polVariant.AsGodotObject();
+        if (!ReferenceEquals(_wMistPoliticalMapObj, polObj))
+        {
+            _wMistPoliticalMapObj = polObj;
+            _mistMaterial.SetShaderParameter("political_map", polVariant);
         }
     }
 

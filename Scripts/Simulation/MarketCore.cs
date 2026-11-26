@@ -466,15 +466,20 @@ public static class MarketSystem
 {
     public static void Seed(Campaign campaign)
     {
-        foreach (var nation in campaign.Nations)
+        var allGoods = CommodityCatalog.Snapshot.AllGoods;
+        for (var ni = 0; ni < campaign.Nations.Count; ni++)
         {
+            var nation = campaign.Nations[ni];
             nation.Market.Clear();
-            foreach (var commodity in CommodityCatalog.All)
+            for (var gi = 0; gi < allGoods.Length; gi++)
+            {
+                var commodity = allGoods[gi];
                 nation.Market[commodity] = new MarketQuote
                 {
                     Commodity = commodity,
                     Price = CommodityCatalog.Get(commodity).BasePrice
                 };
+            }
         }
         Recalculate(campaign, false);
     }
@@ -571,9 +576,14 @@ public static class MarketSystem
         var tallies = CollectTallies(campaign);
         if (activeCount > 0 && Campaign.StageOverdue()) yield return 0;
 
-        for (var start = 0; start < activeCount; start += BalanceStageCountries)
+        // A whole-step caller has no frame to hand back: the countries go to the workers as one
+        // loop, one wake-up of the pool and an even spread, instead of eight loops of thirty-two.
+        // Each country's balance is its own (it reads the week's tables and writes its own market),
+        // so the chunking is the wall time and nothing else.
+        var balanceChunk = Campaign.IsUnboundedStep ? Math.Max(1, activeCount) : BalanceStageCountries;
+        for (var start = 0; start < activeCount; start += balanceChunk)
         {
-            var end = Math.Min(activeCount, start + BalanceStageCountries);
+            var end = Math.Min(activeCount, start + balanceChunk);
             using (SimProfiler.Measure("    mkt:balance"))
             {
                 DeterministicParallel.For(campaign, start, end, index =>
@@ -616,7 +626,8 @@ public static class MarketSystem
         var commerceDay = campaign.ElapsedDays;
         var commerceRev = campaign.MapRevision;
         var commerceFleets = campaign.Fleets.Count;
-        for (var firstNation = 0; firstNation < activeCount; firstNation += BalanceStageCountries)
+        var settleChunk = Campaign.IsUnboundedStep ? Math.Max(1, activeCount) : BalanceStageCountries;
+        for (var firstNation = 0; firstNation < activeCount; firstNation += settleChunk)
         {
             if (commerceDay != campaign.ElapsedDays || commerceRev != campaign.MapRevision ||
                 commerceFleets != campaign.Fleets.Count)
@@ -626,7 +637,7 @@ public static class MarketSystem
                 commerceRev = campaign.MapRevision;
                 commerceFleets = campaign.Fleets.Count;
             }
-            var lastNation = Math.Min(activeCount, firstNation + BalanceStageCountries);
+            var lastNation = Math.Min(activeCount, firstNation + settleChunk);
             using (SimProfiler.Measure("    mkt:nations"))
                 SettleNations(campaign, active, firstNation, lastNation, commerce, catalogSnap);
             if (lastNation < activeCount && Campaign.StageOverdue()) yield return 0;
@@ -967,9 +978,15 @@ public static class MarketSystem
         // quote for the new good, and the trade pass reads that quote by index - so the
         // first market week after enabling the mod threw. Topping up costs one dictionary
         // probe per good per country per week and cannot be got wrong.
-        foreach (var commodity in CommodityCatalog.All)
+        // Walked as the snapshot's array (the order CommodityCatalog.All gives) rather than through
+        // the interface, which boxed an enumerator for every country every market week.
+        var allGoods = CommodityCatalog.Snapshot.AllGoods;
+        for (var gi = 0; gi < allGoods.Length; gi++)
+        {
+            var commodity = allGoods[gi];
             if (!nation.Market.ContainsKey(commodity))
                 nation.Market[commodity] = new MarketQuote { Commodity = commodity, Price = CommodityCatalog.Get(commodity).BasePrice };
+        }
 
         foreach (var quote in nation.Market.Values)
         {

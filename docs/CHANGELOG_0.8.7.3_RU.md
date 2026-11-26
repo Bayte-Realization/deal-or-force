@@ -1,0 +1,45 @@
+# Deal or Force — PortAlpha 0.8.7.3
+
+26 ноября 2026 · Windows x64 и Android · Godot 4.8 Beta 3 (.NET 10)
+
+В выпуске PortAlpha 0.8.7.3 активная ветка публикации переводится с **EntertAlpha 0.8.5.3** на **PortAlpha 0.8.7.3** (Android `versionCode` 13) и объединяет три волны оптимизации детерминированной симуляции, мгновенную отзывчивость касаний на 5-й скорости, масштабирование двумя пальцами без увода камеры, полную локализацию мобильной панели режимов с подсказками и ускорение рендера GLES3 / HUD. Полная история ранней серии 0.8 (`0.8.3.2`–`0.8.5.3`) сохранена в [CHANGELOG 0.8.5.3](CHANGELOG_0.8.5.3_RU.md).
+
+---
+
+## Переход на ветку PortAlpha и совместимость
+
+- **Активная ветка `PortAlpha 0.8.7.3`.** Обновлены метаданные версии в `GameVersion.props`, `GameBuildInfo`, `project.godot`, пресетах экспорта Windows/Android и Android `versionCode=13` / `version/name="0.8.7.3"`. Исторические ветки `ReimAlpha` и `EntertAlpha`, а также файлы `CHANGELOG_0.8.5.3_*` сохранены без изменений.
+- **Неизменность сохранений и идентификатора сборки.** `SaveSystem.FormatVersion` остаётся `2` (с полной совместимостью `.dofsave` и прежних `.dfsave`/`.bdfsave`), а поля Windows-файла (`product_name` и `file_description`) сохраняют значение `Deal or Force`.
+
+## Производительность симуляции, кэши и исправления (волны 1–3)
+
+- **Адаптивный шаг времени для скоростей 1–5 на ПК и Android.** `BackgroundSimRunner.AdaptiveStepPacing` теперь включён и на ПК, и на Android (`AdaptiveStepHours`: `1 / 2 / 4 / 8 / 24 ч` на скоростях 1–5 по таблице `AdaptiveStepSecondsPerDay`). Переключение скорости в середине суток ровно выравнивает шаг к полуночи `00:00` через временное поле `[JsonIgnore]` `Campaign.RuntimeStepHoursOverride` (не меняя формат сохранений и `CampaignFingerprint`), а `Campaign.StageSliceMilliseconds` (`14/10`, `8/6`, `4,5/3,5 мс`) и пакеты 4–5-й скорости укрупнены.
+- **Инвалидация динамического кэша `ProvinceTopology`.** Исправлен застой кэша `ProvinceTopology._provincesByState` при перераспределении провинций в `StatePartition` (`Carve`/`Absorb`), `ColonisationCore` и `RestoreAuthoredBorders`, а `ParticipantWarObjective` переведён на живой CSR-индекс по `OwnershipRevision`, убирающий перебор 34 138 провинций и рассинхронизацию при изменении границ.
+- **Исправления `MovementFall` и потокобезопасность видимости.** Исправлен переход движений, ставших государством и потерявших все земли по аннексии, обратно в безземельный статус и изгнание (`MovementFall.Decide` / `MovementRules.Week`), а `ProvinceVision.cs` получил блокировку `CampaignIntel.Cache.SyncGate` и проверки границ в `EnsureActorIndex`/`Vision`.
+- **Настройка параллелизма под ARM64 big.LITTLE.** `DeterministicParallel.MobileBigLittleCap` ограничивает число потоков на Android производительными ядрами (`Math.Clamp(processorCount / 2, 2, 4)`) и задаёт безопасный минимум элементов (`MobileMinItemsCap = 24` в `ParallelExecution.cs`), чтобы циклы ИИ шли параллельно без торможения на медленных E-ядрах.
+- **Снижение нагрузки на CPU и GC (при побитовом сохранении детерминизма).**
+  - *Дипломатия, скрипты и топология*: для пар ИИ-с-ИИ отключена сборка локализованных строк в еженедельном обходе (`OpinionSystem.Settle(..., explain: nation.IsHuman || other.IsHuman)`), а `ShellCountryDiplomacyView` и экраны игрока достраивают `OpinionSystem.Explain` по запросу; `ScriptLibrary` предкомпилирует блоки `CompiledScore` для `Cabinet`; `StatePartition.ReunifyChanged` переведён на `[ThreadStatic]`-пулы (`reunion` — аллокации `6,2 -> 0,1 МБ`, -98%); `Corridors.EnsurePoresStages` переиспользует корзины `ClusterPool`/`ComponentListPool`.
+  - *Война и логистика*: `Perf/ProtectorIndex` больше не сбрасывает 65-тысячный индекс при ленивой вставке нейтральных отношений в `CampaignDiplomacy.Get` (`war:judge` — аллокации `12,4 -> 2,1 МБ`, -83%); `StrategicExclaves` привязывает `ExclaveSurveyCache` к `OwnershipRevision`; `FrontManager` и `FrontDisengagement` переиспользуют буферы BFS по поколениям (`war:staff` `1 136 -> 757 мс` в военном прогоне); `LongRangeMovement.Reposition` использует `RepositionScratch` (`sup:reposition` `5,3 -> 1,3 МБ`, -75%); `CombatCore` кэширует параметры линии боя `BattleLineUnit`; а `ThreatPosture` ускорен на `54%` (`war:posture` `317 -> 147 мс`).
+  - *Снимки HUD и поздние этапы*: `CampaignHudSnapshot.Capture` заменяет полный обход `Relations.Values` на `O(N)` через `CampaignDiplomacy.Peek`, `CampaignRenderSnapshot.WithClock` снижает частоту пересборки снимка на 5-й скорости при живых часах, а этапы `DemographicCycle` (`CoalesceInterner`), `DomesticCrises`, `PoliticalPolicies`, `NationalModifiers`, `EconomyCore` и `MarketCore` избавлены от лишних аллокаций и длинных неделимых кадров.
+- **Замер `SimBench` (`120` дней, сид `20260830`, `HoursPerTick=24`, `--profile`).** По итогам волн 1–2 (`final_base_profile.log` → `wave2_final_verified_profile.log`) время прогона снизилось с **17 625 до 16 393 мс** (**146,88 → 136,61 мс/день**), суточные аллокации упали на **17,5%** (**2 060 → 1 699 КБ/день**), управляемая куча — с **348,7 до 317,0 МБ** при полном совпадении `CampaignFingerprint` (`6982062A9695837E`), а 3-я волна дополнительно дожимает оставшиеся неделимые пики, кэши и десинхронизацию снимка.
+
+## Отзывчивость тапов по регионам на 5-й скорости (Android и ПК)
+
+- **Приоритетный канал интерактивного чтения (`CampaignAccessGate`).** В `BackgroundSimRunner.cs` добавлены `RequestPriorityRead()`, `ClearPriorityRead()`, `TryEnterPriorityRead(int timeoutMs)` и `HasPriorityReaderRequested`. Тапы по карте и открытие карточек обходят ожидание `readerWorkAheadMs`, не дают фоновому потоку перехватить блокировку между кадрами и защищены от перехвата в `DealOrForceGame._Process` (`5/5` проб в `RunPriorityReaderPreemptionTests` прошли с задержкой `0 мс < 100 мс`).
+- **Мгновенное прерывание между этапами (`Campaign.TickStages`).** Поток симуляции хранит `[ThreadStatic] _stageAccessGate`, поэтому `StageOverdue()` и `RunStages(...)` уступают блокировку сразу при появлении ожидающего тапа или команды игрока.
+- **Надёжный выбор региона и досье.** `GlobeMapSelectionInput` увеличивает окно повтора отложенного тапа до `1500 мс` и допускает микродрейф камеры до `1e-4f` в `CameraMovedMaterially`; `GlobePlatformHooks` держит приоритетный запрос до завершения обработчиков `CountryPicked`; `GlobePresentation.Input` кэширует `SelectedRegionMembers`; а `ShellWorkPanelView.Refresh(priority: true)` гарантирует мгновенное чтение при открытии страны, региона и вкладок.
+
+## Масштабирование двумя пальцами без увода камеры
+
+- **Накопительная защита от сдвига при щипке (`TouchGestureMath`).** В `TouchGestureMachine` добавлено отслеживание накопленного размаха пальцев (`_pinchRefSpanPx`): при изменении расстояния `>= 2,5%` за кадр или `>= 3%` суммарно на частотах 60–120 Гц сбрасываются накопители наклона и поворота, убирая увод глобуса в сторону. Для сенсорных профилей заданы `PanDeadzonePx = 15f * scale` и `MaxTapDurationSec = 0.42f`, устраняющие «мёртвую зону» потери коротких нажатий.
+- **Прямое масштабирование 1:1 к центру щипка (`PinchZoomGlobeAt` / `PinchZoomFlatMapAt`).** Событие `TouchCameraAdapter.PinchStarted` обнуляет инерцию (`_flatGlide`, `_orbitGlide`) и старые якоря зума; `GlobePlatformHooks` убирает мутацию `_pitch`/`_yaw` от двухпальцевого наклона/поворота и отключает двойную инерцию при касании (`recordGlide: false`); обработчики зума на глобусе (с проверкой горизонта `hitLocal.Z >= 0.25`) и плоской карте меняют масштаб напрямую без отстающего `Lerp`-сдвига.
+
+## Локализация панели режимов касания на Android и подсказки
+
+- **Исправлена русская и английская локализация `ShellTouchModeBarView`.** Вызовы `Loc.Get` переведены на ключи `mobile.mode.*` из `game/localization/{english,russian}/98_mobile_ux.json`: кнопки панели 2×2 корректно отображают **Выбор** / **Select**, **Приказ 1×** / **Order 1×**, **Приказ фикс.** / **Order Lock**, **Рамка** / **Box** и **Карта** / **Map** при `1280×720` и `1920×1080`.
+- **Понятные всплывающие пояснения режимов.** Добавлена неблокирующая плашка-подсказка при нажатии кнопок панели режимов, чтобы игроки на телефоне сразу видели назначение режимов («Приказ 1×», фиксация, «Рамка», «Карта») без десктопных hover-подсказок (`tooltip_delay_sec=3600`).
+
+## Оптимизация GLES3, атласа рек и интерфейса HUD
+
+- **Компактный атлас рек 32×32.** `HydrologySurfaceData.PackRiverCentreline` упаковывает только тайлы с руслами рек в компактный атлас с заголовочными строками (`river_atlas_header_rows`, `river_source_size`) в `game/shaders/globe_map.gdshader`, снижая расход видеопамяти и лишние выборки на сухопутных тайлах.
+- **Ускорение GLES3 и NewShell.** `GlobePresentation` на мобильной 5-й скорости разгружает частоту чтений (`0,16 с`), пофазовых проходов (`0,085 с`) и перерисовок карты контроллеров (`0,22 с` с мгновенным обновлением при паузе, скорости `< 5`, смене режима карты и мирных переговорах), `DealOrForceGame` снижает фоновый опрос `liveReadIntervalMs` на 5-й скорости (`320 / 180 мс`), `SaveLoadUI` переносит снимок сохранения через `QueueSavePreparation`, а обновления параметров шейдера и HUD сокращают лишние вызовы на главном потоке.

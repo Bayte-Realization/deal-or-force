@@ -1,17 +1,17 @@
-using static DealOrForce.TerritoryLabelLayout;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Godot;
-using DealOrForce.Simulation;
-using SourceEarthData = DealOrForce.Simulation.WorldMapSource;
-
-namespace DealOrForce;
-
-public sealed partial class GlobePresentation
-{
+using static DealOrForce.TerritoryLabelLayout;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Godot;
+using DealOrForce.Simulation;
+using SourceEarthData = DealOrForce.Simulation.WorldMapSource;
+
+namespace DealOrForce;
+
+public sealed partial class GlobePresentation
+{
     private bool _dragging;
     private bool _boxSelecting;
     /// <summary>The box was begun with Ctrl held: it picks regions, not forces (ProvincesBoxSelected).</summary>
@@ -229,9 +229,7 @@ public sealed partial class GlobePresentation
             var rawRegion = _provinceTopology is not null
                 ? (provinceId > 0 && provinceId < _provinceTopology.ProvinceToState.Length ? _provinceTopology.ProvinceToState[provinceId] : 0)
                 : (SourceEarthData.PeekStatesIfLoaded() is { } loadedRawStates ? loadedRawStates[cell] : SourceEarthData.States[cell]);
-            _globeMaterial.SetShaderParameter("selected_region_id", (float)rawRegion);
-            _globeMaterial.SetShaderParameter("selected_province_id", (float)provinceId);
-            _globeMaterial.SetShaderParameter("selection_active", 1f);
+            SetSelectionShaderParams(active: true, regionId: rawRegion, provinceId: provinceId);
             SelectedRegionMembers(provinceId > 0 && _campaign?.ProvinceMap is not null ? regionMapIndex : -1);
             SetTradeFocusNation(nation is { Movement: null } ? nation.Id : -1);
         }
@@ -526,7 +524,7 @@ public sealed partial class GlobePresentation
     /// move is a peace conference they cannot finish when the war is on the far side of the
     /// world.
     /// </summary>
-    private void DragCamera(Vector2 delta)
+    private void DragCamera(Vector2 delta, bool recordGlide = true)
     {
         _dragDistance += delta.Length();
         if (_flatMap)
@@ -540,12 +538,20 @@ public sealed partial class GlobePresentation
             _targetFlatX -= delta.X * unitsPerPixel;
             _targetFlatY += delta.Y * unitsPerPixel;
             ClampFlatCamera();
-            // How fast the hand is moving, smoothed over the last few motion events, for the glide.
-            var now = Time.GetTicksUsec();
-            var seconds = Mathf.Clamp((now - _lastFlatDragUsec) / 1_000_000f, 0.004f, 0.1f);
-            _lastFlatDragUsec = now;
-            var speed = new Vector2(-delta.X, delta.Y) * unitsPerPixel / seconds;
-            _flatGlide = _flatGlide.Lerp(speed, 0.45f).LimitLength(_flatZoom * 3.5f);
+            if (recordGlide)
+            {
+                // How fast the hand is moving, smoothed over the last few motion events, for the glide.
+                var now = Time.GetTicksUsec();
+                var seconds = Mathf.Clamp((now - _lastFlatDragUsec) / 1_000_000f, 0.004f, 0.1f);
+                _lastFlatDragUsec = now;
+                var speed = new Vector2(-delta.X, delta.Y) * unitsPerPixel / seconds;
+                _flatGlide = _flatGlide.Lerp(speed, 0.45f).LimitLength(_flatZoom * 3.5f);
+            }
+            else
+            {
+                // Touch gestures carry their own smooth exponential inertia in TouchGestureMachine.
+                _flatGlide = Vector2.Zero;
+            }
 
             // And the camera goes there, rather than being asked to.
             //
@@ -572,11 +578,18 @@ public sealed partial class GlobePresentation
         _targetPitch = Mathf.Clamp(_targetPitch + movement.Y, -MaxPitch, MaxPitch);
         _yaw = _targetYaw;
         _pitch = _targetPitch;
-        var dragNow = Time.GetTicksUsec();
-        var dragSeconds = Mathf.Clamp((dragNow - _lastFlatDragUsec) / 1_000_000f, .004f, .1f);
-        _lastFlatDragUsec = dragNow;
-        _orbitGlide = _orbitGlide.Lerp(movement / dragSeconds, 1f - Mathf.Exp(-dragSeconds * 24f))
-            .LimitLength(radians * ViewportSize().Y * .9f / longitudeScale);
+        if (recordGlide)
+        {
+            var dragNow = Time.GetTicksUsec();
+            var dragSeconds = Mathf.Clamp((dragNow - _lastFlatDragUsec) / 1_000_000f, .004f, .1f);
+            _lastFlatDragUsec = dragNow;
+            _orbitGlide = _orbitGlide.Lerp(movement / dragSeconds, 1f - Mathf.Exp(-dragSeconds * 24f))
+                .LimitLength(radians * ViewportSize().Y * .9f / longitudeScale);
+        }
+        else
+        {
+            _orbitGlide = Vector2.Zero;
+        }
     }
 
     /// <summary>
@@ -594,6 +607,45 @@ public sealed partial class GlobePresentation
     }
 
     private int _highlightedNation = -1;
+    private ShaderMaterial _cachedSelectionMaterial;
+    private float _cachedSelectionActive = float.NaN;
+    private float _cachedSelectionRegionId = float.NaN;
+    private float _cachedSelectionProvinceId = float.NaN;
+    private float _cachedSelectionRegionLive = float.NaN;
+
+    private void SetSelectionShaderParams(bool active, float regionId, float provinceId, float? regionLive = null)
+    {
+        if (_globeMaterial is null) return;
+        if (!ReferenceEquals(_cachedSelectionMaterial, _globeMaterial))
+        {
+            _cachedSelectionMaterial = _globeMaterial;
+            _cachedSelectionActive = float.NaN;
+            _cachedSelectionRegionId = float.NaN;
+            _cachedSelectionProvinceId = float.NaN;
+            _cachedSelectionRegionLive = float.NaN;
+        }
+        var activeVal = active ? 1f : 0f;
+        if (_cachedSelectionActive != activeVal)
+        {
+            _cachedSelectionActive = activeVal;
+            _globeMaterial.SetShaderParameter("selection_active", activeVal);
+        }
+        if (_cachedSelectionRegionId != regionId)
+        {
+            _cachedSelectionRegionId = regionId;
+            _globeMaterial.SetShaderParameter("selected_region_id", regionId);
+        }
+        if (_cachedSelectionProvinceId != provinceId)
+        {
+            _cachedSelectionProvinceId = provinceId;
+            _globeMaterial.SetShaderParameter("selected_province_id", provinceId);
+        }
+        if (regionLive is { } live && _cachedSelectionRegionLive != live)
+        {
+            _cachedSelectionRegionLive = live;
+            _globeMaterial.SetShaderParameter("selected_region_live", live);
+        }
+    }
 
     /// <summary>
     /// Take the picked region and province off the map. The tint lives in shader uniforms
@@ -602,16 +654,19 @@ public sealed partial class GlobePresentation
     /// </summary>
     public void ClearSelection()
     {
-        _globeMaterial?.SetShaderParameter("selection_active", 0f);
-        _globeMaterial?.SetShaderParameter("selected_region_id", -1f);
-        _globeMaterial?.SetShaderParameter("selected_province_id", -1f);
-        _globeMaterial?.SetShaderParameter("selected_region_live", 0f);
+        SetSelectionShaderParams(active: false, regionId: -1f, provinceId: -1f, regionLive: 0f);
         SetTradeFocusNation(-1);
     }
 
     private Image _selectedRegionImage;
     private ImageTexture _selectedRegionTexture;
     private readonly byte[] _selectedRegionPixels = new byte[256 * 256];
+    // What the uploaded membership texture currently shows: tapping the same live region again
+    // (on the same map, same revision) re-lights it without walking every province or re-uploading.
+    private int _lastSelectedRegionLive = int.MinValue;
+    private Simulation.Campaign _lastSelectedRegionCampaign;
+    private object _lastSelectedRegionMap;
+    private int _lastSelectedRegionRevision = int.MinValue;
 
     /// <summary>
     /// Light the live region the player picked, every province of it. The tint used to follow
@@ -625,7 +680,25 @@ public sealed partial class GlobePresentation
         var map = _campaign?.ProvinceMap;
         if (liveRegion < 0 || map is null)
         {
-            _globeMaterial.SetShaderParameter("selected_region_live", 0f);
+            if (!ReferenceEquals(_cachedSelectionMaterial, _globeMaterial) || _cachedSelectionRegionLive != 0f)
+            {
+                _cachedSelectionMaterial = _globeMaterial;
+                _cachedSelectionRegionLive = 0f;
+                _globeMaterial.SetShaderParameter("selected_region_live", 0f);
+            }
+            return;
+        }
+        var revision = _campaign.MapRevision;
+        if (liveRegion == _lastSelectedRegionLive && ReferenceEquals(_campaign, _lastSelectedRegionCampaign) &&
+            ReferenceEquals(map, _lastSelectedRegionMap) && revision == _lastSelectedRegionRevision &&
+            _selectedRegionTexture is not null)
+        {
+            if (!ReferenceEquals(_cachedSelectionMaterial, _globeMaterial) || _cachedSelectionRegionLive != 1f)
+            {
+                _cachedSelectionMaterial = _globeMaterial;
+                _cachedSelectionRegionLive = 1f;
+                _globeMaterial.SetShaderParameter("selected_region_live", 1f);
+            }
             return;
         }
         Array.Clear(_selectedRegionPixels);
@@ -635,7 +708,13 @@ public sealed partial class GlobePresentation
         if (_selectedRegionImage is null) _selectedRegionImage = Image.CreateFromData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
         else _selectedRegionImage.SetData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
         UpdateMapImage("selected_region_members", _selectedRegionImage, ref _selectedRegionTexture);
+        _cachedSelectionMaterial = _globeMaterial;
+        _cachedSelectionRegionLive = 1f;
         _globeMaterial.SetShaderParameter("selected_region_live", 1f);
+        _lastSelectedRegionLive = liveRegion;
+        _lastSelectedRegionCampaign = _campaign;
+        _lastSelectedRegionMap = map;
+        _lastSelectedRegionRevision = revision;
     }
 
     private Vector2 _lastHoverTooltipPos = new(float.NaN, float.NaN);
@@ -855,9 +934,12 @@ public sealed partial class GlobePresentation
         return found;
     }
 
-    private void DispatchBoxUnitSelection(Rect2 rect)
+    private bool TryDispatchBoxUnitSelection(Rect2 rect, int timeoutMs = 0, bool priority = false)
     {
-        if (CountrySelectionOnly || !TryBeginActionRead(out var campaign, 150)) return;
+        if (CountrySelectionOnly) return true;
+        Simulation.Campaign campaign;
+        if (priority ? !TryBeginPriorityActionRead(out campaign, timeoutMs) : !TryBeginActionRead(out campaign, timeoutMs))
+            return false;
         // Divisions and long-range formations in one box, as one selection -
         // the panel no longer has to be open for a box to take formations.
         List<Simulation.Army> selected;
@@ -879,6 +961,7 @@ public sealed partial class GlobePresentation
         }
         else if (fleets is { Count: > 0 })
             FleetsBoxPicked?.Invoke(fleets);
+        return true;
     }
 
     private static Rect2 RectFromPoints(Vector2 a, Vector2 b)
@@ -894,4 +977,4 @@ public sealed partial class GlobePresentation
         return new Vector2I(Math.Max(1, (int)size.X), Math.Max(1, (int)size.Y));
     }
 
-}
+}

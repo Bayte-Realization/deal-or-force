@@ -137,7 +137,7 @@ public static class BorderShape
             {
                 var share = edges / (float)total;
                 if (share < wrap) continue;
-                if (AsDrawn(board, c, region, owner, neighbour, r => board.OwnerOf.GetValueOrDefault(r))) continue;
+                if (AsDrawn(board, c, region, owner, neighbour, null)) continue;
                 // Wrapped by the neighbour: the neighbour wants it, and if it hangs on to the rest
                 // of its own country by a thread (or not at all) its owner wants a way through.
                 Add(board, neighbour, owner, 1f / 3f);
@@ -186,22 +186,26 @@ public static class BorderShape
     /// region was its owner's then, and every neighbouring region the wrapper now holds was the
     /// wrapper's then. Such a shape is how the two states were drawn, not a wound.
     /// </summary>
-    private static bool AsDrawn(Board board, Campaign c, int region, int owner, int wrapper, Func<int, int> ownerOf)
+    private static int OwnerOfRegion(Board board, Dictionary<int, int> moved, int region) =>
+        moved is not null && moved.TryGetValue(region, out var to) ? to : board.OwnerOf.GetValueOrDefault(region);
+
+    private static bool AsDrawn(Board board, Campaign c, int region, int owner, int wrapper, Dictionary<int, int> moved)
     {
         if (!c.Defines.BorderShapeIgnoresDrawnBorders || !Drawn(board, c, region, owner)) return false;
         foreach (var next in TerritorialCoherence.RegionBorders(c, region).Keys)
-            if (ownerOf(next) == wrapper && !Drawn(board, c, next, wrapper)) return false;
+            if (OwnerOfRegion(board, moved, next) == wrapper && !Drawn(board, c, next, wrapper)) return false;
         return true;
     }
 
-    private static float Contribution(Board board, Campaign c, int region, int nation, int other, Func<int, int> ownerOf, float wrap)
+    private static float Contribution(Board board, Campaign c, int region, int nation, int other,
+        Dictionary<int, int> moved, float wrap)
     {
-        var owner = ownerOf(region);
+        var owner = OwnerOfRegion(board, moved, region);
         if (owner != nation && owner != other) return 0f;
         var total = 0; var own = 0; var byOther = 0; var byNation = 0;
         foreach (var (next, edges) in TerritorialCoherence.RegionBorders(c, region))
         {
-            var by = ownerOf(next);
+            var by = OwnerOfRegion(board, moved, next);
             if (by <= 0) continue;
             total += edges;
             if (by == owner) own += edges;
@@ -209,11 +213,15 @@ public static class BorderShape
             else if (by == other) byOther += edges;
         }
         if (total <= 0) return 0f;
-        if (owner == other) return byNation / (float)total >= wrap && !AsDrawn(board, c, region, owner, nation, ownerOf) ? 1f / 3f : 0f;
-        if (byOther / (float)total < wrap || AsDrawn(board, c, region, owner, other, ownerOf)) return 0f;
+        if (owner == other) return byNation / (float)total >= wrap && !AsDrawn(board, c, region, owner, nation, moved) ? 1f / 3f : 0f;
+        if (byOther / (float)total < wrap || AsDrawn(board, c, region, owner, other, moved)) return 0f;
         var thread = own / (float)total;
         return thread >= 0.2f ? 0f : thread <= 0f ? 1f / 3f : 1f / 6f;
     }
+
+    [ThreadStatic] private static Dictionary<int, int> _reliefMovedScratch;
+    [ThreadStatic] private static HashSet<int> _reliefAffectedScratch;
+    [ThreadStatic] private static Dictionary<int, int> _pocketByScratch;
 
     /// <summary>
     /// How much of its grievance against <paramref name="other"/> a country would be rid of if it
@@ -225,24 +233,52 @@ public static class BorderShape
     public static float Relief(Campaign c, Nation nation, Nation other, IEnumerable<int> gain, IEnumerable<int> yield)
     {
         if (c?.ProvinceMap is null || nation is null || other is null || nation.Id == other.Id) return 0f;
+        if ((gain is null || (gain is int[] ga && ga.Length == 0)) &&
+            (yield is null || (yield is int[] ya && ya.Length == 0)))
+            return 0f;
         var board = Ensure(c);
-        var moved = new Dictionary<int, int>();
-        foreach (var id in gain ?? Array.Empty<int>())
-            if (board.OwnerOf.GetValueOrDefault(id) == other.MapIndex) moved[id] = nation.MapIndex;
-        foreach (var id in yield ?? Array.Empty<int>())
-            if (board.OwnerOf.GetValueOrDefault(id) == nation.MapIndex) moved[id] = other.MapIndex;
+        var moved = _reliefMovedScratch ??= new Dictionary<int, int>();
+        moved.Clear();
+        if (gain is int[] gainArr)
+        {
+            for (var i = 0; i < gainArr.Length; i++)
+            {
+                var id = gainArr[i];
+                if (board.OwnerOf.GetValueOrDefault(id) == other.MapIndex) moved[id] = nation.MapIndex;
+            }
+        }
+        else if (gain is not null)
+        {
+            foreach (var id in gain)
+                if (board.OwnerOf.GetValueOrDefault(id) == other.MapIndex) moved[id] = nation.MapIndex;
+        }
+        if (yield is int[] yieldArr)
+        {
+            for (var i = 0; i < yieldArr.Length; i++)
+            {
+                var id = yieldArr[i];
+                if (board.OwnerOf.GetValueOrDefault(id) == nation.MapIndex) moved[id] = other.MapIndex;
+            }
+        }
+        else if (yield is not null)
+        {
+            foreach (var id in yield)
+                if (board.OwnerOf.GetValueOrDefault(id) == nation.MapIndex) moved[id] = other.MapIndex;
+        }
         if (moved.Count == 0) return 0f;
-        var affected = new HashSet<int>(moved.Keys);
+        var affected = _reliefAffectedScratch ??= new HashSet<int>();
+        affected.Clear();
         foreach (var id in moved.Keys)
+        {
+            affected.Add(id);
             foreach (var next in TerritorialCoherence.RegionBorders(c, id).Keys) affected.Add(next);
+        }
         var wrap = M.Clamp(c.Defines.BorderWrapShare, 0.5f, 1f);
-        int Now(int r) => board.OwnerOf.GetValueOrDefault(r);
-        int After(int r) => moved.TryGetValue(r, out var to) ? to : board.OwnerOf.GetValueOrDefault(r);
         var before = 0f; var after = 0f;
         foreach (var r in affected)
         {
-            before += Contribution(board, c, r, nation.MapIndex, other.MapIndex, Now, wrap);
-            after += Contribution(board, c, r, nation.MapIndex, other.MapIndex, After, wrap);
+            before += Contribution(board, c, r, nation.MapIndex, other.MapIndex, null, wrap);
+            after += Contribution(board, c, r, nation.MapIndex, other.MapIndex, moved, wrap);
         }
         var raw = board.RawGrievances.GetValueOrDefault(Key(nation.MapIndex, other.MapIndex));
         return MathF.Min(1f, raw) - M.Clamp(raw - before + after, 0f, 1f);
@@ -260,11 +296,10 @@ public static class BorderShape
         if (c?.ProvinceMap is null || nation is null || other is null || nation.Id == other.Id) return;
         var board = Ensure(c);
         var wrap = M.Clamp(c.Defines.BorderWrapShare, 0.5f, 1f);
-        int Now(int r) => board.OwnerOf.GetValueOrDefault(r);
         foreach (var (region, owner) in board.OwnerOf)
         {
             if (owner != nation.MapIndex && owner != other.MapIndex) continue;
-            if (Contribution(board, c, region, nation.MapIndex, other.MapIndex, Now, wrap) <= 0f) continue;
+            if (Contribution(board, c, region, nation.MapIndex, other.MapIndex, null, wrap) <= 0f) continue;
             (owner == other.MapIndex ? wanted : pockets).Add(region);
         }
         wanted.Sort(); pockets.Sort();
@@ -278,7 +313,8 @@ public static class BorderShape
         if (!board.OwnerOf.TryGetValue(state.MapIndex, out var owner)) return false;
         var wrap = M.Clamp(c.Defines.BorderWrapShare, 0.5f, 1f);
         var total = 0; var own = 0;
-        var by = new Dictionary<int, int>();
+        var by = _pocketByScratch ??= new Dictionary<int, int>();
+        by.Clear();
         foreach (var (next, edges) in TerritorialCoherence.RegionBorders(c, state.MapIndex))
         {
             if (!board.OwnerOf.TryGetValue(next, out var holder)) continue;
@@ -287,7 +323,7 @@ public static class BorderShape
         }
         if (total <= 0 || own / (float)total >= 0.2f) return false;
         foreach (var (holder, edges) in by)
-            if (edges / (float)total >= wrap && !AsDrawn(board, c, state.MapIndex, owner, holder, r => board.OwnerOf.GetValueOrDefault(r))) return true;
+            if (edges / (float)total >= wrap && !AsDrawn(board, c, state.MapIndex, owner, holder, null)) return true;
         return false;
     }
 

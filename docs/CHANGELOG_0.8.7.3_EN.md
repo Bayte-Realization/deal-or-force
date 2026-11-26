@@ -1,0 +1,45 @@
+# Deal or Force — PortAlpha 0.8.7.3
+
+26 November 2026 · Windows x64 & Android · Godot 4.8 Beta 3 (.NET 10)
+
+PortAlpha 0.8.7.3 moves the active publication branch from **EntertAlpha 0.8.5.3** to **PortAlpha 0.8.7.3** (Android `versionCode` 13) and delivers three waves of deterministic simulation optimization, zero-drop Speed-5 map taps, zero-drift 2-finger pinch-zoom, localized Android touch-mode controls with on-screen hints, and GLES3 / HUD frame-pacing upgrades. For the earlier 0.8 series history (`0.8.3.2`–`0.8.5.3`), see [CHANGELOG 0.8.5.3](CHANGELOG_0.8.5.3_EN.md).
+
+---
+
+## PortAlpha branch transition & release compatibility
+
+- **Active branch `PortAlpha 0.8.7.3`.** Updated shared assembly/game version metadata (`GameVersion.props`, `GameBuildInfo`, `project.godot`, Windows/Android `export_presets.cfg`, and Android `versionCode=13` / `version/name="0.8.7.3"`). Historical `ReimAlpha` and `EntertAlpha` branches and `CHANGELOG_0.8.5.3_*` records are preserved intact.
+- **Unchanged save & executable contracts.** `SaveSystem.FormatVersion` stays `2` (full `.dofsave` and legacy `.dfsave`/`.bdfsave` compatibility), and Windows native executable identity (`product_name` / `file_description`) remains `Deal or Force`.
+
+## Simulation performance, caching & correctness (Waves 1–3)
+
+- **Adaptive Speed 1–5 step pacing on PC and Android.** `BackgroundSimRunner.AdaptiveStepPacing` is enabled across both desktop and mobile runtimes (`AdaptiveStepHours`: `1h / 2h / 4h / 8h / 24h` across Speed 1–5 via `AdaptiveStepSecondsPerDay`). Mid-day speed transitions align cleanly onto `00:00` midnight via transient `[JsonIgnore]` `Campaign.RuntimeStepHoursOverride` (zero save-schema or `CampaignFingerprint` changes), paired with speed-scaled `Campaign.StageSliceMilliseconds` (`14/10`, `8/6`, `4.5/3.5 ms`) and coarser Speed 4–5 background batches.
+- **`ProvinceTopology` dynamic-state cache invalidation.** Invalidates `ProvinceTopology._provincesByState` when `StatePartition` (`Carve`/`Absorb`), `ColonisationCore`, or `RestoreAuthoredBorders` reassigns `ProvinceToState`, and replaces full-world scans in `ParticipantWarObjective` with a live `OwnershipRevision`-keyed CSR index so dynamic border shifts never leave stale province lists or desyncs.
+- **`MovementFall` & thread-safe visibility fixes.** Resolves edge cases where a movement that graduated to sovereign statehood and lost all provinces by conquest failed to transition cleanly back to landless/exile status (`MovementFall.Decide` / `MovementRules.Week`), and adds `CampaignIntel.Cache.SyncGate` locking plus `EnsureActorIndex`/`Vision` bounds guards in `ProvinceVision.cs`.
+- **ARM64 big.LITTLE parallelism tuning.** `DeterministicParallel.MobileBigLittleCap` caps Android parallel workers to performance cores (`Math.Clamp(processorCount / 2, 2, 4)`) and raises the mobile item floor safely (`MobileMinItemsCap = 24` in `ParallelExecution.cs`) so both AI diplomacy/economy loops and worker barriers run smoothly without hitting E-core stragglers.
+- **Core CPU & GC allocation reductions (bit-identical determinism preserved).**
+  - *Diplomacy, scripts & topology*: AI-to-AI pairs skip localized tooltip generation during weekly scans (`OpinionSystem.Settle(..., explain: nation.IsHuman || other.IsHuman)`) while `ShellCountryDiplomacyView` and legacy UI readers populate `OpinionSystem.Explain` on demand; `ScriptLibrary` pre-compiles `CompiledScore` blocks for `Cabinet`; `StatePartition.ReunifyChanged` uses `[ThreadStatic]` pools (`reunion` allocs `6.2 -> 0.1 MB`); and `Corridors.EnsurePoresStages` reuses `ClusterPool`/`ComponentListPool` buckets.
+  - *Warfare & logistics*: `Perf/ProtectorIndex` avoids full 65k-slot invalidation on neutral `CampaignDiplomacy.Get` inserts (`war:judge` allocs `12.4 -> 2.1 MB`, -83%); `StrategicExclaves` keys `ExclaveSurveyCache` on `OwnershipRevision`; `FrontManager` & `FrontDisengagement` pool generation-stamped BFS route buffers (`war:staff` `1,136 -> 757 ms` in warfare pass); `LongRangeMovement.Reposition` pools `RepositionScratch` (`sup:reposition` `5.3 -> 1.3 MB`, -75%); `CombatCore` caches per-line `BattleLineUnit` factors; and `ThreatPosture` removes hot scan churn (`war:posture` `317 -> 147 ms`, -54%).
+  - *HUD snapshot & late-game stages*: `CampaignHudSnapshot.Capture` replaces the full `Relations.Values` scan with `O(N)` `CampaignDiplomacy.Peek`, `CampaignRenderSnapshot.WithClock` throttles Speed-5 snapshot rebuilds while keeping the clock live, and Wave 1–3 passes trim allocations and indivisible stage spikes across `DemographicCycle` (`CoalesceInterner`), `DomesticCrises`, `PoliticalPolicies`, `NationalModifiers`, `EconomyCore`, and `MarketCore`.
+- **Measured `SimBench` benchmark (`120d`, seed `20260830`, `HoursPerTick=24`, `--profile`).** Across Waves 1–2 (`final_base_profile.log` → `wave2_final_verified_profile.log`), total profiled run time dropped from **17,625 to 16,393 ms** (**146.88 → 136.61 ms/day**), daily allocations dropped **17.5%** (**2,060 → 1,699 kB/day**), managed heap fell from **348.7 to 317.0 MB**, and `CampaignFingerprint` stayed bit-identical (`6982062A9695837E`), with Wave 3 targeting remaining snapshot, movement, and indivisible-spike bottlenecks.
+
+## Android Speed-5 region tap responsiveness
+
+- **Priority interactive reader lane (`CampaignAccessGate`).** Added `RequestPriorityRead()`, `ClearPriorityRead()`, `TryEnterPriorityRead(int timeoutMs)`, and `HasPriorityReaderRequested` in `BackgroundSimRunner.cs`. Interactive map taps and dossier opens bypass routine `readerWorkAheadMs` delays and prevent background worker re-acquisition or Frame-0 `DealOrForceGame._Process` steals from locking out `RetryMapSelection` (`5/5` preemption probes resolved in `0 ms < 100 ms` under Speed-5 contention).
+- **Immediate mid-stage preemption (`Campaign.TickStages`).** Bounded simulation steps track `[ThreadStatic] _stageAccessGate`, letting `StageOverdue()` and `RunStages(...)` yield immediately at stage boundaries whenever an interactive tap or write command waits.
+- **Zero-drop map pick & dossier refresh.** `GlobeMapSelectionInput` extends queued tap lifetime (`MapSelectionLifetimeMs = 1500`) and uses `CameraMovedMaterially` (`1e-4f` tolerance) so tiny camera micro-glides never drop taps; `GlobePlatformHooks` holds priority across `CountryPicked` dispatch; `GlobePresentation.Input` caches `SelectedRegionMembers`; and `ShellWorkPanelView.Refresh(priority: true)` ensures country, region, and tab clicks read immediately.
+
+## Zero-drift 2-finger pinch-zoom & touch ergonomics
+
+- **Cumulative pinch anti-drift (`TouchGestureMath`).** Added `_pinchRefSpanPx` cumulative span tracking in `TouchGestureMachine`: smooth 60–120 Hz pinches reset twist/tilt accumulators and lock flags whenever per-frame span shifts `>= 2.5%` OR cumulative span shifts `>= 3%`, eliminating sideways globe drift from natural thumb-forefinger arcs. Adjusted mobile `TouchGestureConfig.ForProfile` to `PanDeadzonePx = 15f * scale` and `MaxTapDurationSec = 0.42f` to close the silent tap-drop dead-zone.
+- **Direct 1:1 midpoint-anchored scaling (`PinchZoomGlobeAt` / `PinchZoomFlatMapAt`).** `TouchCameraAdapter.PinchStarted` clears glide inertia (`_flatGlide`, `_orbitGlide`) and zoom anchors; `GlobePlatformHooks` removes 2-finger `TiltRotateRequested` mutations of `_pitch`/`_yaw` and passes `recordGlide: false` on touch pan (removing double inertia); and globe/flat pinch handlers update zoom directly with a `hitLocal.Z >= 0.25` limb guard instead of sampling from lagging `Lerp` frames.
+
+## Localized Android Touch-Mode bar & mode hints
+
+- **Full EN/RU Touch-Mode bar localization.** Fixed `ShellTouchModeBarView` key resolution to read `mobile.mode.*` entries from `game/localization/{english,russian}/98_mobile_ux.json`, rendering localized captions across the 2×2 grid (`Выбор` / `Select`, `Приказ 1×` / `Order 1×`, `Приказ фикс.` / `Order Lock`, `Рамка` / `Box`, `Карта` / `Map`) at both `1280×720` and `1920×1080`.
+- **Explainable on-screen mode hint feedback.** Added non-blocking, auto-fading localized mode hint feedback when toggling touch modes so mobile players immediately see what `Order 1×` / `Order Lock` / `Box` / `Map` do without desktop hover tooltips (`tooltip_delay_sec=3600`).
+
+## GLES3 shaders, river atlas & HUD pacing
+
+- **Compact 32×32 river centreline atlas.** `HydrologySurfaceData.PackRiverCentreline` packs wet 32×32 tiles into a header-indexed atlas (`river_atlas_header_rows`, `river_source_size`) read by `game/shaders/globe_map.gdshader`, cutting river texture memory and shader sampling work on dry land tiles.
+- **GLES3 & NewShell frame pacing.** `GlobePresentation` throttles mobile Speed-5 read probes (`0.16 s`), staggered visual phases (`0.085 s`), and heavy controller texture uploads (`0.22 s`, flushing immediately on pause, speed `< 5`, map-mode switches, or peace previews), `DealOrForceGame` relaxes routine Speed-5 `liveReadIntervalMs` (`320 / 180 ms`), `SaveLoadUI` uses off-thread `QueueSavePreparation` snapshots, and GLES3 shader uniform / HUD frame passes avoid redundant per-frame parameter uploads and projection loops.

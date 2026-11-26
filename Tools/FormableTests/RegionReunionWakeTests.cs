@@ -137,6 +137,33 @@ static class RegionReunionWakeTests
         if (!equal) PrintDifferences(c, restored.Campaign);
         Check(equal,
             "the derived blocker cache cannot change the restored campaign fingerprint");
+
+        // Warm ProvinceTopology._provincesByState must invalidate on InvalidateStateIndex / RestoreAuthoredBorders,
+        // and RegionReunionReferences.Move must refresh cached ExileDefinition homelands.
+        var topo = c.ProvinceMap;
+        var span3001 = topo.ProvincesOfState(3001);
+        var warmedBefore = span3001.Length;
+        var firstCarved = span3001[0];
+        for (var pi = 0; pi < 16; pi++) topo.ProvinceToState[span3001[pi]] = 3002;
+        c.InvalidateStateIndex();
+        Check(topo.ProvincesOfState(3001).Length == warmedBefore - 16 &&
+              topo.ProvincesOfState(3002).IndexOf(firstCarved) >= 0,
+            "ProvinceTopology.ProvincesOfState reflects carved changes immediately after InvalidateStateIndex");
+
+        var (exileWorld, exilePaper) = WithOffer();
+        var exileNation = exileWorld.Nations[0];
+        var shard = exileWorld.States.Single(s => s.MapIndex == 4000);
+        exileNation.Movement = new MovementState { Id = "exile_rta", Exile = true, Landless = true };
+        exileNation.Movement.Homeland.Add(shard.Id);
+        exileNation.Movement.Peoples.Add("russian");
+        Check(Movements.DefinitionOf(exileNation).Homeland.Contains(shard.Id),
+            "exile definition initially caches shard homeland id before reunion");
+        DealNegotiations.Respond(exileWorld, exilePaper.ToId, exilePaper.Id, DealReply.Decline);
+        Check(StatePartition.Reunify(exileWorld) == 1 && !exileWorld.States.Any(s => s.MapIndex == 4000),
+            "shard reunites cleanly once blocker closes");
+        var refreshedHome = Movements.DefinitionOf(exileNation).Homeland;
+        Check(refreshedHome.Contains("original") && !refreshedHome.Contains(shard.Id),
+            "reunion refreshes cached ExileDefinition homeland ids away from deleted shard");
     }
 
     static ProvinceTopology FreshTopology() => ProvinceTopology.Build(Enumerable.Repeat((ushort)3001, 8192).ToArray(),

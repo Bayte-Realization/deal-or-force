@@ -56,6 +56,7 @@ static class RestorationTests
     {
         DemographyCatalog.ResetCatalog(); Loc.ResetCatalog(); OpinionCatalog.ResetCatalog();
         MovementCatalog.ResetCatalog();
+        VerifySecessionHomelandOverlap();
 
         // Friendship is not a land-transfer mandate, including when the holder is a player.
         var (guard, claimant, friendly, claimed, _) = Fixture();
@@ -168,6 +169,29 @@ static class RestorationTests
             "the restoration report keeps every formatting argument in both languages");
         Check(MovementActions.Kinds.Any(kind => kind.Id == "restore" && kind.Trait == "government_in_exile"),
             "the restore action is offered only to governments in exile");
+    }
+
+    static void VerifySecessionHomelandOverlap()
+    {
+        var (c, exile, _, home, far) = Fixture();
+        exile.Movement.HeadquartersStateMapIndex = far.MapIndex;
+        exile.Movement.Homeland.Add(home.Id.ToUpperInvariant());
+        var homePiece = new SecessionPiece { MapIndex = home.MapIndex, Population = 49 };
+        var farPiece = new SecessionPiece { MapIndex = far.MapIndex, Population = 51 };
+        var leaving = new[] { homePiece, farPiece };
+
+        Check(SecessionEvents.FindMatchingMovement(c, leaving) is null,
+            "an exile office abroad and duplicate IDs cannot exaggerate its share of the seceding population");
+
+        var second = c.AddNation(new Nation { Tag = "QRC", MapIndex = 503, Name = "Other exile" });
+        second.Movement = new MovementState { Id = "", Exile = true, Landless = true };
+        second.Movement.Homeland.AddRange(new[] { home.Id, far.Id });
+        Check(SecessionEvents.FindMatchingMovement(c, leaving) == second,
+            "a later claimant is considered when the first falls below half");
+
+        homePiece.Population = 51;
+        Check(SecessionEvents.FindMatchingMovement(c, leaving) == exile,
+            "exactly half qualifies and the first eligible claimant still takes precedence");
     }
 
     static void VerifyAccessionDoesNotFlee()

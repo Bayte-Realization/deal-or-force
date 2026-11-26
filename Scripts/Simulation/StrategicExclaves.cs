@@ -24,13 +24,19 @@ public static class StrategicExclaves
 {
     internal sealed record Survey(Dictionary<int, float> Importance, int[] Posts);
 
+    [ThreadStatic] private static Dictionary<int, (int Province, int Size, int Score)> _postsScratch;
+    [ThreadStatic] private static List<(int Province, int Size, int Score)> _orderedScratch;
+
     private static Survey Of(Campaign c, Nation n)
     {
         var map = c.ProvinceMap;
         var cache = c.Caches.Exclaves;
-        if (cache.TryGet(map, c.MapRevision, c.CapitalRevision, n.MapIndex, out var known)) return known;
+        // Ownership and destruction (not battlefront occupation) define national exclaves.
+        var surveyRev = c.OwnershipRevision ^ (c.DestroyedProvinces.Count * 397);
+        if (cache.TryGet(map, surveyRev, c.CapitalRevision, n.MapIndex, out var known)) return known;
         var values = new Dictionary<int, float>();
-        var posts = new Dictionary<int, (int Province, int Size, int Score)>();
+        var posts = _postsScratch ??= new Dictionary<int, (int Province, int Size, int Score)>();
+        posts.Clear();
         var pieces = Corridors.Pieces(c, n);
         var main = pieces.Count > 0 ? pieces[0] : null;
         // Exact capital province wins over a split region whose two fragments share its id.
@@ -58,10 +64,14 @@ public static class StrategicExclaves
                     posts[region] = (p, piece.Count, score);
             }
         }
-        var ordered = new List<(int Province, int Size, int Score)>(posts.Values);
-        ordered.Sort((a, b) => a.Size != b.Size ? b.Size.CompareTo(a.Size) : a.Province.CompareTo(b.Province));
-        var survey = new Survey(values, ordered.ConvertAll(p => p.Province).ToArray());
-        cache.Store(map, c.MapRevision, c.CapitalRevision, n.MapIndex, survey);
+        var ordered = _orderedScratch ??= new List<(int Province, int Size, int Score)>();
+        ordered.Clear();
+        foreach (var row in posts.Values) ordered.Add(row);
+        ordered.Sort(static (a, b) => a.Size != b.Size ? b.Size.CompareTo(a.Size) : a.Province.CompareTo(b.Province));
+        var postProvinces = ordered.Count == 0 ? Array.Empty<int>() : new int[ordered.Count];
+        for (var i = 0; i < ordered.Count; i++) postProvinces[i] = ordered[i].Province;
+        var survey = new Survey(values, postProvinces);
+        cache.Store(map, surveyRev, c.CapitalRevision, n.MapIndex, survey);
         return survey;
     }
 

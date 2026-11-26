@@ -30,19 +30,36 @@ public static partial class Ultimatum
     // Region eligibility for the picker; the complete package is validated again on send.
     public static bool CanDemand(Campaign c, Nation target, int region)
     {
-        if (c?.ProvinceMap is null || target is null ||
-            !c.States.Any(s => s.MapIndex == region && s.NationMapIndex == target.MapIndex)) return false;
+        if (c?.ProvinceMap is null || target is null) return false;
+        var map = c.ProvinceMap;
+        var state = c.StateByMapIndex(region);
+        if (state is null || state.NationMapIndex != target.MapIndex) return false;
+        var controllers = c.ProvinceController ?? map.ProvinceToNation;
+        var provinces = map.ProvincesOfState(region);
         var present = false;
-        var retained = false;
-        for (var p = 1; p <= c.ProvinceMap.ProvinceCount; p++)
+        for (var i = 0; i < provinces.Length; i++)
         {
-            if (c.ProvinceMap.ProvinceToState[p] == region && c.ProvinceMap.ProvinceToNation[p] != target.MapIndex) return false;
-            if (c.ProvinceMap.ProvinceToNation[p] != target.MapIndex) continue;
-            if (c.ProvinceMap.ProvinceToState[p] != region) { retained = true; continue; }
-            if ((c.ProvinceController ?? c.ProvinceMap.ProvinceToNation)[p] != target.MapIndex) return false;
+            var p = provinces[i];
+            if (map.ProvinceToNation[p] != target.MapIndex || controllers[p] != target.MapIndex) return false;
             present = true;
         }
-        return present && retained;
+        if (!present) return false;
+        var ownerStates = c.StatesOf(target);
+        for (var si = 0; si < ownerStates.Length; si++)
+        {
+            var st = ownerStates[si];
+            if (st.MapIndex == region) continue;
+            var otherProvinces = map.ProvincesOfState(st.MapIndex);
+            for (var pi = 0; pi < otherProvinces.Length; pi++)
+                if (map.ProvinceToNation[otherProvinces[pi]] == target.MapIndex)
+                    return true;
+        }
+        for (var p = 1; p <= map.ProvinceCount; p++)
+        {
+            if (map.ProvinceToState[p] != region && map.ProvinceToNation[p] == target.MapIndex)
+                return true;
+        }
+        return false;
     }
 
     public static Outcome Accept(Campaign c, Nation demander, Nation target, int region) =>

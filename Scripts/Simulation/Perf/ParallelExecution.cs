@@ -83,7 +83,9 @@ public static partial class DeterministicParallel
         var count = toExclusive - from;
         if (count <= 0) return false;
 
-        if (!allowed || count < minItems || !TryLease())
+        // EffectiveMinItems: the caller's threshold, raised on a big.LITTLE phone
+        // (MobileBigLittleCap) so a small loop never wakes the pool under MonoVM.
+        if (!allowed || count < EffectiveMinItems(minItems) || !TryLease())
         {
             Interlocked.Increment(ref _serialRuns);
             rangeBody(from, toExclusive);
@@ -132,7 +134,7 @@ public static partial class DeterministicParallel
         if (count > slots.Length)
             throw new ArgumentException("the slot array is shorter than the count", nameof(slots));
 
-        if (!allowed || count < minItems || !TryLease())
+        if (!allowed || count < EffectiveMinItems(minItems) || !TryLease())
         {
             Interlocked.Increment(ref _serialRuns);
             computeRange(0, count, slots);

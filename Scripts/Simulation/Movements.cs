@@ -529,13 +529,49 @@ public static partial class Movements
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MovementState, Tuple<MovementDefinition, int, MovementDefinition>> Become = new();
 
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MovementState, Tuple<int, MovementDefinition>> Exiles = new();
+    private sealed class CachedExileDefinition
+    {
+        public int CatalogVersion;
+        public bool Landless;
+        public MovementDefinition Definition;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MovementState, CachedExileDefinition> Exiles = new();
+
+    /// <summary>Drop a movement's cached exile definition when its homeland or status changes in place.</summary>
+    internal static void InvalidateExileDefinition(MovementState state)
+    {
+        if (state is not null) Exiles.Remove(state);
+    }
+
+    private static bool ExileMatches(CachedExileDefinition cached, Nation nation, MovementState state)
+    {
+        if (cached.CatalogVersion != MovementCatalog.Version || cached.Landless != state.Landless)
+            return false;
+        var def = cached.Definition;
+        if (!string.Equals(def.Id, state.Id, StringComparison.Ordinal) ||
+            !string.Equals(def.Tag, nation.Tag, StringComparison.Ordinal) ||
+            !string.Equals(def.Name, nation.Name, StringComparison.Ordinal) ||
+            !SameStringList(def.Homeland, state.Homeland) ||
+            !SameStringList(def.Peoples, state.Peoples))
+            return false;
+        return true;
+    }
+
+    private static bool SameStringList(List<string> cached, List<string> current)
+    {
+        if (cached.Count != current.Count) return false;
+        for (var i = 0; i < cached.Count; i++)
+            if (!string.Equals(cached[i], current[i], StringComparison.Ordinal)) return false;
+        return true;
+    }
 
     /// <summary>A government in exile, as the template makes it and its own country fills it in.</summary>
     private static MovementDefinition ExileDefinition(Nation nation)
     {
         var state = nation.Movement;
-        if (Exiles.TryGetValue(state, out var cached) && cached.Item1 == MovementCatalog.Version) return cached.Item2;
+        if (Exiles.TryGetValue(state, out var cached) && ExileMatches(cached, nation, state))
+            return cached.Definition;
         var underground = state.Id.StartsWith(MovementCatalog.UndergroundPrefix, StringComparison.Ordinal);
         var template = MovementCatalog.Of(underground ? MovementCatalog.UndergroundTemplate : MovementCatalog.ExileTemplate);
         var description = template?.Description ?? "";
@@ -559,7 +595,12 @@ public static partial class Movements
             : underground ? new[] { "armed_wing", "tunnel_network" } : new[] { "government_in_exile" });
         if (template is not null) definition.Faiths.AddRange(template.Faiths);
         definition.ForgetLookups();
-        Exiles.AddOrUpdate(state, Tuple.Create(MovementCatalog.Version, definition));
+        Exiles.AddOrUpdate(state, new CachedExileDefinition
+        {
+            CatalogVersion = MovementCatalog.Version,
+            Landless = state.Landless,
+            Definition = definition
+        });
         return definition;
     }
 
@@ -731,9 +772,9 @@ public static partial class Movements
         // to the far side of the world; then the region's own province closest to it.
         double latitude = 0, x = 0, y = 0;
         var count = 0;
-        for (var province = 1; province <= topology.ProvinceCount; province++)
+        var provinces = topology.ProvincesOfState((ushort)region.MapIndex);
+        foreach (var province in provinces)
         {
-            if (topology.ProvinceToState[province] != (ushort)region.MapIndex) continue;
             var centre = topology.CenterOf(province);
             latitude += centre.Latitude;
             var radians = centre.Longitude * Math.PI / 180.0;
@@ -747,9 +788,8 @@ public static partial class Movements
         var scale = MathF.Max(0.12f, MathF.Cos(midLatitude * MathF.PI / 180f));
         var best = float.MaxValue;
         var seat = 0;
-        for (var province = 1; province <= topology.ProvinceCount; province++)
+        foreach (var province in provinces)
         {
-            if (topology.ProvinceToState[province] != (ushort)region.MapIndex) continue;
             var centre = topology.CenterOf(province);
             var dx = MathF.Abs(centre.Longitude - midLongitude);
             dx = MathF.Min(dx, 360f - dx) * scale;
@@ -768,9 +808,8 @@ public static partial class Movements
         if (topology is null || region is null) return (0f, 0f);
         double latitude = 0, longitude = 0;
         var counted = 0;
-        for (var province = 1; province <= topology.ProvinceCount; province++)
+        foreach (var province in topology.ProvincesOfState((ushort)region.MapIndex))
         {
-            if (topology.ProvinceToState[province] != (ushort)region.MapIndex) continue;
             var centre = topology.CenterOf(province);
             latitude += centre.Latitude;
             longitude += centre.Longitude;

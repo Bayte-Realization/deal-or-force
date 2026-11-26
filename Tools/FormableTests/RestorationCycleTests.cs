@@ -36,8 +36,36 @@ static class RestorationCycleTests
         return (c, first, next, original, home);
     }
 
+    private static void ReunionReadsLiveRegions()
+    {
+        var (c, first, _, original, home) = World();
+        var outside = Enumerable.Range(1, c.ProvinceMap.ProvinceCount).Except(home).ToArray();
+        StatePartition.Annex(c, outside, original, asConquest: false);
+        c.ScenarioTerritories[original.Tag] = home.Concat(outside).ToArray();
+        bool CatalogueHasReunion() => FormableRestorations.In(c).Any(d => d.Id == "reunite_cze");
+
+        Check(!CatalogueHasReunion(), "half of the current population is enough to keep the original identity intact");
+        c.StatesOf(first).Single().Population = 3_000_000;
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, c.ElapsedHours + 24);
+        Check(CatalogueHasReunion() && FormableRestorations.BrokenApart(c, original),
+            "reused region lookups still read current population");
+
+        c.ScenarioTerritories[original.Tag] = outside;
+        FormableRestorations.Invalidate(c);
+        Check(!CatalogueHasReunion(), "an edited scenario homeland refreshes the region lookup");
+        c.ScenarioTerritories[original.Tag] = new[] { home[0] };
+        FormableRestorations.Invalidate(c);
+        Check(CatalogueHasReunion(), "restoring a foreign authored province opens the reunion again");
+
+        c.ProvinceMap.ProvinceToState[home[0]] = c.ProvinceMap.ProvinceToState[outside[0]];
+        c.InvalidateStateIndex();
+        Check(!CatalogueHasReunion() && !FormableRestorations.BrokenApart(c, original),
+            "moving an authored province to a different region invalidates the lookup");
+    }
+
     public static void Run()
     {
+        ReunionReadsLiveRegions();
         var (c, first, next, original, home) = World();
         const string id = "restore_cze";
         var definition = FormableNations.Find(c, id);

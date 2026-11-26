@@ -943,26 +943,31 @@ public static class NuclearPosture
         if (!Active(c) || attacker is null || target is null || c.Defines.AiNuclearUmbrellaPrice <= 0f) return 0f;
         var bestScore = 0f;
         Nation bestPatron = null;
-        void Consider(Nation holder)
-        {
-            if (holder is null || holder.NuclearPosture >= 4 || holder.Id == attacker.Id || holder.Id == target.Id || holder.Population <= 0) return;
-            if (Allied(c, holder.Id, attacker.Id) || !IsHolder(c, holder)) return;
-            var score = (4 - holder.NuclearPosture) * Deterrence.UmbrellaMultiplier(holder.NuclearDoctrine);
-            if (score > bestScore) { bestScore = score; bestPatron = holder; }
-        }
         var allies = c.Caches.Protectors.AlliesOf(c, target.Id);
-        for (var i = 0; i < allies.Length; i++) Consider(c.NationById(allies[i]));
-        if (target.IsSubject && target.OverlordId >= 0) Consider(c.NationById(target.OverlordId));
+        for (var i = 0; i < allies.Length; i++)
+            ConsiderUmbrellaHolder(c, attacker, target, c.NationById(allies[i]), ref bestScore, ref bestPatron);
+        if (target.IsSubject && target.OverlordId >= 0)
+            ConsiderUmbrellaHolder(c, attacker, target, c.NationById(target.OverlordId), ref bestScore, ref bestPatron);
         WarmUmbrellaCache(c);
         var cache = SubjectHolderCaches.GetOrCreateValue(c);
         var shList = cache.SubjectHolders;
         for (var i = 0; i < shList.Count; i++)
         {
             var sh = shList[i];
-            if (sh.AnswersTo(target.Id)) Consider(sh);
+            if (sh.AnswersTo(target.Id))
+                ConsiderUmbrellaHolder(c, attacker, target, sh, ref bestScore, ref bestPatron);
         }
         patron = bestPatron;
         return bestScore * c.Defines.AiNuclearUmbrellaPrice;
+    }
+
+    private static void ConsiderUmbrellaHolder(Campaign c, Nation attacker, Nation target, Nation holder,
+        ref float bestScore, ref Nation bestPatron)
+    {
+        if (holder is null || holder.NuclearPosture >= 4 || holder.Id == attacker.Id || holder.Id == target.Id || holder.Population <= 0) return;
+        if (Allied(c, holder.Id, attacker.Id) || !IsHolder(c, holder)) return;
+        var score = (4 - holder.NuclearPosture) * Deterrence.UmbrellaMultiplier(holder.NuclearDoctrine);
+        if (score > bestScore) { bestScore = score; bestPatron = holder; }
     }
 
     private static bool Allied(Campaign c, int a, int b) =>

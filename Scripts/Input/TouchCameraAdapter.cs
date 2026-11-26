@@ -22,6 +22,9 @@ public sealed class TouchCameraAdapter
     /// <summary>1-finger drag or inertial coast delta in viewport pixels.</summary>
     public event Action<Vector2> PanRequested;
 
+    /// <summary>Emitted when a second finger joins and transitions the recognizer into pinching.</summary>
+    public event Action PinchStarted;
+
     /// <summary>
     /// 2-finger pinch zoom anchored at midpoint.
     /// Parameters: <c>(anchorPx, zoomDirection, rawScaleFactor)</c> where negative <c>zoomDirection</c>
@@ -98,7 +101,8 @@ public sealed class TouchCameraAdapter
 
         var nowSec = Time.GetTicksUsec() / 1_000_000.0;
         var modeBefore = _machine.ActiveMode;
-        var wasBox = _machine.State == TouchGestureState.BoxSelecting;
+        var stateBefore = _machine.State;
+        var wasBox = stateBefore == TouchGestureState.BoxSelecting;
 
         if (inputEvent is InputEventScreenTouch touch)
         {
@@ -109,6 +113,8 @@ public sealed class TouchCameraAdapter
                     : _machine.OnTouchUp(touch.Index, touch.Position.X, touch.Position.Y, nowSec);
             if (wasBox && _machine.State != TouchGestureState.BoxSelecting && !delta.BoxSelectCompleted)
                 BoxSelectCanceled?.Invoke();
+            if (stateBefore != TouchGestureState.Pinching && _machine.State == TouchGestureState.Pinching)
+                PinchStarted?.Invoke();
             Dispatch(delta);
             if (_machine.ActiveMode != modeBefore) ModeChanged?.Invoke(_machine.ActiveMode);
             return true;
@@ -119,6 +125,8 @@ public sealed class TouchCameraAdapter
             var delta = _machine.OnTouchMove(drag.Index, drag.Position.X, drag.Position.Y, nowSec);
             if (wasBox && _machine.State != TouchGestureState.BoxSelecting && !delta.BoxSelectCompleted)
                 BoxSelectCanceled?.Invoke();
+            if (stateBefore != TouchGestureState.Pinching && _machine.State == TouchGestureState.Pinching)
+                PinchStarted?.Invoke();
             Dispatch(delta);
             if (_machine.ActiveMode != modeBefore) ModeChanged?.Invoke(_machine.ActiveMode);
             return true;

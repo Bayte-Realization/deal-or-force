@@ -15,8 +15,14 @@ namespace DealOrForce;
 /// </summary>
 internal sealed class ShellTouchModeBarView
 {
+    private const double ToastDurationSec = 3.5;
+    private const double ToastFadeSec = 0.6;
+
     private readonly ShellContext _ctx;
     private PanelContainer _panel;
+    private PanelContainer _toastPanel;
+    private Label _toastLabel;
+    private ShellLayoutProfile _lastProfile;
     private readonly Dictionary<TouchTapMode, Button> _buttons = new();
     private StyleBox _normalStyle;
     private StyleBoxFlat _hoverStyle;
@@ -27,8 +33,12 @@ internal sealed class ShellTouchModeBarView
     private TouchTapMode? _lastMode;
     private bool? _lastSticky;
     private string _lastLang = "";
+    private double _toastRemaining;
+    private TouchTapMode _toastMode;
+    private bool _toastSticky;
 
     public bool IsVisible => _panel is { Visible: true };
+    public bool HasActiveToast => _toastRemaining > 0.0 || _toastPanel is { Visible: true };
 
     public ShellTouchModeBarView(ShellContext ctx)
     {
@@ -94,17 +104,45 @@ internal sealed class ShellTouchModeBarView
                 MouseDefaultCursorShape = Control.CursorShape.PointingHand
             };
             btn.AddThemeFontOverride("font", _ctx.Font("shell.serif_semibold"));
-            btn.AddThemeFontSizeOverride("font_size", 11);
+            btn.AddThemeFontSizeOverride("font_size", 10);
             btn.Pressed += () =>
             {
                 _ctx.PlayCue?.Invoke("ui_select");
                 if (captured == TouchTapMode.Order) _ctx.PressTouchOrderMode?.Invoke();
                 else _ctx.SetTouchTapMode?.Invoke(captured);
                 Refresh();
+                var curMode = _ctx.GetTouchTapMode?.Invoke() ?? captured;
+                var sticky = _ctx.IsTouchStickyOrder?.Invoke() ?? false;
+                ShowModeToast(curMode, sticky);
             };
             grid.AddChild(btn);
             _buttons[captured] = btn;
         }
+
+        _toastPanel = new PanelContainer
+        {
+            Name = "ShellTouchModeToast",
+            Visible = false,
+            ClipContents = false,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            ZIndex = 13
+        };
+        _toastPanel.AddThemeStyleboxOverride("panel",
+            _ctx.NineSlice("plate_umber_9s", 10, 10, 6, 10, 6, "shell.plate_bottom", "shell.brass_dim", 2));
+        _toastLabel = new Label
+        {
+            Name = "ShellTouchModeToastLabel",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            CustomMinimumSize = new Vector2(260, 0)
+        };
+        _toastLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
+        _toastLabel.AddThemeFontSizeOverride("font_size", 11);
+        _toastLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
+        _toastPanel.AddChild(_toastLabel);
+        _ctx.Root.AddChild(_toastPanel);
+
         Refresh();
     }
 
@@ -112,18 +150,22 @@ internal sealed class ShellTouchModeBarView
     {
         if (_modalObscured == obscured) return;
         _modalObscured = obscured;
+        if (obscured) HideToast();
         Refresh();
     }
 
     public void Layout(ShellLayoutProfile profile)
     {
+        _lastProfile = profile;
         if (_panel is null) return;
         if (!profile.TouchMode || profile.TouchModeBar.W <= 0f || profile.TouchModeBar.H <= 0f)
         {
             _panel.Visible = false;
+            HideToast();
             return;
         }
         ShellContext.PlaceRect(_panel, profile.TouchModeBar);
+        LayoutToast(profile);
     }
 
     public void Refresh()
@@ -139,12 +181,23 @@ internal sealed class ShellTouchModeBarView
         if (_lastVisible == vis && _lastMode == curMode && _lastSticky == sticky && _lastLang == lang)
             return;
 
+        var langChanged = _lastLang != lang;
         _lastVisible = vis;
         _lastMode = curMode;
         _lastSticky = sticky;
         _lastLang = lang;
         _panel.Visible = vis;
-        if (!vis) return;
+        if (!vis)
+        {
+            HideToast();
+            return;
+        }
+
+        if (langChanged && _toastRemaining > 0.0 && _toastLabel is not null)
+        {
+            _toastLabel.Text = ToastFor(_toastMode, _toastSticky);
+            LayoutToast(_lastProfile);
+        }
 
         foreach (var (mode, btn) in _buttons)
         {
@@ -159,6 +212,65 @@ internal sealed class ShellTouchModeBarView
         }
     }
 
+    public void Tick(double delta)
+    {
+        if (_toastPanel is null || _toastRemaining <= 0.0)
+        {
+            if (_toastPanel is { Visible: true }) _toastPanel.Visible = false;
+            return;
+        }
+        var touch = _ctx.IsTouchMode?.Invoke() ?? (PlatformProfile.Current?.IsTouchPrimary == true);
+        var obscured = _modalObscured || (_ctx.IsAnyModalOpen?.Invoke() ?? false);
+        if (!touch || obscured || !IsVisible)
+        {
+            HideToast();
+            return;
+        }
+        _toastRemaining -= Math.Max(0.0, delta);
+        if (_toastRemaining <= 0.0)
+        {
+            HideToast();
+            return;
+        }
+        var alpha = _toastRemaining < ToastFadeSec ? (float)(_toastRemaining / ToastFadeSec) : 1f;
+        _toastPanel.Modulate = Colors.White with { A = alpha };
+        if (!_toastPanel.Visible) _toastPanel.Visible = true;
+    }
+
+    private void ShowModeToast(TouchTapMode mode, bool stickyOrder)
+    {
+        if (_toastPanel is null || _toastLabel is null || !IsVisible) return;
+        _toastMode = mode;
+        _toastSticky = stickyOrder;
+        _toastRemaining = ToastDurationSec;
+        _toastLabel.Text = ToastFor(mode, stickyOrder);
+        _toastPanel.Modulate = Colors.White;
+        _toastPanel.Visible = true;
+        LayoutToast(_lastProfile);
+    }
+
+    private void HideToast()
+    {
+        _toastRemaining = 0.0;
+        if (_toastPanel is not null) _toastPanel.Visible = false;
+    }
+
+    private void LayoutToast(ShellLayoutProfile profile)
+    {
+        if (_toastPanel is null || _toastLabel is null || profile is null ||
+            !profile.TouchMode || profile.TouchModeBar.W <= 0f || profile.TouchModeBar.H <= 0f)
+            return;
+        var toastW = MathF.Min(308f, MathF.Max(220f, profile.TouchModeBar.Right - 16f));
+        if (profile.AlertColumn.W > 0f && profile.AlertColumn.X < profile.TouchModeBar.Right)
+            toastW = MathF.Min(toastW, MathF.Max(180f, profile.AlertColumn.X - 16f));
+        var toastX = MathF.Max(12f, profile.TouchModeBar.Right - toastW);
+        var toastY = profile.TouchModeBar.Bottom + 6f;
+        _toastLabel.CustomMinimumSize = new Vector2(MathF.Max(160f, toastW - 20f), 0f);
+        _toastPanel.Position = new Vector2(toastX, toastY);
+        _toastPanel.Size = new Vector2(toastW, 0f);
+        _toastPanel.ResetSize();
+    }
+
     private static string L(string key, string fallback)
     {
         var v = Loc.Get(key);
@@ -169,13 +281,13 @@ internal sealed class ShellTouchModeBarView
     {
         return mode switch
         {
-            TouchTapMode.Select => L("mobile.tap.select_short", "Select"),
+            TouchTapMode.Select => L("mobile.mode.select.short", "Select"),
             TouchTapMode.Order => stickyOrder
-                ? L("mobile.tap.order_lock_short", "Order Lock")
-                : L("mobile.tap.order_once_short", "Order 1×"),
-            TouchTapMode.BoxSelect => L("mobile.tap.box_short", "Box"),
-            TouchTapMode.Pan => L("mobile.tap.pan_short", "Pan"),
-            _ => "Select"
+                ? L("mobile.mode.order.sticky", "Order Lock")
+                : L("mobile.mode.order.oneshot", "Order 1×"),
+            TouchTapMode.BoxSelect => L("mobile.mode.box.short", "Box"),
+            TouchTapMode.Pan => L("mobile.mode.pan.short", "Map"),
+            _ => L("mobile.mode.select.short", "Select")
         };
     }
 
@@ -183,17 +295,26 @@ internal sealed class ShellTouchModeBarView
     {
         return mode switch
         {
-            TouchTapMode.Select => L("mobile.tap.select_tip",
-                "Select — tap to pick a country, region, or army.\nDrag to pan · Hold a province to issue a quick order."),
+            TouchTapMode.Select => L("mobile.mode.select.tip", "Tap to select a province, nation, or army. Drag to pan. Hold to issue an order."),
             TouchTapMode.Order => stickyOrder
-                ? L("mobile.tap.order_lock_tip",
-                    "Order Lock — every tap issues a march or context order\nwithout returning to Select.\nTap again or pick Select to exit.")
-                : L("mobile.tap.order_once_tip",
-                    "Order 1× — next tap issues 1 march or context order\n(like Right-Click) and returns to Select.\nTap again while active to lock multi-order mode."),
-            TouchTapMode.BoxSelect => L("mobile.tap.box_tip",
-                "Box — drag one finger to draw a selection box over armies.\nDrag with two fingers to pan or zoom the map."),
-            TouchTapMode.Pan => L("mobile.tap.pan_tip",
-                "Pan — move and zoom the map safely.\nTaps never select units or issue orders."),
+                ? L("mobile.mode.order.sticky.tip", L("mobile.mode.order.tip", "Order Lock: every tap keeps issuing orders continuously until you tap Order again or switch mode."))
+                : L("mobile.mode.order.oneshot.tip", L("mobile.mode.order.tip", "Order 1×: next tap issues an order (like right-click) and returns to Select. Tap Order again to lock.")),
+            TouchTapMode.BoxSelect => L("mobile.mode.box.tip", "Drag with one finger to draw a selection rectangle for divisions. Two fingers move the map."),
+            TouchTapMode.Pan => L("mobile.mode.pan.tip", "Safe map navigation lock: taps and holds never select or issue orders while browsing the map."),
+            _ => ""
+        };
+    }
+
+    private static string ToastFor(TouchTapMode mode, bool stickyOrder)
+    {
+        return mode switch
+        {
+            TouchTapMode.Select => L("mobile.mode.select.toast", "Select mode: tap picks province, country, or army. Hold issues an order."),
+            TouchTapMode.Order => stickyOrder
+                ? L("mobile.mode.order.sticky.toast", "Order Lock: every tap issues orders until switched off. Tap again to return to 1×.")
+                : L("mobile.mode.order.oneshot.toast", "Order 1×: next tap issues an order (like right-click) and returns to Select. Tap again to lock."),
+            TouchTapMode.BoxSelect => L("mobile.mode.box.toast", "Box mode: drag one finger to box-select divisions. Two fingers move the map."),
+            TouchTapMode.Pan => L("mobile.mode.pan.toast", "Map mode: safe camera navigation — taps never select or issue orders."),
             _ => ""
         };
     }

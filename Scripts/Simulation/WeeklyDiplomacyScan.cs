@@ -109,8 +109,24 @@ public static partial class AiStatecraft
         internal float Fear;
     }
 
+    internal static int ComputeStandingMultiMask()
+    {
+        var mask = 0;
+        if (OpinionCatalog.Find("shared_border") is { MaxStacks: > 1 }) mask |= 1;
+        if (OpinionCatalog.Find("alliance") is { MaxStacks: > 1 }) mask |= 2;
+        if (OpinionCatalog.Find("shared_state_faith") is { MaxStacks: > 1 }) mask |= 4;
+        if (OpinionCatalog.Find("fear_of_strength") is { MaxStacks: > 1 }) mask |= 8;
+        return mask;
+    }
+
     internal static WeeklyPairPrecheck PrecheckWeeklyPair(Campaign campaign, WeeklyScanMemory memory,
-        Nation nation, Nation other, bool borders, float myStrength, bool identityOn)
+        Nation nation, Nation other, bool borders, float myStrength, bool identityOn) =>
+        PrecheckWeeklyPair(campaign, memory, nation, other, borders, myStrength, identityOn,
+            campaign?.FeatureEnabled("intelligence") ?? false, -1);
+
+    internal static WeeklyPairPrecheck PrecheckWeeklyPair(Campaign campaign, WeeklyScanMemory memory,
+        Nation nation, Nation other, bool borders, float myStrength, bool identityOn,
+        bool intelligenceOn, int standingMultiMask)
     {
         var result = new WeeklyPairPrecheck { Borders = borders };
         if (campaign is null || nation is null || other is null || nation.Id == other.Id)
@@ -129,7 +145,8 @@ public static partial class AiStatecraft
             result.Unchanged = true;
             return result;
         }
-        result.Unchanged = !WeeklyPassWouldWriteSinglePass(campaign, nation, other, peeked, borders, myStrength, identityOn, stamp, ref result);
+        result.Unchanged = !WeeklyPassWouldWriteSinglePass(campaign, nation, other, peeked, borders, myStrength,
+            identityOn, intelligenceOn, standingMultiMask, stamp, ref result);
         return result;
     }
 
@@ -148,22 +165,36 @@ public static partial class AiStatecraft
         if (relation is null) return false;
         if (relation.Stance == DiplomaticStance.AtWar)
         {
-            WeeklyAdditives(campaign, relation, out var warPolitics, out var warIdentity, out var warSocial, out var warClaims, out var warGeopolitics);
+            WeeklyAdditives(campaign, nation, other, relation, out var warPolitics, out var warIdentity, out var warSocial, out var warClaims, out var warGeopolitics);
             RememberWeeklyPair(memory, nation.Id, other.Id, borders, relation, warPolitics, warIdentity, warSocial, warClaims, warGeopolitics);
             return true;
         }
 
+        var reasons = relation.Reasons;
+        bool hasBorder = false, hasAlliance = false, hasFaith = false, hasFear = false;
+        for (var ri = 0; ri < reasons.Count; ri++)
+        {
+            var id = reasons[ri].Id;
+            if (!hasBorder && string.Equals(id, "shared_border", System.StringComparison.OrdinalIgnoreCase)) hasBorder = true;
+            else if (!hasAlliance && string.Equals(id, "alliance", System.StringComparison.OrdinalIgnoreCase)) hasAlliance = true;
+            else if (!hasFaith && string.Equals(id, "shared_state_faith", System.StringComparison.OrdinalIgnoreCase)) hasFaith = true;
+            else if (!hasFear && string.Equals(id, "fear_of_strength", System.StringComparison.OrdinalIgnoreCase)) hasFear = true;
+        }
+
         if (borders)
             OpinionSystem.Remember(campaign, relation, "shared_border", 1f, settle: false);
-        else OpinionSystem.Forget(campaign, relation, "shared_border", settle: false);
+        else if (hasBorder)
+            OpinionSystem.Forget(campaign, relation, "shared_border", settle: false);
         var isAllied = relation.Stance == DiplomaticStance.Allied;
         if (isAllied)
             OpinionSystem.Remember(campaign, relation, "alliance", 1f, settle: false);
-        else OpinionSystem.Forget(campaign, relation, "alliance", settle: false);
+        else if (hasAlliance)
+            OpinionSystem.Forget(campaign, relation, "alliance", settle: false);
         var faith = pre.HasComputed ? pre.Faith : (identityOn && StateIdentity.ShareDeclaredFaith(nation, other));
         if (faith)
             OpinionSystem.Remember(campaign, relation, "shared_state_faith", 1f, settle: false);
-        else OpinionSystem.Forget(campaign, relation, "shared_state_faith", settle: false);
+        else if (hasFaith)
+            OpinionSystem.Forget(campaign, relation, "shared_state_faith", settle: false);
 
         float strength, fear;
         if (pre.HasComputed && !pre.AssessmentDue)
@@ -180,9 +211,10 @@ public static partial class AiStatecraft
         }
         if (fear > 0.05f && (borders || pre.Awake || fear >= 0.25f))
             OpinionSystem.Remember(campaign, relation, "fear_of_strength", fear, settle: false);
-        else if (strength >= 0.95f || (!borders && !pre.Awake && fear < 0.25f))
+        else if (hasFear && (strength >= 0.95f || (!borders && !pre.Awake && fear < 0.25f)))
             OpinionSystem.Forget(campaign, relation, "fear_of_strength", settle: false);
-        OpinionSystem.Settle(campaign, relation, out var politics, out var identity, out var social, out var claims, out var geopolitics);
+        var explain = nation.IsHuman || other.IsHuman;
+        OpinionSystem.Settle(campaign, relation, explain, out var politics, out var identity, out var social, out var claims, out var geopolitics);
         CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
         RememberWeeklyPair(memory, nation.Id, other.Id, borders, relation, politics, identity, social, claims, geopolitics);
         return true;
@@ -221,18 +253,20 @@ public static partial class AiStatecraft
         bool borders, float myStrength, bool identityOn, in WeeklyStamp stamp)
     {
         var dummy = new WeeklyPairPrecheck { Borders = borders };
-        return WeeklyPassWouldWriteSinglePass(campaign, nation, other, relation, borders, myStrength, identityOn, stamp, ref dummy);
+        return WeeklyPassWouldWriteSinglePass(campaign, nation, other, relation, borders, myStrength, identityOn,
+            campaign.FeatureEnabled("intelligence"), -1, stamp, ref dummy);
     }
 
     static bool WeeklyPassWouldWriteSinglePass(Campaign campaign, Nation nation, Nation other, DiplomaticRelation relation,
-        bool borders, float myStrength, bool identityOn, in WeeklyStamp stamp, ref WeeklyPairPrecheck pre)
+        bool borders, float myStrength, bool identityOn, bool intelligenceOn, int standingMultiMask,
+        in WeeklyStamp stamp, ref WeeklyPairPrecheck pre)
     {
         if (relation.Stance == DiplomaticStance.AtWar) return false;
         var today = campaign.ElapsedDays;
         if (relation.Stance == DiplomaticStance.Truce && today >= relation.TruceUntil) return true;
         var allied = relation.Stance == DiplomaticStance.Allied;
         var faith = identityOn && StateIdentity.ShareDeclaredFaith(nation, other);
-        var assessmentDue = WeeklyAssessmentDue(campaign, nation.Id, other);
+        var assessmentDue = WeeklyAssessmentDue(campaign, nation, other, intelligenceOn);
 
         // Single pass over relation.Reasons to locate all 4 standing reasons AND check expiry/decay.
         OpinionReason heldBorder = null, heldAlliance = null, heldFaith = null, heldFear = null;
@@ -249,17 +283,21 @@ public static partial class AiStatecraft
 
             if (!anyDecayOrExpiry && r.ExpiresDay > 0)
             {
-                if (OpinionCatalog.Find(id) is { } def)
+                if (r.ExpiresDay <= today)
                 {
-                    if (r.ExpiresDay <= today || (def.Decays && def.Days > 0))
+                    if (OpinionCatalog.Find(id) is not null)
                         anyDecayOrExpiry = true;
+                }
+                else if (OpinionCatalog.Find(id) is { Decays: true, Days: > 0 })
+                {
+                    anyDecayOrExpiry = true;
                 }
             }
         }
 
-        if (StandingReasonWouldWrite("shared_border", heldBorder, borders, 1f)) return true;
-        if (StandingReasonWouldWrite("alliance", heldAlliance, allied, 1f)) return true;
-        if (StandingReasonWouldWrite("shared_state_faith", heldFaith, faith, 1f)) return true;
+        if (StandingReasonWouldWrite("shared_border", heldBorder, borders, 1f, 1, standingMultiMask)) return true;
+        if (StandingReasonWouldWrite("alliance", heldAlliance, allied, 1f, 2, standingMultiMask)) return true;
+        if (StandingReasonWouldWrite("shared_state_faith", heldFaith, faith, 1f, 4, standingMultiMask)) return true;
         if (assessmentDue)
         {
             pre.Faith = faith;
@@ -280,39 +318,40 @@ public static partial class AiStatecraft
 
         if (fear > 0.05f)
         {
-            if (StandingReasonWouldWrite("fear_of_strength", heldFear, true, fear)) return true;
+            if (StandingReasonWouldWrite("fear_of_strength", heldFear, true, fear, 8, standingMultiMask)) return true;
         }
         else if (strength >= 0.95f && heldFear is not null)
             return true;
 
         if (anyDecayOrExpiry) return true;
 
-        WeeklyAdditives(campaign, relation, out var politics, out var identity, out var social, out var claims, out var geopolitics);
+        WeeklyAdditives(campaign, nation, other, relation, out var politics, out var identity, out var social, out var claims, out var geopolitics);
         return stamp.Politics != politics || stamp.Identity != identity || stamp.Social != social ||
                stamp.Claims != claims || stamp.Geopolitics != geopolitics;
     }
 
-    static bool StandingReasonWouldWrite(string id, OpinionReason held, bool present, float scale)
+    static bool StandingReasonWouldWrite(string id, OpinionReason held, bool present, float scale, int bit, int standingMultiMask)
     {
         if (!present) return held is not null;
         if (held is null || held.Scale != scale) return true;
-        return OpinionCatalog.Find(id) is { MaxStacks: > 1 };
+        return standingMultiMask >= 0 ? (standingMultiMask & bit) != 0 : OpinionCatalog.Find(id) is { MaxStacks: > 1 };
     }
 
-    static bool WeeklyAssessmentDue(Campaign campaign, int viewerId, Nation target)
+    static bool WeeklyAssessmentDue(Campaign campaign, Nation viewer, Nation target, bool intelligenceOn)
     {
-        if (target is null || CampaignIntel.CanInspect(viewerId, target.Id)) return false;
-        if (IntelNetworks.Strength(campaign, viewerId, target.Id) >= campaign.Defines.IntelInspectStrength) return false;
+        if (viewer is null || target is null || CampaignIntel.CanInspect(viewer.Id, target.Id)) return false;
+        var network = intelligenceOn ? viewer.IntelNetworks.GetValueOrDefault(target.Id) : 0f;
+        if (network >= campaign.Defines.IntelInspectStrength) return false;
         var every = System.Math.Max(1, campaign.Defines.IntelAssessmentDays);
         return target.AssessedDay < 0 || campaign.ElapsedDays < target.AssessedDay ||
                campaign.ElapsedDays - target.AssessedDay >= every;
     }
 
-    static void WeeklyAdditives(Campaign campaign, DiplomaticRelation relation,
+    static void WeeklyAdditives(Campaign campaign, Nation nation, Nation other, DiplomaticRelation relation,
         out float politics, out float identity, out float social, out float claims, out float geopolitics)
     {
-        var left = campaign.NationById(relation.A);
-        var right = campaign.NationById(relation.B);
+        var left = relation.A == nation.Id ? nation : relation.A == other.Id ? other : campaign.NationById(relation.A);
+        var right = relation.B == other.Id ? other : relation.B == nation.Id ? nation : campaign.NationById(relation.B);
         politics = PoliticsCore.Affinity(campaign, left, right);
         identity = StateIdentity.Affinity(campaign, left, right);
         social = SocialMemory.OpinionEffect(campaign, left, right);

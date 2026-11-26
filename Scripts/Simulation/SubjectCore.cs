@@ -328,6 +328,17 @@ public static class SubjectSystem
         return found;
     }
 
+    /// <summary>Zero-allocation count of direct dependencies for scripted triggers.</summary>
+    internal static int SubjectCount(Campaign campaign, Nation overlord)
+    {
+        if (campaign is null || overlord is null) return 0;
+        var count = 0;
+        var nations = campaign.Nations;
+        for (var i = 0; i < nations.Count; i++)
+            if (nations[i].AnswersTo(overlord.Id)) count++;
+        return count;
+    }
+
     public static Nation OverlordOf(Campaign campaign, Nation subject) =>
         subject is null || !subject.IsSubject ? null : campaign?.NationById(subject.OverlordId);
 

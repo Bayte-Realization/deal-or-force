@@ -1363,32 +1363,39 @@ public static class SecessionEvents
         return trimmed;
     }
 
-    private static Nation FindMatchingMovement(Campaign campaign, IReadOnlyList<SecessionPiece> leaving)
+    [ThreadStatic] private static Dictionary<int, long> _secedingPopulationByRegion;
+    [ThreadStatic] private static HashSet<int> _matchedHomelandRegions;
+
+    internal static Nation FindMatchingMovement(Campaign campaign, IReadOnlyList<SecessionPiece> leaving)
     {
         if (campaign?.ProvinceMap is null || leaving is null || leaving.Count == 0) return null;
-        var leavingIndices = leaving.Select(p => p.MapIndex).ToHashSet();
+        var peopleByRegion = _secedingPopulationByRegion ??= new Dictionary<int, long>();
+        peopleByRegion.Clear();
+        long all = 0;
+        for (var i = 0; i < leaving.Count; i++)
+        {
+            var piece = leaving[i];
+            var people = Math.Max(0L, piece.Population);
+            peopleByRegion[piece.MapIndex] = peopleByRegion.GetValueOrDefault(piece.MapIndex) + people;
+            all += people;
+        }
+
+        var matched = _matchedHomelandRegions ??= new HashSet<int>();
         foreach (var nation in campaign.Nations)
         {
-            if (nation.Movement is not { Landless: true }) continue;
-            // A map artefact (common/country_merges) is not anybody's movement (an old save's
-            // Siachen Glacier went into exile and came back as the "Military Command of Kashmir").
-            if (CountryMerges.IsMerged(nation.Tag)) continue;
-            // Only match a movement if the seceding ground actually overlaps the movement's defined authentic homeland.
-            // A temporary exile office / headquarters outside the homeland must NEVER confer ownership of a foreign region!
-            var def = Movements.DefinitionOf(nation);
-            if (def?.Homeland is null || def.Homeland.Count == 0) continue;
-            var homelandIndices = def.Homeland
-                .Select(id => Movements.StateById(campaign, id)?.MapIndex)
-                .Where(idx => idx.HasValue && idx.Value > 0)
-                .Select(idx => idx.Value)
-                .ToHashSet();
-            // And a real overlap: half the people leaving live in its homeland. One shared region
-            // let an exile Dagestani state come back as the ruler of Rostov and Voronezh.
-            long inside = 0, all = 0;
-            foreach (var piece in leaving)
+            if (nation.Movement is not { Landless: true } || CountryMerges.IsMerged(nation.Tag)) continue;
+            var homeland = Movements.DefinitionOf(nation)?.Homeland;
+            if (homeland is null || homeland.Count == 0) continue;
+
+            // A foreign headquarters gives no claim. At least half of those leaving must
+            // live in the movement's homeland. Multiple IDs for one region still count once.
+            matched.Clear();
+            long inside = 0;
+            for (var i = 0; i < homeland.Count; i++)
             {
-                all += Math.Max(0, piece.Population);
-                if (homelandIndices.Contains(piece.MapIndex)) inside += Math.Max(0, piece.Population);
+                if (Movements.StateById(campaign, homeland[i]) is { MapIndex: > 0 } region &&
+                    peopleByRegion.TryGetValue(region.MapIndex, out var people) && matched.Add(region.MapIndex))
+                    inside += people;
             }
             if (inside > 0 && inside * 2 >= all)
                 return nation;
@@ -1406,17 +1413,24 @@ public static class SecessionEvents
         var letters = new string((culture ?? "").Where(char.IsLetter).ToArray()).ToUpperInvariant();
         if (letters.Length < 2) letters = (avoid ?? "XX").ToUpperInvariant();
 
-        var candidates = new List<string>();
-        if (letters.Length >= 3) candidates.Add(letters[..3]);
-        if (letters.Length >= 4) candidates.Add(string.Concat(letters[0], letters[2..4]));
-        for (var suffix = 1; suffix <= 99; suffix++)
-            candidates.Add($"{letters[..1]}{suffix:00}");
+        bool Available(string candidate) =>
+            !string.Equals(candidate, avoid, StringComparison.OrdinalIgnoreCase) && campaign.NationByTag(candidate) is null;
 
-        foreach (var candidate in candidates)
+        if (letters.Length >= 3)
         {
-            if (string.Equals(candidate, avoid, StringComparison.OrdinalIgnoreCase)) continue;
-            if (campaign.NationByTag(candidate) is not null) continue;
-            return candidate;
+            var candidate = letters[..3];
+            if (Available(candidate)) return candidate;
+        }
+        if (letters.Length >= 4)
+        {
+            var candidate = string.Concat(letters[0], letters[2..4]);
+            if (Available(candidate)) return candidate;
+        }
+        var prefix = letters[..1];
+        for (var suffix = 1; suffix <= 99; suffix++)
+        {
+            var candidate = $"{prefix}{suffix:00}";
+            if (Available(candidate)) return candidate;
         }
         return "";
     }

@@ -12,6 +12,7 @@ public partial class ExportVerification
         var c = game.VerificationWorld; c.IsPaused = true;
         var fingerprint = CampaignFingerprint.Of(c); var rng = c.Random.State;
         GetTree().Root.Size = new Vector2I(1920, 1080);
+        game.VerificationRenderWeather = false;
         game.Call("CloseMapSelection");
         foreach (var flat in new[] { false, true })
         foreach (var location in new[] { ("perm", 58.01f, 56.25f), ("volga", 48.8f, 44.5f) })

@@ -285,6 +285,11 @@ public static partial class CampaignFingerprint
             MixText(ref hash, "revolt_parent");
             Mix(ref hash, nation.RevoltParentId);
         }
+        if (!string.IsNullOrEmpty(nation.GraduatedMovementId))
+        {
+            MixText(ref hash, "graduated_movement");
+            MixText(ref hash, nation.GraduatedMovementId);
+        }
         if (nation.HasCustomLeadership)
         {
             MixText(ref hash, "ruler_cabinet");

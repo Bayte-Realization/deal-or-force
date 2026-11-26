@@ -1191,7 +1191,8 @@ public static partial class Warfare
                     // One with nowhere at all to slip to scatters instead (Partisans).
                     if (!Partisans.TryGoToGround(campaign, war, army, battle.ProvinceId))
                     {
-                        DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
+                        if (DiagnosticLogs.Enabled)
+                            DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
                         WarLosses.Surrender(campaign, army);
                         Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
                     }
@@ -1294,25 +1295,37 @@ public static partial class Warfare
             battle.LastAttackerCombinedArms = attackerCombinedArms;
             battle.LastDefenderCombinedArms = defenderCombinedArms;
 
+            _battleNationFactors?.Clear();
+            var atkCache = _atkLineUnits ??= new List<BattleLineUnit>(16);
+            atkCache.Clear();
             double attackerOffenceSum = 0d;
             double atkPowerWeight = 0d, atkTrainSum = 0d, atkStanceSum = 0d, atkCmdSum = 0d, atkResSum = 0d, atkEncSum = 0d;
             for (var ai = 0; ai < AttackerLine.Count; ai++)
             {
                 var army = AttackerLine[ai];
+                var nf = GetBattleNationFactors(campaign, war, army.NationId);
                 var power = M.Max(0.01f, army.Power);
                 var train = DivisionRules.Attack(army);
                 var stance = MilitaryDoctrine.Attack(army.Stance);
-                var res = Researched(campaign, army, "army_attack");
-                var mun = StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId));
+                var res = nf.AtkRes;
+                var mun = nf.Munitions;
                 var enc = CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff);
-                var spirit = GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId));
-                var cmd = Generals.Factors(campaign, army).Attack;
-                attackerOffenceSum += power * Offence(army, defenderHardness) * train * stance * res * mun * enc * spirit * cmd;
+                var spirit = nf.Spirit;
+                var cmd = Generals.Factors(campaign, army);
+                atkCache.Add(new BattleLineUnit
+                {
+                    Power = power,
+                    Enc = enc,
+                    DefRes = nf.DefRes,
+                    Spirit = spirit,
+                    CmdDef = cmd.Defence
+                });
+                attackerOffenceSum += power * Offence(army, defenderHardness) * train * stance * res * mun * enc * spirit * cmd.Attack;
                 double w = power;
                 atkPowerWeight += w;
                 atkTrainSum += w * train;
                 atkStanceSum += w * stance;
-                atkCmdSum += w * cmd;
+                atkCmdSum += w * cmd.Attack;
                 atkResSum += w * res;
                 atkEncSum += w * enc;
             }
@@ -1320,17 +1333,31 @@ public static partial class Warfare
                 attackerEngagement * attackerPierces * riverAttackMultiplier * straitAttackMultiplier * terrain.Attack *
                 (1f + attackerPlanning * defines.MaxPlanningAttackBonus) * envelopmentBonus * attackerFire * attackerCombinedArms;
 
+            var defCache = _defLineUnits ??= new List<BattleLineUnit>(16);
+            defCache.Clear();
             double defenderOffenceSum = 0d;
             for (var di = 0; di < DefenderLine.Count; di++)
             {
                 var army = DefenderLine[di];
-                defenderOffenceSum += M.Max(0.01f, army.Power) *
+                var nf = GetBattleNationFactors(campaign, war, army.NationId);
+                var power = M.Max(0.01f, army.Power);
+                var enc = CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff);
+                var cmd = Generals.Factors(campaign, army);
+                defCache.Add(new BattleLineUnit
+                {
+                    Power = power,
+                    Enc = enc,
+                    DefRes = nf.DefRes,
+                    Spirit = nf.Spirit,
+                    CmdDef = cmd.Defence
+                });
+                defenderOffenceSum += power *
                     Offence(army, attackerHardness) * DivisionRules.Attack(army) *
-                    MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack") *
-                    StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId)) *
-                    CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff) *
-                    GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId)) *
-                    Generals.Factors(campaign, army).Attack;
+                    MilitaryDoctrine.Attack(army.Stance) * nf.AtkRes *
+                    nf.Munitions *
+                    enc *
+                    nf.Spirit *
+                    cmd.Attack;
             }
             var defenderOffence = (float)defenderOffenceSum *
                 defenderEngagement * defenderPierces * defines.DefenderCounterFire * defenderFire * defenderCombinedArms;
@@ -1366,13 +1393,14 @@ public static partial class Warfare
             for (var di = 0; di < DefenderLine.Count; di++)
             {
                 var army = DefenderLine[di];
-                var power = M.Max(0.01f, army.Power);
+                var unit = defCache[di];
+                var power = unit.Power;
                 var train = DivisionRules.Defense(army);
                 var stance = MilitaryDoctrine.Defense(army.Stance);
-                var res = Researched(campaign, army, "army_defense");
-                var enc = CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff);
-                var spirit = GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId));
-                var cmd = Generals.Factors(campaign, army).Defence;
+                var res = unit.DefRes;
+                var enc = unit.Enc;
+                var spirit = unit.Spirit;
+                var cmd = unit.CmdDef;
                 defenderProtectionSum += power * UnitTypeCatalog.Get(army.TemplateId).Defense * train * stance * res * enc * spirit * cmd;
                 double w = power;
                 defPowerWeight += w;
@@ -1394,12 +1422,13 @@ public static partial class Warfare
             for (var ai = 0; ai < AttackerLine.Count; ai++)
             {
                 var army = AttackerLine[ai];
-                attackerProtectionSum += M.Max(0.01f, army.Power) *
+                var unit = atkCache[ai];
+                attackerProtectionSum += unit.Power *
                     UnitTypeCatalog.Get(army.TemplateId).Breakthrough * DivisionRules.Defense(army) *
-                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense") *
-                    CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff) *
-                    GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId)) *
-                    Generals.Factors(campaign, army).Defence;
+                    MilitaryDoctrine.Defense(army.Stance) * unit.DefRes *
+                    unit.Enc *
+                    unit.Spirit *
+                    unit.CmdDef;
             }
             var attackerProtection = (float)attackerProtectionSum *
                 attackerEngagement * attackerStripped * attackerCombinedArms;
@@ -1444,7 +1473,8 @@ public static partial class Warfare
             {
                 var attack = battle.AttackFactors; attack.Clear();
                 var defence = battle.DefenceFactors; defence.Clear();
-                var attackerSide = campaign.NationById(battle.AttackerId);
+                var attackerStats = GetBattleNationFactors(campaign, war, battle.AttackerId);
+                var defenderStats = GetBattleNationFactors(campaign, war, battle.DefenderId);
                 CombatFactors.Add(attack, "Terrain", terrain.Attack);
                 CombatFactors.Add(attack, "River crossing", riverAttackMultiplier);
                 CombatFactors.Add(attack, "Strait crossing", straitAttackMultiplier);
@@ -1458,9 +1488,9 @@ public static partial class Warfare
                 CombatFactors.Add(attack, "Stance", atkPowerWeight <= 0 ? 1f : (float)(atkStanceSum / atkPowerWeight));
                 CombatFactors.Add(attack, "Commander", atkPowerWeight <= 0 ? 1f : (float)(atkCmdSum / atkPowerWeight));
                 CombatFactors.Add(attack, "Research", atkPowerWeight <= 0 ? 1f : (float)(atkResSum / atkPowerWeight));
-                CombatFactors.Add(attack, "Munitions", StrategicStockpiles.CombatMunitionsFactor(campaign, attackerSide));
+                CombatFactors.Add(attack, "Munitions", attackerStats.Munitions);
                 CombatFactors.Add(attack, "Encircled", atkPowerWeight <= 0 ? 1f : (float)(atkEncSum / atkPowerWeight));
-                CombatFactors.Add(attack, "Fighting spirit", GuerrillaWar.Spirit(campaign, war, attackerSide));
+                CombatFactors.Add(attack, "Fighting spirit", attackerStats.Spirit);
                 CombatFactors.Add(attack, "Manoeuvre of the day", CombatTactics.Attack(attackerTactic, defenderTactic, defines) * CombatTactics.EnemyAttack(defenderTactic));
                 CombatFactors.Add(attack, "Fortune", attackerFortune);
 
@@ -1478,7 +1508,7 @@ public static partial class Warfare
                 CombatFactors.Add(defence, "Commander", defPowerWeight <= 0 ? 1f : (float)(defCmdSum / defPowerWeight));
                 CombatFactors.Add(defence, "Research", defPowerWeight <= 0 ? 1f : (float)(defResSum / defPowerWeight));
                 CombatFactors.Add(defence, "Encircled", defPowerWeight <= 0 ? 1f : (float)(defEncSum / defPowerWeight));
-                CombatFactors.Add(defence, "Fighting spirit", GuerrillaWar.Spirit(campaign, war, defenderNation));
+                CombatFactors.Add(defence, "Fighting spirit", defenderStats.Spirit);
                 CombatFactors.Add(defence, "Guerrilla country", 1f + defines.GuerrillaDefence * guerrillaCover);
                 CombatFactors.Add(defence, "Manoeuvre of the day", CombatTactics.Defence(defenderTactic) * CombatTactics.EnemyDefence(attackerTactic));
                 CombatFactors.Add(defence, "Fortune", defenderFortune);
@@ -1626,7 +1656,8 @@ public static partial class Warfare
                 {
                     if (!Partisans.TryGoToGround(campaign, war, army, battle.ProvinceId))
                     {
-                        DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
+                        if (DiagnosticLogs.Enabled)
+                            DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
                         WarLosses.Surrender(campaign, army);
                         Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
                     }
@@ -1661,7 +1692,7 @@ public static partial class Warfare
                     attackerPierces < 0.99f ? "Armour is shrugging off the attack" :
                     defenderPierces < 0.99f ? "Defenders cannot pierce the assault" :
                     attackerWantedWidth > usableWidth * 1.35f ? "Too many divisions for the frontage" :
-                    directions > 1 ? $"Attacking from {directions} directions widens the front" :
+                    directions > 1 ? DirectionWidensNote(directions) :
                     directions == 1 && dugIn > 0.5f ? "Entrenched defenders hold the narrow frontal approach" :
                     isCapitalState && isHomeProvince ? "Stubborn last stand for the capital" :
                     isHomeProvince && dugIn > 0.4f ? "Defenders stubbornly hold their homeland" :
@@ -1957,7 +1988,8 @@ public static partial class Warfare
 
     private static void Close(Campaign campaign, LandBattle battle, int winnerId, string outcome)
     {
-        DiagnosticLogs.Write("simulation", $"BATTLE_END battle={battle.Id} war={battle.WarId} province={battle.ProvinceId} winner={winnerId} outcome={outcome}");
+        if (DiagnosticLogs.Enabled)
+            DiagnosticLogs.Write("simulation", $"BATTLE_END battle={battle.Id} war={battle.WarId} province={battle.ProvinceId} winner={winnerId} outcome={outcome}");
         Tally(battle.WarId, outcome);
         battle.Ended = true;
         if (ArmyIndexes.TryGetValue(campaign, out var index)) index.ActiveBattlesDirty = true;
@@ -1966,7 +1998,68 @@ public static partial class Warfare
         // Who won it, who lost it, and whether the world will remember its name (Generals).
         Generals.AfterBattle(campaign, battle, winnerId,
             outcome.StartsWith("Defenders broke", StringComparison.Ordinal) || outcome.StartsWith("Attack repelled", StringComparison.Ordinal));
-        foreach (var army in campaign.Armies)
-            if (army.BattleId == battle.Id) army.BattleId = -1;
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
+            if (armies[i].BattleId == battle.Id) armies[i].BattleId = -1;
     }
+
+    private struct BattleNationFactors
+    {
+        public Nation Nation;
+        public float Munitions;
+        public float Spirit;
+        public float AtkRes;
+        public float DefRes;
+    }
+
+    private struct BattleLineUnit
+    {
+        public float Power;
+        public float Enc;
+        public float DefRes;
+        public float Spirit;
+        public float CmdDef;
+    }
+
+    [ThreadStatic] private static Dictionary<int, BattleNationFactors> _battleNationFactors;
+    [ThreadStatic] private static List<BattleLineUnit> _atkLineUnits;
+    [ThreadStatic] private static List<BattleLineUnit> _defLineUnits;
+
+    private static BattleNationFactors GetBattleNationFactors(Campaign campaign, StrategicWar war, int nationId)
+    {
+        var map = _battleNationFactors ??= new Dictionary<int, BattleNationFactors>(4);
+        if (map.TryGetValue(nationId, out var cached)) return cached;
+        var nation = campaign.NationById(nationId);
+        cached = new BattleNationFactors
+        {
+            Nation = nation,
+            Munitions = StrategicStockpiles.CombatMunitionsFactor(campaign, nation),
+            Spirit = GuerrillaWar.Spirit(campaign, war, nation),
+            AtkRes = NationalModifiers.Factor(nation, "army_attack"),
+            DefRes = NationalModifiers.Factor(nation, "army_defense")
+        };
+        map[nationId] = cached;
+        return cached;
+    }
+
+    private static readonly string[] DirectionWidensNotes =
+    {
+        "", "",
+        "Attacking from 2 directions widens the front",
+        "Attacking from 3 directions widens the front",
+        "Attacking from 4 directions widens the front",
+        "Attacking from 5 directions widens the front",
+        "Attacking from 6 directions widens the front",
+        "Attacking from 7 directions widens the front",
+        "Attacking from 8 directions widens the front",
+        "Attacking from 9 directions widens the front",
+        "Attacking from 10 directions widens the front",
+        "Attacking from 11 directions widens the front",
+        "Attacking from 12 directions widens the front"
+    };
+
+    private static string DirectionWidensNote(int directions) =>
+        (uint)directions < (uint)DirectionWidensNotes.Length
+            ? DirectionWidensNotes[directions]
+            : $"Attacking from {directions} directions widens the front";
 }

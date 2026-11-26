@@ -124,6 +124,7 @@ public static class MovementFall
     {
         if (nation is null || !string.IsNullOrEmpty(nation.FactionId)) return false;
         if (nation.Name?.StartsWith("rising:", StringComparison.Ordinal) == true) return false;
+        if (!string.IsNullOrEmpty(nation.GraduatedMovementId)) return true;
         // Taking the state over gives a side the state's name and clears its parent's claim on it
         // (Factions.TakeOver, SettleCivilWarSurvivors). A breakaway that only named itself after
         // a country no longer standing keeps that claim, and is still a breakaway.
@@ -343,6 +344,7 @@ public static class MovementFall
         {
             if (other.Id == nation.Id || other.Movement is not { Exile: true, Landless: true, Dissolved: false } theirs ||
                 (governmentsOnly && !GovernmentInExile(theirs))) continue;
+            if (!SameCauseOrigin(nation, other)) continue;
             if (SharesStateName(nation, other)) return other;
             if (theirs.Homeland.Count == 0) continue;
             if (homeland is null)
@@ -707,7 +709,9 @@ public static class MovementFall
         };
         var peoples = nation.FoundedCultures is { Count: > 0 }
             ? nation.FoundedCultures
-            : (IEnumerable<string>)DemographyCatalog.PrimarySet(nation.Tag) ?? Array.Empty<string>();
+            : DemographyCatalog.PrimarySet(nation.Tag) is { Count: > 0 } tagPeoples
+                ? tagPeoples
+                : (IEnumerable<string>)MovementCatalog.Of(nation.GraduatedMovementId)?.Peoples ?? Array.Empty<string>();
         state.Peoples.AddRange(peoples.Distinct(StringComparer.OrdinalIgnoreCase));
         if (campaign.Homelands.TryGetValue(nation.Id, out var homeland))
             foreach (var index in homeland)
@@ -906,8 +910,12 @@ public static class MovementFall
         return null;
     }
 
+    private static bool SameCauseOrigin(Nation a, Nation b) =>
+        string.Equals(a.GraduatedMovementId ?? "", b.GraduatedMovementId ?? "", StringComparison.OrdinalIgnoreCase);
+
     private static bool SameState(Nation a, MovementState first, Nation b, MovementState second)
     {
+        if (!SameCauseOrigin(a, b)) return false;
         if (SharesStateName(a, b)) return true;
         if (first.Homeland.Count == 0 || second.Homeland.Count == 0) return false;
         var shared = 0;

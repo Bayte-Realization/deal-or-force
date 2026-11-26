@@ -289,7 +289,7 @@ public static class OpinionSystem
     internal static void Settle(Campaign campaign, DiplomaticRelation relation, bool explain) =>
         Settle(campaign, relation, explain, out _, out _, out _, out _, out _);
 
-    private static void Settle(Campaign campaign, DiplomaticRelation relation, bool explain,
+    internal static void Settle(Campaign campaign, DiplomaticRelation relation, bool explain,
         out float politics, out float identity, out float social, out float claims, out float geopolitics)
     {
         politics = identity = social = claims = geopolitics = 0f;

@@ -658,7 +658,14 @@ public static partial class AiStatecraft
         circle.Clear();
         seen.Clear();
         seen.Add(nation.Id);
-        foreach (var mapIndex in NeighboursOf(campaign, nation.MapIndex)) ConsiderCircle(circle, seen, ByMapIndex(campaign, mapIndex));
+        // The shared neighbour index is a HashSet: walked as one, its enumerator stays on the
+        // stack instead of being boxed through the interface for every country every week. Same
+        // set, same order.
+        var neighbours = NeighboursOf(campaign, nation.MapIndex);
+        if (neighbours is HashSet<int> neighbourSet)
+            foreach (var mapIndex in neighbourSet) ConsiderCircle(circle, seen, ByMapIndex(campaign, mapIndex));
+        else
+            foreach (var mapIndex in neighbours) ConsiderCircle(circle, seen, ByMapIndex(campaign, mapIndex));
         InternationalOrganizations.FillMemberships(campaign, nation.Id, orgs);
         for (var oi = 0; oi < orgs.Count; oi++)
         {
@@ -749,9 +756,10 @@ public static partial class AiStatecraft
     [ThreadStatic] private static List<DueEntry> _dueEntriesScratch;
     [ThreadStatic] private static List<DueSlot> _dueSlotsScratch;
     [ThreadStatic] private static HashSet<int> _mutatedNationsScratch;
+    [ThreadStatic] private static HashSet<long> _mutatedPairsScratch;
     [ThreadStatic] private static HashSet<int> _atWarNationsScratch;
     [ThreadStatic] private static Dictionary<int, (int Hulls, float Lat, float Lon)> _fleetHullsScratch;
-    [ThreadStatic] private static Dictionary<int, int> _friendlyIdxScratch;
+    [ThreadStatic] private static List<(Nation Friend, float Opinion, int CircleIdx)> _friendlyTriplesScratch;
 
     private static IEnumerable<int> ThinkAboutTheNeighbours(Campaign campaign)
     {
@@ -871,6 +879,8 @@ public static partial class AiStatecraft
 
             var defines = campaign.Defines;
             var identityOn = campaign.FeatureEnabled("state_identity");
+            var intelligenceOn = campaign.FeatureEnabled("intelligence");
+            var standingMultiMask = ComputeStandingMultiMask();
             var scanMemory = WeeklyScanOf(campaign);
             var minHulls = defines.AiInvasionMinimumHulls;
             var reach = defines.AiInvasionSearchDegrees;
@@ -909,7 +919,8 @@ public static partial class AiStatecraft
                                 var borders = borderSet is not null
                                     ? borderSet.Contains(partner.MapIndex)
                                     : neighbours.Contains(partner.MapIndex);
-                                var pre = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength, identityOn);
+                                var pre = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength,
+                                    identityOn, intelligenceOn, standingMultiMask);
                                 slot.Prechecks.Add(pre);
                                 var skipFriendly = pre.Unchanged &&
                                     pre.Peeked is { Stance: not DiplomaticStance.AtWar } rel &&
@@ -929,8 +940,17 @@ public static partial class AiStatecraft
                         slot.HasWarmaking = true;
                         var targets = slot.ReachableTargets;
                         var seenT = slot.ReachableSeen;
-                        foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
-                            if (seenT.Add(mapIndex)) targets.Add(mapIndex);
+                        var landNeighbours = CampaignDiplomacy.Neighbours(campaign, nation.MapIndex);
+                        if (landNeighbours is HashSet<int> landSet)
+                        {
+                            foreach (var mapIndex in landSet)
+                                if (seenT.Add(mapIndex)) targets.Add(mapIndex);
+                        }
+                        else
+                        {
+                            foreach (var mapIndex in landNeighbours)
+                                if (seenT.Add(mapIndex)) targets.Add(mapIndex);
+                        }
 
                         if (fleetHulls.TryGetValue(nation.Id, out var naval) && naval.Hulls >= minHulls)
                         {
@@ -1001,12 +1021,14 @@ public static partial class AiStatecraft
                 if (slot.ComputedNewOverseas)
                     tables.Overseas[slot.NationId] = (slot.NewHulls, slot.NewOverseasTargets);
             }
-            atWarSet.Clear();
             fleetHulls.Clear();
 
             // Phase 2: apply actions sequentially in strictly ascending Nation.Id order.
+            var initialWarRev = campaign.WarRevision;
             var mutatedNations = _mutatedNationsScratch ??= new HashSet<int>();
             mutatedNations.Clear();
+            var mutatedPairs = _mutatedPairsScratch ??= new HashSet<long>();
+            mutatedPairs.Clear();
             var worldInvalidated = false;
 
             for (var index = 0; index < dueCount; index++)
@@ -1014,8 +1036,14 @@ public static partial class AiStatecraft
                 var entry = due[index];
                 var slot = worldInvalidated ? null : slots[index];
                 var warRev = campaign.WarRevision;
-                var treatyRev = DiplomaticRelation.TreatyMutationVersion;
-                using var steps = ThinkTodayStages(campaign, entry, slot, mutatedNations, worldInvalidated).GetEnumerator();
+                var allianceRev = DiplomaticRelation.AllianceStanceVersion;
+                var protectorRev = DiplomaticRelation.ProtectorMutationVersion;
+                var ownershipRev = campaign.OwnershipRevision;
+                var nationInWar = initialWarRev == warRev
+                    ? atWarSet.Contains(entry.Nation.Id)
+                    : InAnyWar(campaign, entry.Nation.Id);
+                using var steps = ThinkTodayStages(campaign, entry, slot, mutatedNations, mutatedPairs,
+                    worldInvalidated, nationInWar, intelligenceOn, standingMultiMask).GetEnumerator();
                 while (true)
                 {
                     bool more;
@@ -1023,11 +1051,19 @@ public static partial class AiStatecraft
                     if (!more) break;
                     yield return 0;
                 }
-                if (warRev != campaign.WarRevision || treatyRev != DiplomaticRelation.TreatyMutationVersion)
+                if (warRev != campaign.WarRevision ||
+                    allianceRev != DiplomaticRelation.AllianceStanceVersion ||
+                    protectorRev != DiplomaticRelation.ProtectorMutationVersion ||
+                    ownershipRev != campaign.OwnershipRevision)
                     worldInvalidated = true;
-                yield return 0;
+                // Between countries only when the frame's slice is spent: a yield is not part of
+                // the world, and an unconditional one was a trip through every enclosing stage for
+                // each of the day's due countries.
+                if (Campaign.StageOverdue()) yield return 0;
             }
+            atWarSet.Clear();
             mutatedNations.Clear();
+            mutatedPairs.Clear();
             for (var i = 0; i < dueCount; i++) slots[i].Reset(-1);
             due.Clear();
         }
@@ -1108,7 +1144,8 @@ public static partial class AiStatecraft
     }
 
     private static IEnumerable<int> ThinkTodayStages(Campaign campaign, DueEntry entry, DueSlot slot,
-        HashSet<int> mutatedNations, bool worldInvalidated)
+        HashSet<int> mutatedNations, HashSet<long> mutatedPairs, bool worldInvalidated,
+        bool nationInWar, bool intelligenceOn, int standingMultiMask)
     {
         var nation = entry.Nation;
         // A player's country is governed by its player - except for the portfolios that
@@ -1121,25 +1158,27 @@ public static partial class AiStatecraft
             // The foreign ministry keeps the same weekly round as everybody else's.
             if (entry.DiplomacyDue)
                 using (SimProfiler.Measure("  ai:delegated"))
-                    foreach (var _ in DiplomacyStages(campaign, nation, slot, mutatedNations, worldInvalidated)) { }
+                    foreach (var _ in DiplomacyStages(campaign, nation, slot, mutatedNations, mutatedPairs,
+                        worldInvalidated, nationInWar, intelligenceOn, standingMultiMask)) { }
             yield break;
         }
 
         if (entry.DiplomacyDue)
         {
-            foreach (var _ in DiplomacyStages(campaign, nation, slot, mutatedNations, worldInvalidated)) yield return 0;
-            yield return 0;
+            foreach (var _ in DiplomacyStages(campaign, nation, slot, mutatedNations, mutatedPairs,
+                worldInvalidated, nationInWar, intelligenceOn, standingMultiMask)) yield return 0;
+            if (Campaign.StageOverdue()) yield return 0;
         }
         if (entry.EconomyDue)
         {
             if (Campaign.StageOverdue()) yield return 0;
-            using (SimProfiler.Measure("  ai:economy")) Economy(campaign, nation);
+            using (SimProfiler.Measure("  ai:economy")) Economy(campaign, nation, nationInWar);
             mutatedNations.Add(nation.Id);
-            yield return 0;
+            if (Campaign.StageOverdue()) yield return 0;
         }
         if (entry.WarmakingDue)
         {
-            using var warSteps = WarmakingStages(campaign, nation, slot, mutatedNations, worldInvalidated).GetEnumerator();
+            using var warSteps = WarmakingStages(campaign, nation, slot, mutatedNations, mutatedPairs, worldInvalidated).GetEnumerator();
             while (true)
             {
                 bool more;
@@ -1173,8 +1212,17 @@ public static partial class AiStatecraft
         }
         ReachableTargets.Clear();
         ReachableSeen.Clear();
-        foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
-            if (ReachableSeen.Add(mapIndex)) ReachableTargets.Add(mapIndex);
+        var landNeighbours = CampaignDiplomacy.Neighbours(campaign, nation.MapIndex);
+        if (landNeighbours is HashSet<int> landSet)
+        {
+            foreach (var mapIndex in landSet)
+                if (ReachableSeen.Add(mapIndex)) ReachableTargets.Add(mapIndex);
+        }
+        else
+        {
+            foreach (var mapIndex in landNeighbours)
+                if (ReachableSeen.Add(mapIndex)) ReachableTargets.Add(mapIndex);
+        }
 
         var hulls = 0;
         var fromLatitude = 0f;
@@ -1215,17 +1263,22 @@ public static partial class AiStatecraft
     // --------------------------------------------------------------- diplomacy ---------
 
     private static IEnumerable<int> DiplomacyStages(Campaign campaign, Nation nation, DueSlot slot = null,
-        HashSet<int> mutatedNations = null, bool worldInvalidated = false)
+        HashSet<int> mutatedNations = null, HashSet<long> mutatedPairs = null, bool worldInvalidated = false,
+        bool? nationInWar = null, bool? intelligenceEnabled = null, int standingMultiMask = -1)
     {
         var defines = campaign.Defines;
         Nation bestFriend = null;
         Nation worstRival = null;
+        DiplomaticRelation bestFriendRelation = null;
+        DiplomaticRelation worstRivalRelation = null;
         var bestOpinion = float.MinValue;
         var worstOpinion = float.MaxValue;
         var canUseSlot = !worldInvalidated && slot is not null && (mutatedNations is null || !mutatedNations.Contains(nation.Id));
         var neighbours = NeighboursOf(campaign, nation.MapIndex);
         var myStrength = M.Max(0.01f, Strength(campaign, nation));
         var identityOn = campaign.FeatureEnabled("state_identity");
+        var intelligenceOn = intelligenceEnabled ?? campaign.FeatureEnabled("intelligence");
+        var inWar = nationInWar ?? InAnyWar(campaign, nation.Id);
         var scanMemory = WeeklyScanOf(campaign);
         List<Nation> circle;
 
@@ -1265,7 +1318,9 @@ public static partial class AiStatecraft
                     for (var i = 0; i < circleCount; i++)
                     {
                         var partner = circle[i];
-                        if (partner is null || partner.Id == nation.Id || mutatedNations is null || !mutatedNations.Contains(partner.Id))
+                        if (partner is null || partner.Id == nation.Id ||
+                            ((mutatedNations is null || !mutatedNations.Contains(partner.Id)) &&
+                             (mutatedPairs is null || !mutatedPairs.Contains(WeeklyPairKey(nation.Id, partner.Id)))))
                         {
                             slots[i] = slot.Prechecks[i];
                             continue;
@@ -1273,7 +1328,8 @@ public static partial class AiStatecraft
                         var borders = borderSet is not null
                             ? borderSet.Contains(partner.MapIndex)
                             : neighbours.Contains(partner.MapIndex);
-                        slots[i] = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength, identityOn);
+                        slots[i] = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength,
+                            identityOn, intelligenceOn, standingMultiMask);
                     }
                 }
                 else
@@ -1296,7 +1352,8 @@ public static partial class AiStatecraft
                                 var borders = borderSet is not null
                                     ? borderSet.Contains(partner.MapIndex)
                                     : neighbours.Contains(partner.MapIndex);
-                                slots[i] = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength, identityOn);
+                                slots[i] = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength,
+                                    identityOn, intelligenceOn, standingMultiMask);
                             }
                         }, minItems: 48);
                     }
@@ -1313,13 +1370,13 @@ public static partial class AiStatecraft
                             var borders = borderSet is not null
                                 ? borderSet.Contains(partner.MapIndex)
                                 : neighbours.Contains(partner.MapIndex);
-                            slots[i] = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength, identityOn);
+                            slots[i] = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength,
+                                identityOn, intelligenceOn, standingMultiMask);
                         }
                     }
                 }
             }
 
-            var writtenPartners = 0;
             for (var ci = 0; ci < circleCount; ci++)
             {
                 var other = circle[ci];
@@ -1332,20 +1389,26 @@ public static partial class AiStatecraft
                 }
                 else
                 {
-                    if (++writtenPartners % 8 == 0 || Campaign.StageOverdue()) yield return 0;
+                    // Only when the frame's slice is spent; the forced yield every eight written
+                    // pairs was a trip through every enclosing stage and its profiler scopes.
+                    if (Campaign.StageOverdue()) yield return 0;
                     using (SimProfiler.Measure("  ai:diplomacy"))
                     using (SimProfiler.Measure("    dip:opinions"))
                     {
+                        var assessedDayBefore = other.AssessedDay;
+                        var assessedStrengthBefore = other.AssessedStrength;
                         if (CommitWeeklyPair(campaign, scanMemory, nation, other, myStrength, identityOn, pre, out relation))
                         {
-                            mutatedNations?.Add(nation.Id);
-                            mutatedNations?.Add(other.Id);
+                            mutatedPairs?.Add(WeeklyPairKey(nation.Id, other.Id));
+                            if (other.AssessedDay != assessedDayBefore || other.AssessedStrength != assessedStrengthBefore)
+                                mutatedNations?.Add(other.Id);
                         }
                     }
+                    slots[ci].Peeked = relation;
                 }
                 if (relation is null || relation.Stance == DiplomaticStance.AtWar) continue;
-                if (relation.Opinion > bestOpinion) { bestOpinion = relation.Opinion; bestFriend = other; }
-                if (relation.Opinion < worstOpinion) { worstOpinion = relation.Opinion; worstRival = other; }
+                if (relation.Opinion > bestOpinion) { bestOpinion = relation.Opinion; bestFriend = other; bestFriendRelation = relation; }
+                if (relation.Opinion < worstOpinion) { worstOpinion = relation.Opinion; worstRival = other; worstRivalRelation = relation; }
             }
 
         using (SimProfiler.Measure("  ai:diplomacy"))
@@ -1356,19 +1419,17 @@ public static partial class AiStatecraft
         {
             using var friendlySample = SimProfiler.Measure("    dip:friendly");
             DiplomaticOutreach.WarmCensus(campaign);
-            var pairs = FriendlyPairs;
+            var pairs = _friendlyTriplesScratch ??= new List<(Nation Friend, float Opinion, int CircleIdx)>(16);
             pairs.Clear();
-            var circleIdxById = _friendlyIdxScratch ??= new Dictionary<int, int>(circleCount);
-            circleIdxById.Clear();
-            for (var ci = 0; ci < circle.Count; ci++)
+            for (var ci = 0; ci < circleCount; ci++)
             {
                 var other = circle[ci];
-                if (other.Id == nation.Id) continue;
-                circleIdxById[other.Id] = ci;
-                if (CampaignDiplomacy.Peek(campaign, nation.Id, other.Id) is not { } bond) continue;
+                if (other is null || other.Id == nation.Id) continue;
+                var bond = slots[ci].Peeked;
+                if (bond is null) continue;
                 if (bond.Stance != DiplomaticStance.AtWar &&
                     bond.Opinion >= defines.AiFriendshipThreshold)
-                    pairs.Add((other, bond.Opinion));
+                    pairs.Add((other, bond.Opinion, ci));
             }
             if (pairs.Count > 1)
                 pairs.Sort(static (left, right) =>
@@ -1378,7 +1439,7 @@ public static partial class AiStatecraft
                 });
             var canConfrontRival = worstRival is not null &&
                 (worstOpinion <= defines.AiRivalryThreshold ||
-                 (CampaignDiplomacy.Peek(campaign, nation.Id, worstRival.Id) is not { Stance: DiplomaticStance.Allied } &&
+                 (worstRivalRelation is not { Stance: DiplomaticStance.Allied } &&
                   (TerritorialClaims.HoldsOurHomeland(campaign, nation, worstRival) ||
                    LostLands.HasClaimedLand(campaign, nation, worstRival) ||
                    BorderShape.Grievance(campaign, nation, worstRival) > 0.25f)));
@@ -1391,9 +1452,10 @@ public static partial class AiStatecraft
             var limit = Math.Min(8, pairs.Count);
             for (var fi = 0; fi < limit; fi++)
             {
-                var friend = pairs[fi].Friend;
-                if (skipFlags is not null && circleIdxById.TryGetValue(friend.Id, out var ci) &&
-                    slots[ci].Unchanged && (mutatedNations is null || !mutatedNations.Contains(friend.Id)))
+                var (friend, _, ci) = pairs[fi];
+                var friendMutated = (mutatedNations is not null && mutatedNations.Contains(friend.Id)) ||
+                                    (mutatedPairs is not null && mutatedPairs.Contains(WeeklyPairKey(nation.Id, friend.Id)));
+                if (skipFlags is not null && slots[ci].Unchanged && !friendMutated)
                 {
                     if (skipFlags[ci]) continue;
                 }
@@ -1404,7 +1466,7 @@ public static partial class AiStatecraft
                         : neighbours.Contains(friend.MapIndex);
                     if (SkipUnchangedFriendly(campaign, nation, friend, bordersFriend)) continue;
                 }
-                if (TryFriendlyMove(campaign, nation, friend, missionScan, allianceScan))
+                if (TryFriendlyMove(campaign, nation, friend, missionScan, allianceScan, inWar))
                 {
                     mutatedNations?.Add(nation.Id);
                     mutatedNations?.Add(friend.Id);
@@ -1415,7 +1477,7 @@ public static partial class AiStatecraft
             }
             if (didFriendlyMove)
             {
-                var relation = CampaignDiplomacy.Get(campaign, nation.Id, worstRival.Id);
+                var relation = worstRivalRelation ?? CampaignDiplomacy.Get(campaign, nation.Id, worstRival.Id);
                 CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
                 if (relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Friendly)
                 {
@@ -1454,9 +1516,12 @@ public static partial class AiStatecraft
         // somebody attacks, it is decided in one week rather than two years, and it makes
         // the country asking measurably less worth invading, because the war judgement
         // counts a guarantor exactly as it counts an ally.
+        float? worstRivalStrength = null;
+        float GetWorstRivalStrength() => worstRivalStrength ??= CampaignIntel.EstimatedStrength(campaign, nation.Id, worstRival);
+
         using (SimProfiler.Measure("    dip:shelter"))
         if (worstRival is not null && worstOpinion <= defines.AiRivalryThreshold &&
-            CampaignIntel.EstimatedStrength(campaign, nation.Id, worstRival) >
+            GetWorstRivalStrength() >
             Strength(campaign, nation) * defines.AiCounterweightFear &&
             AskForShelter(campaign, nation, worstRival))
         {
@@ -1477,8 +1542,8 @@ public static partial class AiStatecraft
         using (SimProfiler.Measure("    dip:buy_peace"))
         if (worstRival is not null && worstOpinion <= defines.AiRivalryThreshold &&
             nation.Treasury > 0.01f &&
-            CampaignDiplomacy.Peek(campaign, nation.Id, worstRival.Id) is { NonAggressionPact: false, Stance: not DiplomaticStance.AtWar } &&
-            Strength(campaign, nation) < CampaignIntel.EstimatedStrength(campaign, nation.Id, worstRival) &&
+            worstRivalRelation is { NonAggressionPact: false, Stance: not DiplomaticStance.AtWar } &&
+            Strength(campaign, nation) < GetWorstRivalStrength() &&
             ThreatPosture.ThreatOf(campaign, nation, worstRival) >= defines.AiBuyPeaceThreat &&
             (neighbours.Contains(worstRival.MapIndex) || CanStageWar(campaign, worstRival, nation)) &&
             BuyPeace(campaign, nation, worstRival))
@@ -1491,27 +1556,30 @@ public static partial class AiStatecraft
         // A week spent on our own people across the fence, before a week spent on being liked.
         // The cheque is the deal table's. A player on the other side of it still has to sign.
         using (SimProfiler.Measure("    dip:kindred"))
-        if (TryBuyKindredLand(campaign, nation))
+        if (TryBuyKindredLand(campaign, nation, out var kindredSellerId))
         {
             mutatedNations?.Add(nation.Id);
+            if (kindredSellerId >= 0) mutatedNations?.Add(kindredSellerId);
             yield break;
         }
 
         // A client whose institutions are failing, after our own fear and our own people.
         // The cheque is the ordinary deal table. A player still has to sign.
         using (SimProfiler.Measure("    dip:crisis_grant"))
-        if (TryOfferCrisisGrant(campaign, nation))
+        if (TryOfferCrisisGrant(campaign, nation, out var grantClientId))
         {
             mutatedNations?.Add(nation.Id);
+            if (grantClientId >= 0) mutatedNations?.Add(grantClientId);
             yield break;
         }
 
         // A scarce good that arrives from one partner, before a week spent only on being liked.
         // The paper is a trade agreement. A player who is asked still has to sign. No land moves.
         using (SimProfiler.Measure("    dip:supply_hedge"))
-        if (TryHedgeSupply(campaign, nation))
+        if (TryHedgeSupply(campaign, nation, out var hedgedPartnerId))
         {
             mutatedNations?.Add(nation.Id);
+            if (hedgedPartnerId >= 0) mutatedNations?.Add(hedgedPartnerId);
             yield break;
         }
 
@@ -1523,13 +1591,13 @@ public static partial class AiStatecraft
         {
         var rivalTrigger = worstRival is not null &&
             (worstOpinion <= defines.AiRivalryThreshold ||
-             (CampaignDiplomacy.Peek(campaign, nation.Id, worstRival.Id) is not { Stance: DiplomaticStance.Allied } &&
+             (worstRivalRelation is not { Stance: DiplomaticStance.Allied } &&
               (TerritorialClaims.HoldsOurHomeland(campaign, nation, worstRival) ||
                LostLands.HasClaimedLand(campaign, nation, worstRival) ||
                BorderShape.Grievance(campaign, nation, worstRival) > 0.25f)));
         if (rivalTrigger)
         {
-            var relation = CampaignDiplomacy.Get(campaign, nation.Id, worstRival.Id);
+            var relation = worstRivalRelation ?? CampaignDiplomacy.Get(campaign, nation.Id, worstRival.Id);
             CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
             if (relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Friendly)
             {
@@ -1556,7 +1624,7 @@ public static partial class AiStatecraft
 
         if (bestFriend is not null && (worstRival is null || bestOpinion > defines.AiRivalryThreshold))
         {
-            var relation = CampaignDiplomacy.Get(campaign, nation.Id, bestFriend.Id);
+            var relation = bestFriendRelation ?? CampaignDiplomacy.Get(campaign, nation.Id, bestFriend.Id);
             CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
             if (relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Friendly)
             {
@@ -1580,8 +1648,12 @@ public static partial class AiStatecraft
     /// gone. No land is on the table. An AI client answers by the deal table; a player
     /// gets the paper and nothing moves until they sign.
     /// </summary>
-    internal static bool TryOfferCrisisGrant(Campaign campaign, Nation nation)
+    internal static bool TryOfferCrisisGrant(Campaign campaign, Nation nation) =>
+        TryOfferCrisisGrant(campaign, nation, out _);
+
+    internal static bool TryOfferCrisisGrant(Campaign campaign, Nation nation, out int clientId)
     {
+        clientId = -1;
         var defines = campaign?.Defines;
         if (defines is null || nation is null || campaign.IsHumanControlled(nation) || nation.Movement is not null) return false;
         if (!defines.AiCrisisGrants || !campaign.FeatureEnabled("deals")) return false;
@@ -1650,6 +1722,7 @@ public static partial class AiStatecraft
         // patron waits as it would after any answer instead of offering it again every week.
         if (!outcome.Accepted && !pending && !DealNegotiations.AnsweredByRuleToday(campaign, nation.Id, client.Id))
             return false;
+        clientId = client.Id;
         nation.DecisionAvailableDay[CrisisGrantKey(client.Id)] =
             campaign.ElapsedDays + Math.Max(30, defines.AiCrisisGrantRetryDays);
         Count("crisis_grant");
@@ -1714,10 +1787,10 @@ public static partial class AiStatecraft
     /// whatever is left over is built with. It is the difference between a country that
     /// develops and one that is a fixed set of numbers with an army standing on it.
     /// </summary>
-    private static void Economy(Campaign campaign, Nation nation)
+    private static void Economy(Campaign campaign, Nation nation, bool? nationInWar = null)
     {
         GovernTheBudget(campaign, nation);
-        using (SimProfiler.Measure("    eco:cabinet")) Cabinet(campaign, nation);
+        using (SimProfiler.Measure("    eco:cabinet")) Cabinet(campaign, nation, nationInWar);
     }
 
 
@@ -1743,15 +1816,22 @@ public static partial class AiStatecraft
         Cabinet(campaign, nation);
     }
 
-    private static void Cabinet(Campaign campaign, Nation nation)
+    private static void Cabinet(Campaign campaign, Nation nation, bool? nationInWar = null)
     {
+        if (!campaign.FeatureEnabled("decisions")) return;
         var bestScore = campaign.Defines.AiDecisionThreshold;
         var best = "";
-        foreach (var definition in DecisionCatalog.All)
+        var decisions = DecisionCatalog.All;
+        var hasCooldowns = nation.DecisionAvailableDay.Count > 0;
+        var today = campaign.ElapsedDays;
+        for (var di = 0; di < decisions.Count; di++)
         {
+            var definition = decisions[di];
             if (string.IsNullOrEmpty(definition.AiWillDo)) continue;
-            if (DecisionCatalog.IsBlocked(campaign, nation, definition)) continue;
+            if (hasCooldowns && nation.DecisionAvailableDay.GetValueOrDefault(definition.Id) > today) continue;
+            if (nation.Treasury < DecisionCatalog.Cost(nation, definition)) continue;
             if (!DecisionResources.CanAfford(nation, definition, keepAiReserve: true)) continue;
+            if (DecisionCatalog.IsBlockedAfterCost(campaign, nation, definition, nationInWar)) continue;
             var score = ScriptLibrary.Score(campaign, nation, definition.AiWillDo);
             if (score <= bestScore) continue;
             bestScore = score;
@@ -1775,7 +1855,7 @@ public static partial class AiStatecraft
     }
 
     private static IEnumerable<int> WarmakingStages(Campaign campaign, Nation nation, DueSlot slot = null,
-        HashSet<int> mutatedNations = null, bool worldInvalidated = false)
+        HashSet<int> mutatedNations = null, HashSet<long> mutatedPairs = null, bool worldInvalidated = false)
     {
         // Every war it is in, not just the first one in the world's list. A country fighting three
         // wars asked about whichever war the enumeration happened to reach first and never spoke
@@ -1805,7 +1885,7 @@ public static partial class AiStatecraft
                 var rescueStarted = StageCosts.Start();
                 using (SimProfiler.Measure("    war:rescue")) SeekRescue(campaign, nation, existing);
                 StageCosts.Stop("war:rescue", nation.Id, rescueStarted);
-                yield return 0;
+                if (Campaign.StageOverdue()) yield return 0;
                 if (!existing.Ended && existing.Involves(nation.Id))
                 {
                     using var negotiateSteps = NegotiateStages(campaign, nation, existing).GetEnumerator();
@@ -1820,8 +1900,9 @@ public static partial class AiStatecraft
                         yield return 0;
                     }
                 }
-                yield return 0;
+                if (Campaign.StageOverdue()) yield return 0;
             }
+            mutatedNations?.Add(nation.Id);
             yield break;
         }
         if (!campaign.Defines.AiMayDeclareWar) yield break;
@@ -1840,8 +1921,8 @@ public static partial class AiStatecraft
         // government cannot go shopping for a private war on top of carving up a neighbour.
         bool partitioned;
         using (SimProfiler.Measure("    war:partition")) partitioned = TryCoordinatePartition(campaign, nation);
-        if (partitioned) yield break;
-        yield return 0;
+        if (partitioned) { mutatedNations?.Add(nation.Id); yield break; }
+        if (Campaign.StageOverdue()) yield return 0;
 
         // First, whatever we already decided to do about somebody. A country with a plan
         // spends its week on the plan rather than on shopping for a different war.
@@ -1863,11 +1944,9 @@ public static partial class AiStatecraft
             var targets = slot.ReachableTargets;
             var judgements = slot.Judgements;
             var reachableCount = targets.Count;
-            var assessEvery = Math.Max(1, defines.IntelAssessmentDays);
-            var inspectThreshold = defines.IntelInspectStrength;
             for (var ri = 0; ri < reachableCount; ri++)
             {
-                if (ri > 0 && (ri % 6 == 0 || Campaign.StageOverdue())) yield return 0;
+                if (ri > 0 && Campaign.StageOverdue()) yield return 0;
                 var other = ByMapIndex(campaign, targets[ri]);
                 if (other is null || other.Id == nation.Id) continue;
                 Count("considered");
@@ -1875,7 +1954,8 @@ public static partial class AiStatecraft
 
                 float judgement;
                 var cachedJudgement = judgements[ri];
-                if (mutatedNations is not null && mutatedNations.Contains(other.Id))
+                if ((mutatedNations is not null && mutatedNations.Contains(other.Id)) ||
+                    (mutatedPairs is not null && mutatedPairs.Contains(WeeklyPairKey(nation.Id, other.Id))))
                 {
                     var allied = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id) is { Stance: DiplomaticStance.Allied };
                     if (!allied && !CampaignDiplomacy.CanDeclareWarQuiet(campaign, nation.Id, other.Id))
@@ -2024,14 +2104,24 @@ public static partial class AiStatecraft
         // every fresh world handed over the same weak neighbours on their first AI day,
         // even when the government would never have committed to the threatened war.
         // A player's own papers and the recipient's assessment are unchanged.
-        bool asked = false;
+        // Roll passed: anything past this point (ultimatum, alliance break, war declaration)
+        // can alter territories, cooldowns, relations, or wars, so mark both parties dirty.
         if (annexation is null)
-            using (SimProfiler.Measure("    war:ultimatum")) asked = TryUltimatumFirst(campaign, nation, target);
-        if (Campaign.StageOverdue()) yield return 0;
-        if (asked)
         {
-            Count("asked_before_war");
-            yield break;
+            bool asked;
+            using (SimProfiler.Measure("    war:ultimatum")) asked = TryUltimatumFirst(campaign, nation, target);
+            mutatedNations?.Add(nation.Id);
+            mutatedNations?.Add(target.Id);
+            if (Campaign.StageOverdue()) yield return 0;
+            if (asked)
+            {
+                Count("asked_before_war");
+                yield break;
+            }
+        }
+        else
+        {
+            if (Campaign.StageOverdue()) yield return 0;
         }
 
         // A legitimate territorial demand may supply a cause if refused, but merely
@@ -2068,6 +2158,8 @@ public static partial class AiStatecraft
             if (InternationalOrganizations.HasDefencePartner(campaign, nation.Id, target.Id))
             { Count("blocked"); yield break; }
             new BreakAllianceCommand { IssuerId = nation.Id, TargetId = target.Id }.Apply(campaign);
+            mutatedNations?.Add(nation.Id);
+            mutatedNations?.Add(target.Id);
             nation.Notoriety += defines.AiBetrayalNotoriety;
             Count("betrayed");
             // And whatever is left - a truce nobody remembered, a subject that answers to the
@@ -2089,7 +2181,11 @@ public static partial class AiStatecraft
         // older recovery claim names one region. A border reconquest keeps its own goal.
         if (annexation is { Reunification: true } union) claimed = union.ClaimedState;
         if (CampaignDiplomacy.DeclareWar(campaign, nation.Id, target.Id, claimed, cause) is not null)
+        {
+            mutatedNations?.Add(nation.Id);
+            mutatedNations?.Add(target.Id);
             Count(annexation is null ? "declared" : "annexation_declared");
+        }
     }
 
 
@@ -2966,19 +3062,30 @@ public static partial class AiStatecraft
 
     internal static bool Threatened(Campaign campaign, Nation nation)
     {
-        foreach (var mapIndex in NeighboursOf(campaign, nation.MapIndex))
+        // The live wars are one list for the whole question, asked once rather than once a neighbour.
+        var live = Warfare.LiveWars(campaign);
+        var neighbours = NeighboursOf(campaign, nation.MapIndex);
+        if (neighbours is HashSet<int> neighbourSet)
         {
-            var other = ByMapIndex(campaign, mapIndex);
-            if (other is null) continue;
-            var live = Warfare.LiveWars(campaign);
-            for (var index = 0; index < live.Count; index++)
-            {
-                var war = live[index];
-                if (!war.Ended && war.Involves(other.Id)) return true;
-            }
-            if (CampaignDiplomacy.Peek(campaign, nation.Id, other.Id)?.Stance == DiplomaticStance.Rival) return true;
+            foreach (var mapIndex in neighbourSet)
+                if (ThreatenedBy(campaign, nation, mapIndex, live)) return true;
+            return false;
         }
+        foreach (var mapIndex in neighbours)
+            if (ThreatenedBy(campaign, nation, mapIndex, live)) return true;
         return false;
+    }
+
+    private static bool ThreatenedBy(Campaign campaign, Nation nation, int mapIndex, IReadOnlyList<StrategicWar> live)
+    {
+        var other = ByMapIndex(campaign, mapIndex);
+        if (other is null) return false;
+        for (var index = 0; index < live.Count; index++)
+        {
+            var war = live[index];
+            if (!war.Ended && war.Involves(other.Id)) return true;
+        }
+        return CampaignDiplomacy.Peek(campaign, nation.Id, other.Id)?.Stance == DiplomaticStance.Rival;
     }
 
     // ------------------------------------------------------- coordinated partition ------------

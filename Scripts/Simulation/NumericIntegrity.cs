@@ -12,8 +12,8 @@ namespace DealOrForce.Simulation;
 /// <summary>Reject non-finite state, without turning a broken calculation into a believable zero.</summary>
 public static class NumericIntegrity
 {
-    private static readonly ConcurrentDictionary<Type, FieldInfo[]> Fields = new();
-    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> RecordProperties = new();
+    private readonly record struct WalkMembers(FieldInfo[] Fields, PropertyInfo[] Properties);
+    private static readonly ConcurrentDictionary<Type, WalkMembers> MembersToInspect = new();
     private static readonly ConcurrentDictionary<Type, FieldInfo[]> UnknownScalarFieldsCache = new();
     private static readonly ConcurrentDictionary<Type, FieldInfo[]> FallbackScalarFieldsCache = new();
 
@@ -427,6 +427,29 @@ public static class NumericIntegrity
         return issues;
     }
 
+    private static bool IsFiniteOnlyScalar(Type type)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        return type != typeof(float) && type != typeof(double) &&
+            (type.IsPrimitive || type.IsEnum || type == typeof(string) || type == typeof(decimal));
+    }
+
+    private static WalkMembers FindWalkMembers(Type type)
+    {
+        var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public)
+            .Where(field => field.GetCustomAttribute<JsonIgnoreAttribute>()?.Condition != JsonIgnoreCondition.Always).ToArray();
+        // Positional records carry their values in properties. Entities with fields still skip
+        // computed properties, even when every one of their visible fields is an integer or flag.
+        if (type.IsValueType && fields.Length == 0)
+        {
+            var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(p => p.CanRead && p.GetIndexParameters().Length == 0 && !IsFiniteOnlyScalar(p.PropertyType) &&
+                            p.GetCustomAttribute<JsonIgnoreAttribute>()?.Condition != JsonIgnoreCondition.Always).ToArray();
+            return new(fields, properties);
+        }
+        return new(fields.Where(field => !IsFiniteOnlyScalar(field.FieldType)).ToArray(), Array.Empty<PropertyInfo>());
+    }
+
     private static void Walk(object value, StringBuilder path, List<string> issues, HashSet<object> seen, int limit)
     {
         if (value is null || issues.Count >= limit) return;
@@ -449,6 +472,8 @@ public static class NumericIntegrity
         }
         if (value is IEnumerable list)
         {
+            // Province-id and other integral arrays contain no floating-point values to inspect.
+            if (type.IsArray && IsFiniteOnlyScalar(type.GetElementType())) return;
             var index = 0;
             foreach (var item in list)
             {
@@ -460,21 +485,15 @@ public static class NumericIntegrity
             return;
         }
         if (type.Namespace != typeof(Campaign).Namespace) return;
-        var fields = Fields.GetOrAdd(type, t => t.GetFields(BindingFlags.Instance | BindingFlags.Public)
-            .Where(field => field.GetCustomAttribute<JsonIgnoreAttribute>()?.Condition != JsonIgnoreCondition.Always).ToArray());
-        foreach (var field in fields)
+        var members = MembersToInspect.GetOrAdd(type, FindWalkMembers);
+        foreach (var field in members.Fields)
         {
             path.Append('.').Append(field.Name);
             Walk(field.GetValue(value), path, issues, seen, limit);
             path.Length = length;
             if (issues.Count >= limit) return;
         }
-        // Positional records (notably history samples and market quotes) have properties,
-        // not public fields. Do not invoke computed UI properties of mutable entities.
-        if (!type.IsValueType || fields.Length != 0) return;
-        foreach (var property in RecordProperties.GetOrAdd(type, t => t.GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                     .Where(p => p.CanRead && p.GetIndexParameters().Length == 0 &&
-                                 p.GetCustomAttribute<JsonIgnoreAttribute>()?.Condition != JsonIgnoreCondition.Always).ToArray()))
+        foreach (var property in members.Properties)
         {
             path.Append('.').Append(property.Name);
             Walk(property.GetValue(value), path, issues, seen, limit);

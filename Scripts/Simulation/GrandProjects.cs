@@ -657,11 +657,20 @@ public static class GrandProjects
 
     public static void Tick(Campaign c)
     {
-        if (c is null) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>
+    /// Staged megaproject tick: yields on <see cref="Campaign.StageOverdue"/> between project
+    /// updates, weekly chokepoint evaluation, and staggered AI participation.
+    /// </summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null) yield break;
         if (!IsEnabled(c))
         {
             ClearAllModifierCachesIfPresent(c);
-            return;
+            yield break;
         }
 
         var modifiersDirty = false;
@@ -778,23 +787,33 @@ public static class GrandProjects
         }
 
         if (modifiersDirty) RebuildAllModifiers(c);
+        if (Campaign.StageOverdue()) yield return 0;
 
         // 6. Weekly Emergent Supply-Chain & Chokepoint Leverage pass (single O(R) flat cache)
-        StrategicChokepoints.TickWeekly(c);
+        foreach (var _ in StrategicChokepoints.TickWeeklyStages(c)) yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
 
         // 7. Staggered Monthly AI Participation (nation.Id % 30 == ElapsedDays % 30 -> zero spike!)
-        if (c.Defines.GrandProjectAiEnabled) TickAi(c);
+        if (c.Defines.GrandProjectAiEnabled)
+            foreach (var _ in TickAiStages(c)) yield return 0;
     }
 
     private static void TickAi(Campaign c)
     {
+        foreach (var _ in TickAiStages(c)) { }
+    }
+
+    private static IEnumerable<int> TickAiStages(Campaign c)
+    {
         var bucket = c.ElapsedDays % 30;
         var living = c.ActiveNations;
+        var checkedCount = 0;
         for (var i = 0; i < living.Count; i++)
         {
             var nation = living[i];
             if (nation.IsHuman || nation.Movement is not null) continue;
             if (nation.Id % 30 != bucket) continue;
+            if (++checkedCount % 4 == 0 && Campaign.StageOverdue()) yield return 0;
             EvaluateAiNation(c, nation);
         }
     }

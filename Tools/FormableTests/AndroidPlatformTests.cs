@@ -30,6 +30,7 @@ static class AndroidPlatformTests
         RunTapAndLongPressTests();
         RunPanAndInertiaTests();
         RunPinchRotateTiltTests();
+        RunTouchZoomAntiDriftAndTapConfigTests();
         RunMultiTouchEdgeCaseTests();
         RunTapModeTests();
         RunMobileTextAdapterTests();
@@ -40,6 +41,7 @@ static class AndroidPlatformTests
         RunBackgroundSimStagedDeterminismTests();
         RunBackgroundSimMobilePacingTests();
         RunCompletedDateTests();
+        RunQueuedSaveTests();
         RunRenderSnapshotReuseTests();
         RunRenderSnapshotNameTests();
         RunConcurrentCatalogReloadSafetyTests();
@@ -338,6 +340,124 @@ static class AndroidPlatformTests
         Check(Approx(t2.ZoomScaleFactor, 1.0f, 0.05f), "Parallel vertical tilt keeps zoom near 1.0");
     }
 
+    private static void RunTouchZoomAntiDriftAndTapConfigTests()
+    {
+        // (a) 30-step 120 Hz smooth incremental pinch (~1% span growth per frame) with realistic
+        // thumb arc and slight vertical drift must emit ZERO pan, rotate, or tilt across all 30 frames.
+        var machine = new TouchGestureMachine(TouchGestureConfig.Default);
+        const float cx = 960f;
+        const float cy = 540f;
+        var radius = 120f;
+        var angle = 0f;
+        var midY = cy;
+        machine.OnTouchDown(0, cx - radius, midY, 0.000);
+        machine.OnTouchDown(1, cx + radius, midY, 0.001);
+        var hadDrift = false;
+        var allZoomedIn = true;
+        for (var step = 1; step <= 30; step++)
+        {
+            radius *= 1.01f;
+            angle += 0.009f; // ~0.27 rad (~15.5 deg) cumulative arc over 30 frames
+            midY += 0.5f;    // 15px cumulative vertical drift
+            var cos = MathF.Cos(angle);
+            var sin = MathF.Sin(angle);
+            var t = 0.008 * step;
+            var d0 = machine.OnTouchMove(0, cx - radius * cos, midY - radius * sin, t);
+            var d1 = machine.OnTouchMove(1, cx + radius * cos, midY + radius * sin, t + 0.001);
+            if (d0.PanDeltaPx.LengthSquared > 0f || d0.RotateDeltaRadians != 0f || d0.TiltDeltaPx != 0f ||
+                d1.PanDeltaPx.LengthSquared > 0f || d1.RotateDeltaRadians != 0f || d1.TiltDeltaPx != 0f)
+            {
+                hadDrift = true;
+            }
+            if (d0.ZoomScaleFactor <= 1f || d1.ZoomScaleFactor <= 1f)
+                allZoomedIn = false;
+        }
+        Check(!hadDrift && allZoomedIn,
+            "30-step 120Hz smooth pinch with thumb arc emits zero pan, zero rotate, and zero tilt drift");
+
+        // (b) TouchGestureConfig.ForProfile eliminates the 0.32s-0.42s silent tap drop gap and sets 15px*scale deadzone
+        var phoneProfile = PlatformProfile.Evaluate(new PlatformSnapshot(
+            OsName: "Android",
+            HasMobileFeature: true,
+            HasTouchscreen: true,
+            ScreenWidthPx: 2340,
+            ScreenHeightPx: 1080,
+            ScreenDpi: 425f,
+            SafeAreaRawPx: SafeAreaInsets.Zero,
+            SystemMemoryMb: 8192,
+            IsLowEndGpu: false,
+            ViewportHeightLogical: 1080f));
+        var phoneCfg = TouchGestureConfig.ForProfile(phoneProfile);
+        var expectedScale = Math.Clamp(phoneProfile.UiScaleFactor, 1.0f, 1.6f);
+        Check(phoneCfg.MaxTapDurationSec >= phoneCfg.LongPressDurationSec - 0.01f &&
+              Approx(phoneCfg.MaxTapDurationSec, 0.42f) &&
+              Approx(phoneCfg.PanDeadzonePx, 15f * expectedScale) &&
+              Approx(TouchGestureConfig.Default.MaxTapDurationSec, 0.32f) &&
+              Approx(TouchGestureConfig.Default.PanDeadzonePx, 12f),
+            "TouchGestureConfig.ForProfile removes 0.32s-0.42s tap dead-zone and uses 15px*scale pan deadzone while preserving Default");
+
+        var phoneTapMachine = new TouchGestureMachine(phoneCfg);
+        phoneTapMachine.OnTouchDown(0, 600f, 400f, 1.00);
+        var slowTap = phoneTapMachine.OnTouchUp(0, 602f, 401f, 1.37); // 370 ms tap
+        Check(slowTap.TapTriggered && !slowTap.LongPressTriggered,
+            "TouchGestureConfig.ForProfile fires TapTriggered cleanly for a 370ms mobile tap");
+
+        // (c) Multi-step direct pinch anchor accuracy using ControlSchemeRules.SolveGlobeZoomAnchor
+        const float viewW = 1920f;
+        const float viewH = 1080f;
+        const float fov = 38f;
+        const float globeRadius = 5f;
+        const float maxPitch = 1.50f;
+        const float pixelX = 1180f;
+        const float pixelY = 440f;
+        var pitch = 0.30f;
+        var yaw = -0.35f;
+        var dist = 12.5f;
+
+        var hitOk = DealOrForce.Simulation.Controls.ControlSchemeRules.TryGlobeRayHitLocal(
+            pixelX, pixelY, viewW, viewH, fov, globeRadius, dist, out var initialLocal);
+        Check(hitOk && initialLocal.Z >= 0.25, "Initial multi-step pinch test ray hits inside globe limb");
+        var initialWorld = DealOrForce.Simulation.Controls.ControlSchemeRules.OrbitLocalToWorld(initialLocal, pitch, yaw);
+
+        var maxAnchorDotErr = 0.0;
+        var allSolved = true;
+        for (var step = 0; step < 10; step++)
+        {
+            if (!DealOrForce.Simulation.Controls.ControlSchemeRules.TryGlobeRayHitLocal(
+                    pixelX, pixelY, viewW, viewH, fov, globeRadius, dist, out var hitLocal) ||
+                hitLocal.Z < 0.25)
+            {
+                allSolved = false;
+                break;
+            }
+            var anchorWorld = DealOrForce.Simulation.Controls.ControlSchemeRules.OrbitLocalToWorld(hitLocal, pitch, yaw);
+            var oldAlt = Math.Max(0.05f, dist - globeRadius);
+            var newDist = Math.Clamp(globeRadius + oldAlt / 1.06f, 5.4f, 22f);
+            if (!DealOrForce.Simulation.Controls.ControlSchemeRules.SolveGlobeZoomAnchor(
+                    pixelX, pixelY, viewW, viewH, fov, globeRadius, maxPitch,
+                    anchorWorld.X, anchorWorld.Y, anchorWorld.Z,
+                    pitch, yaw, newDist, out var nextPitch, out var nextYaw))
+            {
+                allSolved = false;
+                break;
+            }
+            pitch = nextPitch;
+            yaw = nextYaw;
+            dist = newDist;
+            if (!DealOrForce.Simulation.Controls.ControlSchemeRules.TryGlobeRayHitLocal(
+                    pixelX, pixelY, viewW, viewH, fov, globeRadius, dist, out var verifyLocal))
+            {
+                allSolved = false;
+                break;
+            }
+            var verifyWorld = DealOrForce.Simulation.Controls.ControlSchemeRules.OrbitLocalToWorld(verifyLocal, pitch, yaw);
+            var dot = initialWorld.X * verifyWorld.X + initialWorld.Y * verifyWorld.Y + initialWorld.Z * verifyWorld.Z;
+            maxAnchorDotErr = Math.Max(maxAnchorDotErr, Math.Abs(1.0 - dot));
+        }
+        Check(allSolved && maxAnchorDotErr < 1e-6,
+            $"10-step direct globe pinch zoom keeps anchored surface point locked (dot error={maxAnchorDotErr:E2})");
+    }
+
     private static void RunMultiTouchEdgeCaseTests()
     {
         var machine = new TouchGestureMachine(TouchGestureConfig.Default);
@@ -579,6 +699,71 @@ static class AndroidPlatformTests
         Check(!touchViewSrc.Contains("new Color(", StringComparison.Ordinal) &&
               touchViewSrc.Split('\n').Length < 400,
             "ShellTouchModeBarView uses Ui.Colour tokens only and stays compact (<400 lines)");
+        Check(!touchViewSrc.Contains("mobile.tap.", StringComparison.Ordinal) &&
+              touchViewSrc.Contains("mobile.mode.select.short", StringComparison.Ordinal) &&
+              touchViewSrc.Contains("mobile.mode.order.oneshot", StringComparison.Ordinal) &&
+              touchViewSrc.Contains("mobile.mode.order.sticky", StringComparison.Ordinal) &&
+              touchViewSrc.Contains("mobile.mode.box.short", StringComparison.Ordinal) &&
+              touchViewSrc.Contains("mobile.mode.pan.short", StringComparison.Ordinal) &&
+              touchViewSrc.Contains("ShellTouchModeToast", StringComparison.Ordinal) &&
+              touchViewSrc.Contains("MouseFilterEnum.Ignore", StringComparison.Ordinal) &&
+              touchViewSrc.Contains("public void Tick(double delta)", StringComparison.Ordinal),
+            "ShellTouchModeBarView binds mobile.mode.* keys and non-blocking auto-fading toast pill");
+
+        var orchSrc = File.ReadAllText(Path.Combine(root, "Scripts", "ui", "Shell", "ShellOrchestrator.cs"));
+        Check(orchSrc.Contains("TouchModeBar.Tick(delta);", StringComparison.Ordinal),
+            "ShellOrchestrator ticks ShellTouchModeBarView toast fade");
+
+        // 2b. Verify ShellTouchModeBarView CaptionFor / TooltipFor / ToastFor keys resolve via Loc in english and russian
+        var prevLang = Loc.Language;
+        var prevAdapter = Loc.TextAdapter;
+        Loc.ResetCatalog();
+        try
+        {
+            Loc.TextAdapter = null;
+            var keyMatches = System.Text.RegularExpressions.Regex.Matches(
+                touchViewSrc, @"L\(""(mobile\.mode\.[^""]+)""");
+            var viewKeys = keyMatches.Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal).ToList();
+            Check(viewKeys.Count >= 14,
+                $"ShellTouchModeBarView extracts all mobile.mode.* localization keys ({viewKeys.Count})");
+
+            Loc.Language = "english";
+            Check(Loc.Get("mobile.mode.select.short") == "Select" &&
+                  Loc.Get("mobile.mode.order.oneshot") == "Order 1×" &&
+                  Loc.Get("mobile.mode.order.sticky") == "Order Lock" &&
+                  Loc.Get("mobile.mode.box.short") == "Box" &&
+                  Loc.Get("mobile.mode.pan.short") == "Map",
+                "ShellTouchModeBarView resolves English captions (Select / Order 1× / Order Lock / Box / Map)");
+            var enStrings = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var k in viewKeys)
+            {
+                var resolved = Loc.Get(k);
+                Check(resolved != k && !string.IsNullOrWhiteSpace(resolved),
+                    $"ShellTouchModeBarView key '{k}' resolves in english");
+                enStrings[k] = resolved;
+            }
+
+            Loc.Language = "russian";
+            var ruOneShot = Loc.Get("mobile.mode.order.oneshot");
+            var ruSticky = Loc.Get("mobile.mode.order.sticky");
+            Check(Loc.Get("mobile.mode.select.short") == "Выбор" &&
+                  ruOneShot == "Приказ 1×" && ruOneShot != "Order 1×" &&
+                  ruSticky == "Приказ ●" && ruSticky != "Order Lock" &&
+                  Loc.Get("mobile.mode.box.short") == "Рамка" &&
+                  Loc.Get("mobile.mode.pan.short") == "Карта",
+                "ShellTouchModeBarView resolves Russian captions without English fallback");
+            foreach (var k in viewKeys)
+            {
+                var resolved = Loc.Get(k);
+                Check(resolved != k && !string.IsNullOrWhiteSpace(resolved) && resolved != enStrings[k],
+                    $"ShellTouchModeBarView key '{k}' translates distinctly in russian");
+            }
+        }
+        finally
+        {
+            Loc.TextAdapter = prevAdapter;
+            Loc.Language = prevLang;
+        }
 
         var mapBarSrc = File.ReadAllText(mapBarPath);
         Check(!mapBarSrc.Contains("ShellTouchModeBar", StringComparison.Ordinal) &&
@@ -1010,8 +1195,10 @@ static class AndroidPlatformTests
         var cSync = Campaign.CreateBootstrap(91122);
         cSync.IsPaused = false;
         cSync.Speed = 5;
+        cSync.RuntimeStepHoursOverride = BackgroundSimRunner.AdaptiveStepHours(5);
         while (cSync.ElapsedHours < cBg.ElapsedHours)
             cSync.Tick();
+        cSync.RuntimeStepHoursOverride = 0;
 
         Check(cSync.ElapsedHours == cBg.ElapsedHours &&
               CampaignFingerprint.Of(cBg) == CampaignFingerprint.Of(cSync),
@@ -1191,8 +1378,10 @@ static class AndroidPlatformTests
         var cDeskSync = Campaign.CreateBootstrap(91127);
         cDeskSync.IsPaused = false;
         cDeskSync.Speed = 5;
+        cDeskSync.RuntimeStepHoursOverride = BackgroundSimRunner.AdaptiveStepHours(5);
         while (cDeskSync.ElapsedHours < cDesk.ElapsedHours)
             cDeskSync.Tick();
+        cDeskSync.RuntimeStepHoursOverride = 0;
         Check(cDesk.ElapsedHours >= 72 && cDeskSync.ElapsedHours == cDesk.ElapsedHours &&
               CampaignFingerprint.Of(cDesk) == CampaignFingerprint.Of(cDeskSync),
             $"Uncapped desktop batched Speed-5 matches synchronous Campaign.Tick fingerprint at {cDesk.ElapsedHours}h");
@@ -1265,6 +1454,81 @@ static class AndroidPlatformTests
         runner.Start(another);
         Check(runner.ReadPresentationDate(another).Year == 1337,
             "a new campaign never inherits the previous campaign's displayed date");
+    }
+
+    private static void RunQueuedSaveTests()
+    {
+        var campaign = Campaign.CreateBootstrap(91128);
+        var region = campaign.States.First(s => s.NationMapIndex == campaign.Player.MapIndex);
+        var states = Enumerable.Repeat((ushort)region.MapIndex, 128).ToArray();
+        var owners = Enumerable.Repeat((ushort)campaign.Player.MapIndex, states.Length).ToArray();
+        campaign.AttachProvinceTopology(ProvinceTopology.Build(states, owners, 16, 8, _ => false));
+        campaign.Date = new GameDate(2024, 1, 31) { Hour = 23 };
+        campaign.Defines.HoursPerTick = 1;
+        campaign.IsPaused = true;
+
+        var folder = Path.Combine(Path.GetTempPath(), "dof-queued-save-" + Guid.NewGuid().ToString("N"));
+        using var runner = new BackgroundSimRunner { MobilePacing = true };
+        runner.Start(campaign);
+        Task<SaveSystem.PreparedSave> pending;
+        campaign.AccessGate.EnterWrite();
+        try
+        {
+            campaign.IsPaused = false;
+            for (var slice = 0; slice < 64 && campaign.Date.Day == 31; slice++) campaign.StepFor(0.0);
+            campaign.IsPaused = true;
+            Check(campaign.MidStep && runner.ReadPresentationDate(campaign).Day == 31,
+                "the save fixture suspends a midnight step before publishing its date");
+            pending = runner.QueueSavePreparation(campaign, folder, SaveSystem.AutoSlot, "", "", autosave: true);
+            Check(!pending.IsCompleted, "queuing a save returns without waiting on the campaign gate");
+            var duplicate = runner.QueueSavePreparation(campaign, folder, SaveSystem.AutoSlot, "", "", autosave: true);
+            Check(duplicate.Exception?.InnerException is InvalidOperationException,
+                "a second request cannot overtake preparation for the first save");
+        }
+        finally { campaign.AccessGate.ExitWrite(); }
+
+        var prepared = pending.WaitAsync(TimeSpan.FromSeconds(15)).GetAwaiter().GetResult();
+        var capturedDate = runner.ReadPresentationDate(campaign);
+        Check(!campaign.MidStep && campaign.IsPaused && capturedDate.Month == 2 && capturedDate.Day == 1 &&
+              capturedDate.Hour == 0 && prepared.Metadata.IsAutosave &&
+              prepared.Metadata.GameDate == capturedDate.ToString() && prepared.Metadata.DisplayName.EndsWith(capturedDate.Display()),
+            "background preparation finishes a paused midnight and uses the committed date for its save");
+        runner.RunWrite(c => c.Date = new GameDate(2024, 2, 2), refreshSnapshot: false);
+        prepared.Commit();
+        var saved = SaveSystem.Load(folder, SaveSystem.AutoSlot, "");
+        Check(saved.Success && saved.Campaign.Date.Day == 1 && runner.ReadPresentationDate(campaign).Day == 2,
+            "disk writing uses the detached snapshot even after the live campaign advances");
+
+        Check(campaign.TryEnterRead(0, requestWindowOnMiss: false), "the save fixture holds a read window during shutdown");
+        try
+        {
+            var abandoned = runner.QueueSavePreparation(campaign, folder, "abandoned", "", "", autosave: true);
+            runner.Stop();
+            Check(abandoned.IsCanceled && !runner.IsActive && SaveSystem.List(folder).Count == 1,
+                "stopping a campaign cancels a snapshot waiting for the gate without creating a new save");
+        }
+        finally { campaign.ExitRead(); }
+
+        campaign.Commands.Enqueue(new FailingSaveStepCommand());
+        campaign.Speed = 5;
+        campaign.IsPaused = false;
+        runner.Start(campaign);
+        Exception stepFault = null;
+        Check(SpinWait.SpinUntil(() =>
+        {
+            runner.DrainMainThreadUpdates(out _, out _, out _, out stepFault);
+            return stepFault is not null;
+        }, TimeSpan.FromSeconds(15)), "the test drains a failed step before the UI blocks the campaign");
+        var afterFault = runner.QueueSavePreparation(campaign, folder, "after_fault", "", "", autosave: true);
+        Check(SpinWait.SpinUntil(() => afterFault.IsCompleted, TimeSpan.FromSeconds(15)) &&
+              ReferenceEquals(afterFault.Exception?.InnerException?.InnerException, stepFault) && SaveSystem.List(folder).Count == 1,
+            "draining a fault for display cannot let a save capture the failed campaign");
+    }
+
+    private sealed class FailingSaveStepCommand : ICampaignCommand
+    {
+        public int IssuerId => -1;
+        public void Apply(Campaign campaign) => throw new InvalidOperationException("Failed step before a queued save");
     }
 
     private static void RunConcurrentCatalogReloadSafetyTests()
@@ -1404,6 +1668,9 @@ static class AndroidPlatformTests
 
         RunCampaignIntelConcurrencyTests();
         RunMobileAdaptiveStepHoursAndMidnightAlignmentTests();
+        RunPriorityReaderPreemptionTests();
+        RunDesktopAdaptiveStepPacingTests();
+        RunMobileBigLittleParallelDeterminismTests();
     }
 
     private static void RunCampaignIntelConcurrencyTests()
@@ -1632,6 +1899,310 @@ static class AndroidPlatformTests
         Check(bgCampaign.ElapsedHours >= 48 && bgCampaign.ElapsedHours % 24 == 0 &&
               bgCampaign.RuntimeStepHoursOverride == 0 && bgCampaign.Defines.HoursPerTick == 1,
             $"MobilePacing BackgroundSimRunner aligns from 14:00 onto midnight steps and Stop() resets RuntimeStepHoursOverride ({bgCampaign.ElapsedHours}h)");
+    }
+
+    private static void RunPriorityReaderPreemptionTests()
+    {
+        var campaign = Campaign.CreateBootstrap(91140);
+        var nationA = campaign.Player ?? campaign.Nations[0];
+        var nationB = campaign.Nations.First(n => n.Id != nationA.Id && n.RetiredDay < 0);
+        var regionA = campaign.States.First(s => s.NationMapIndex == nationA.MapIndex);
+        var regionB = campaign.States.FirstOrDefault(s => s.NationMapIndex == nationB.MapIndex) ?? regionA;
+        var states = new ushort[128];
+        var owners = new ushort[128];
+        for (var i = 0; i < states.Length; i++)
+        {
+            var isA = i < 64;
+            states[i] = (ushort)(isA ? regionA.MapIndex : regionB.MapIndex);
+            owners[i] = (ushort)(isA ? nationA.MapIndex : nationB.MapIndex);
+        }
+        campaign.AttachProvinceTopology(ProvinceTopology.Build(states, owners, 16, 8, _ => false));
+        campaign.ObserverMode = true;
+        campaign.IsPaused = false;
+        campaign.Speed = 5;
+
+        using var runner = new BackgroundSimRunner
+        {
+            AdaptiveStepPacing = true,
+            MinSpeed5DayIntervalMs = 0.0
+        };
+        runner.Start(campaign);
+        runner.SyncClockState(paused: false, speed: 5);
+
+        // Warm up at least one live day before racing the lock-stealer.
+        var warmSw = Stopwatch.StartNew();
+        while (warmSw.ElapsedMilliseconds < 3000)
+        {
+            if (campaign.TryEnterRead(5, requestWindowOnMiss: true))
+            {
+                var ready = campaign.ElapsedDays >= 1;
+                campaign.ExitRead();
+                if (ready) break;
+            }
+            Thread.Sleep(2);
+        }
+
+        // Continuously hammer normal TryEnterRead(0, requestWindowOnMiss: true) on a helper thread,
+        // reproducing DealOrForceGame._Process stealing routine read windows before a tap retries.
+        var stopStealer = 0;
+        var stolenReads = 0;
+        var stealer = Task.Run(() =>
+        {
+            while (Volatile.Read(ref stopStealer) == 0)
+            {
+                if (campaign.TryEnterRead(0, requestWindowOnMiss: true))
+                {
+                    try { Interlocked.Increment(ref stolenReads); }
+                    finally { campaign.ExitRead(); }
+                }
+                Thread.Yield();
+            }
+        });
+
+        try
+        {
+            for (var probe = 0; probe < 5; probe++)
+            {
+                Thread.Sleep(5);
+                var sw = Stopwatch.StartNew();
+                var acquired = false;
+                campaign.AccessGate.RequestPriorityRead();
+                try
+                {
+                    acquired = campaign.AccessGate.TryEnterPriorityRead(100);
+                    if (acquired)
+                    {
+                        try { _ = campaign.ElapsedHours; }
+                        finally { campaign.ExitRead(); }
+                    }
+                }
+                finally
+                {
+                    campaign.AccessGate.ClearPriorityRead();
+                }
+                sw.Stop();
+                Check(acquired && sw.ElapsedMilliseconds < 100,
+                    $"Priority tap probe {probe + 1}/5 preempts Speed-5 + lock-stealing reader within 100 ms ({sw.ElapsedMilliseconds} ms, acquired={acquired})");
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref stopStealer, 1);
+            stealer.Wait(3000);
+        }
+
+        runner.RunWrite(c =>
+        {
+            c.IsPaused = true;
+            if (c.MidStep) c.FinishStep();
+        });
+        runner.Stop();
+
+        Check(Volatile.Read(ref stolenReads) > 0 && !campaign.AccessGate.HasPriorityReaderRequested &&
+              campaign.ElapsedDays >= 1 && !campaign.MidStep && string.IsNullOrEmpty(campaign.SimulationFault),
+            $"Priority reader lane stayed clear after preemption stress (stolenReads={stolenReads}, days={campaign.ElapsedDays})");
+    }
+
+    private static void RunDesktopAdaptiveStepPacingTests()
+    {
+        var defaults = new BackgroundSimRunner();
+        Check(!defaults.MobilePacing && defaults.AdaptiveStepPacing,
+            "BackgroundSimRunner enables AdaptiveStepPacing by default on desktop");
+
+        var expectedHours = new[] { 0, 1, 2, 4, 8, 24 };
+        for (var speed = 1; speed <= 5; speed++)
+        {
+            Check(BackgroundSimRunner.AdaptiveStepHours(speed) == expectedHours[speed],
+                $"AdaptiveStepHours({speed}) == {expectedHours[speed]}h");
+        }
+        var testDefines = new Defines { SecondsPerDay = 5f, HoursPerTick = 1 };
+        Check(Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 1, mobilePacing: false) - 3.00) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 2, mobilePacing: false) - 1.20) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 3, mobilePacing: false) - 0.45) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 4, mobilePacing: false) - 0.125) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 5, mobilePacing: false) - 0.0) < 1e-9,
+            "AdaptiveStepSecondsPerDay desktop pacing table matches 3.00/1.20/0.45/0.125/0.0");
+
+        // Verify RuntimeStepHoursOverride stays [JsonIgnore] and is excluded from saves & fingerprints.
+        var overrideField = typeof(Campaign).GetField("RuntimeStepHoursOverride",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var hasJsonIgnore = overrideField?.GetCustomAttributes(
+            typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), inherit: false).Length == 1;
+        Check(hasJsonIgnore, "Campaign.RuntimeStepHoursOverride carries [JsonIgnore]");
+
+        // Verify desktop AdaptiveStepPacing steps 1h/2h/4h/8h/24h for Speed 1..5 when Defines.HoursPerTick == 1.
+        for (var speed = 1; speed <= 5; speed++)
+        {
+            var cSpeed = Campaign.CreateBootstrap(91141);
+            cSpeed.ObserverMode = true;
+            cSpeed.IsPaused = false;
+            cSpeed.Defines.HoursPerTick = 1;
+            cSpeed.Defines.SecondsPerDay = 0.05f;
+            cSpeed.Speed = speed;
+            var expectedStep = expectedHours[speed];
+            using var speedRunner = new BackgroundSimRunner
+            {
+                MobilePacing = false,
+                AdaptiveStepPacing = true,
+                MinSpeed5DayIntervalMs = 0.0
+            };
+            speedRunner.Start(cSpeed);
+            speedRunner.SyncClockState(paused: false, speed: speed);
+            var wait = Stopwatch.StartNew();
+            while (wait.ElapsedMilliseconds < 4000)
+            {
+                if (cSpeed.TryEnterRead(5, requestWindowOnMiss: false))
+                {
+                    var done = cSpeed.ElapsedHours >= expectedStep && !cSpeed.MidStep;
+                    cSpeed.ExitRead();
+                    if (done) break;
+                }
+                Thread.Sleep(2);
+            }
+            speedRunner.RunWrite(c =>
+            {
+                c.IsPaused = true;
+                if (c.MidStep) c.FinishStep();
+            });
+            var activeOverride = cSpeed.RuntimeStepHoursOverride;
+            speedRunner.Stop();
+            Check(cSpeed.ElapsedHours >= expectedStep && cSpeed.ElapsedHours % expectedStep == 0 &&
+                  activeOverride == expectedStep && cSpeed.RuntimeStepHoursOverride == 0 &&
+                  cSpeed.Defines.HoursPerTick == 1,
+                $"Desktop AdaptiveStepPacing Speed {speed} steps in {expectedStep}h multiples (hours={cSpeed.ElapsedHours}, override={activeOverride})");
+        }
+
+        // Fingerprint parity: desktop AdaptiveStepPacing at Speed 5 matches explicit Defines.HoursPerTick = 24 stepping.
+        var cAdaptive = Campaign.CreateBootstrap(91141);
+        cAdaptive.ObserverMode = true;
+        cAdaptive.IsPaused = false;
+        cAdaptive.Defines.HoursPerTick = 1;
+        cAdaptive.Speed = 5;
+        var fpBefore = CampaignFingerprint.Of(cAdaptive);
+        using (var runner = new BackgroundSimRunner
+        {
+            MobilePacing = false,
+            AdaptiveStepPacing = true,
+            MinSpeed5DayIntervalMs = 0.0
+        })
+        {
+            runner.Start(cAdaptive);
+            runner.SyncClockState(paused: false, speed: 5);
+            var sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < 5000)
+            {
+                if (cAdaptive.TryEnterRead(5, requestWindowOnMiss: false))
+                {
+                    var done = cAdaptive.ElapsedHours >= 72 && !cAdaptive.MidStep;
+                    cAdaptive.ExitRead();
+                    if (done) break;
+                }
+                Thread.Sleep(2);
+            }
+            runner.RunWrite(c =>
+            {
+                c.IsPaused = true;
+                if (c.MidStep) c.FinishStep();
+            });
+            runner.Stop();
+        }
+
+        var cExplicit = Campaign.CreateBootstrap(91141);
+        cExplicit.ObserverMode = true;
+        cExplicit.IsPaused = false;
+        cExplicit.Speed = 5;
+        Check(CampaignFingerprint.Of(cExplicit) == fpBefore,
+            "Bootstrap fingerprint before desktop adaptive stepping is identical");
+        cExplicit.Defines.HoursPerTick = 24;
+        while (cExplicit.ElapsedHours < cAdaptive.ElapsedHours)
+            cExplicit.Tick();
+        cExplicit.Defines.HoursPerTick = 1;
+
+        Check(cAdaptive.ElapsedHours >= 72 && cExplicit.ElapsedHours == cAdaptive.ElapsedHours &&
+              CampaignFingerprint.Of(cAdaptive) == CampaignFingerprint.Of(cExplicit),
+            $"Desktop AdaptiveStepPacing Speed 5 fingerprint matches explicit HoursPerTick=24 stepping at {cAdaptive.ElapsedHours}h");
+    }
+
+    private static void RunMobileBigLittleParallelDeterminismTests()
+    {
+        var originalCap = DeterministicParallel.MobileBigLittleCap;
+        try
+        {
+            Check(DeterministicParallel.ResolveWorkerCount(200, 16, mobileCap: true, processorCount: 8) == 4 &&
+                  DeterministicParallel.ResolveWorkerCount(20, 16, mobileCap: true, processorCount: 8) == 1 &&
+                  DeterministicParallel.ResolveWorkerCount(200, 16, mobileCap: false, processorCount: 8) == 7,
+                "ResolveWorkerCount caps big.LITTLE mobile workers to 4 and raises minItems to 24");
+
+            // 1. Multi-worker DeterministicParallel.ForRange parity with MobileBigLittleCap false vs true.
+            const int itemCount = 512;
+            var baseline = new double[itemCount];
+            var capped = new double[itemCount];
+            DeterministicParallel.MobileBigLittleCap = false;
+            var ranUnrestricted = DeterministicParallel.ForRange(0, itemCount, (from, to) =>
+            {
+                for (var i = from; i < to; i++)
+                    baseline[i] = Math.Sin(i * 0.17) * (i + 1) + Math.Sqrt(i + 0.5);
+            }, minItems: 16);
+
+            DeterministicParallel.MobileBigLittleCap = true;
+            var expectedWorkers = Math.Clamp(Environment.ProcessorCount / 2, 2, 4);
+            Check(DeterministicParallel.Workers == expectedWorkers &&
+                  DeterministicParallel.EffectiveMinItems(16) == 24 &&
+                  DeterministicParallel.EffectiveMinItems(8) == 16 &&
+                  DeterministicParallel.EffectiveMinItems(48) == 48,
+                $"MobileBigLittleCap=true enforces Workers={expectedWorkers} and EffectiveMinItems(16)=24");
+
+            var ranCapped = DeterministicParallel.ForRange(0, itemCount, (from, to) =>
+            {
+                for (var i = from; i < to; i++)
+                    capped[i] = Math.Sin(i * 0.17) * (i + 1) + Math.Sqrt(i + 0.5);
+            }, minItems: 16);
+
+            Check(baseline.SequenceEqual(capped),
+                $"DeterministicParallel.ForRange produces bit-identical results under MobileBigLittleCap false vs true (unrestricted={ranUnrestricted}, capped={ranCapped})");
+
+            // 2. Live multi-day campaign tick parity under MobileBigLittleCap false vs true.
+            static Campaign CreateParallelCampaign()
+            {
+                var c = Campaign.CreateBootstrap(91142);
+                var nationA = c.Player ?? c.Nations[0];
+                var nationB = c.Nations.First(n => n.Id != nationA.Id && n.RetiredDay < 0);
+                var regionA = c.States.First(s => s.NationMapIndex == nationA.MapIndex);
+                var regionB = c.States.FirstOrDefault(s => s.NationMapIndex == nationB.MapIndex) ?? regionA;
+                var states = new ushort[256];
+                var owners = new ushort[256];
+                for (var i = 0; i < states.Length; i++)
+                {
+                    var isA = i < 128;
+                    states[i] = (ushort)(isA ? regionA.MapIndex : regionB.MapIndex);
+                    owners[i] = (ushort)(isA ? nationA.MapIndex : nationB.MapIndex);
+                }
+                c.AttachProvinceTopology(ProvinceTopology.Build(states, owners, 16, 16, _ => false));
+                c.ObserverMode = true;
+                c.IsPaused = false;
+                c.Defines.HoursPerTick = 24;
+                c.Defines.ParallelRegions = true;
+                return c;
+            }
+
+            DeterministicParallel.MobileBigLittleCap = false;
+            var cUnrestricted = CreateParallelCampaign();
+            for (var day = 0; day < 5; day++) cUnrestricted.Tick();
+
+            DeterministicParallel.MobileBigLittleCap = true;
+            var cMobileCapped = CreateParallelCampaign();
+            for (var day = 0; day < 5; day++) cMobileCapped.Tick();
+
+            Check(CampaignFingerprint.Of(cUnrestricted) == CampaignFingerprint.Of(cMobileCapped) &&
+                  cUnrestricted.Random.State == cMobileCapped.Random.State,
+                "Campaign ticks stay 100% bit-identical with MobileBigLittleCap false vs true");
+        }
+        finally
+        {
+            DeterministicParallel.MobileBigLittleCap = originalCap;
+        }
+        Check(DeterministicParallel.MobileBigLittleCap == OperatingSystem.IsAndroid(),
+            "MobileBigLittleCap restored to platform default cleanly");
     }
 
     private static string FindRepoRoot()

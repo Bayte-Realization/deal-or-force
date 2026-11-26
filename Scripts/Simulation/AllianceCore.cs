@@ -135,6 +135,22 @@ public static class AllianceSystem
         return found;
     }
 
+    /// <summary>Zero-allocation count of active allies for scripted triggers and cabinet scoring.</summary>
+    internal static int AllyCount(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return 0;
+        var count = 0;
+        var nations = campaign.Nations;
+        for (var i = 0; i < nations.Count; i++)
+        {
+            var other = nations[i];
+            if (other.Id == nation.Id) continue;
+            var relation = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id);
+            if (relation is { Stance: DiplomaticStance.Allied }) count++;
+        }
+        return count;
+    }
+
     /// <summary>Who has an alliance on this country's table, if anybody.</summary>
     public static Nation OfferedTo(Campaign campaign, Nation nation)
     {

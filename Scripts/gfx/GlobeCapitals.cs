@@ -190,6 +190,13 @@ void fragment() {
     /// 1-draw-call city lights on the night side, scaled by real state population and GDP.
     /// Zero invented settlements, zero per-frame allocations, cleanly muted in paper mode & MobileLow.
     /// </summary>
+    private ShaderMaterial _cachedUrbanGlowMaterial;
+    private bool? _cachedUrbanGlowVisible;
+    private Vector3 _cachedUrbanSunDir = new(float.NaN, float.NaN, float.NaN);
+    private float _cachedUrbanFlatMap = float.NaN;
+    private float _cachedUrbanPaperFade = float.NaN;
+    private float _cachedUrbanDuskBoost = float.NaN;
+
     private void UpdateUrbanGlowClusters()
     {
         if (_campaign is null || !_mapApplied || !IsInstanceValid(_skyWorld)) return;
@@ -198,7 +205,11 @@ void fragment() {
         var allowed = !_mapLookPaper && tier < 1.5f && Simulation.WorldLayers.On("cities") && !_flatMap && DayNightEnabled;
         if (!allowed)
         {
-            if (IsInstanceValid(_urbanGlowNode)) _urbanGlowNode.Visible = false;
+            if (IsInstanceValid(_urbanGlowNode) && _cachedUrbanGlowVisible != false)
+            {
+                _cachedUrbanGlowVisible = false;
+                _urbanGlowNode.Visible = false;
+            }
             return;
         }
 
@@ -209,6 +220,8 @@ void fragment() {
                 Shader = new Shader { Code = UrbanGlowShader },
                 RenderPriority = 4
             };
+            _cachedUrbanGlowMaterial = null;
+            _cachedUrbanGlowVisible = null;
             var mm = new MultiMesh
             {
                 TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
@@ -228,12 +241,47 @@ void fragment() {
             _skyWorld.AddChild(_urbanGlowNode);
         }
 
-        _urbanGlowNode.Visible = true;
+        if (_cachedUrbanGlowVisible != true)
+        {
+            _cachedUrbanGlowVisible = true;
+            _urbanGlowNode.Visible = true;
+        }
+        var matChanged = !ReferenceEquals(_cachedUrbanGlowMaterial, _urbanGlowMaterial);
+        if (matChanged)
+        {
+            _cachedUrbanGlowMaterial = _urbanGlowMaterial;
+            _cachedUrbanSunDir = new Vector3(float.NaN, float.NaN, float.NaN);
+            _cachedUrbanFlatMap = float.NaN;
+            _cachedUrbanPaperFade = float.NaN;
+            _cachedUrbanDuskBoost = float.NaN;
+        }
         if (IsInstanceValid(_daySun))
-            _urbanGlowMaterial.SetShaderParameter("sun_direction", _daySun.GlobalBasis.Z);
-        _urbanGlowMaterial.SetShaderParameter("flat_map", _flatMap ? 1f : 0f);
-        _urbanGlowMaterial.SetShaderParameter("paper_fade", 1f - Math.Clamp(_cachedPaperMix, 0f, 1f));
-        _urbanGlowMaterial.SetShaderParameter("dusk_boost", 1.0f);
+        {
+            var sunDir = _daySun.GlobalBasis.Z;
+            if (!sunDir.IsEqualApprox(_cachedUrbanSunDir))
+            {
+                _cachedUrbanSunDir = sunDir;
+                _urbanGlowMaterial.SetShaderParameter("sun_direction", sunDir);
+            }
+        }
+        var flatVal = _flatMap ? 1f : 0f;
+        if (flatVal != _cachedUrbanFlatMap)
+        {
+            _cachedUrbanFlatMap = flatVal;
+            _urbanGlowMaterial.SetShaderParameter("flat_map", flatVal);
+        }
+        var paperFade = 1f - Math.Clamp(_cachedPaperMix, 0f, 1f);
+        if (paperFade != _cachedUrbanPaperFade && (matChanged || MathF.Abs(paperFade - _cachedUrbanPaperFade) > 0.001f || paperFade <= 0f || paperFade >= 1f))
+        {
+            _cachedUrbanPaperFade = paperFade;
+            _urbanGlowMaterial.SetShaderParameter("paper_fade", paperFade);
+        }
+        const float duskBoost = 1.0f;
+        if (duskBoost != _cachedUrbanDuskBoost)
+        {
+            _cachedUrbanDuskBoost = duskBoost;
+            _urbanGlowMaterial.SetShaderParameter("dusk_boost", duskBoost);
+        }
 
         var rev = _campaign.MapRevision;
         var cityCount = Math.Min(_cities.Count, _cityAnchors.Length);

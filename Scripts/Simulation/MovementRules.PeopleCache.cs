@@ -131,6 +131,15 @@ public static partial class MovementRules
         internal long[] StateHeaderPop = Array.Empty<long>();
         internal int[] StateHeaderGroupCount = Array.Empty<int>();
 
+        internal int[] RawOrderScratch = Array.Empty<int>();
+        internal readonly RawRowComparer RawRowOrderComparer = new();
+
+        internal sealed class RawRowComparer : IComparer<int>
+        {
+            public string[] Strings;
+            public int Compare(int a, int b) => string.CompareOrdinal(Strings[a] ?? "", Strings[b] ?? "");
+        }
+
         internal static int[] Unresolved(int length)
         {
             var ids = new int[length];
@@ -555,9 +564,12 @@ public static partial class MovementRules
     {
         var count = cache.RawCount;
         var strings = cache.RawStrings;
-        var order = new int[count];
+        var order = cache.RawOrderScratch;
+        if (order.Length < count) cache.RawOrderScratch = order = new int[Math.Max(count, 64)];
         for (var row = 0; row < count; row++) order[row] = row;
-        Array.Sort(order, (a, b) => string.CompareOrdinal(strings[a] ?? "", strings[b] ?? ""));
+        var comparer = cache.RawRowOrderComparer;
+        comparer.Strings = strings;
+        Array.Sort(order, 0, count, comparer);
         var rank = 0;
         for (var k = 0; k < count; k++)
         {

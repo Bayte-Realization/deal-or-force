@@ -31,6 +31,9 @@ namespace DealOrForce;
 public sealed partial class GlobePresentation
 {
     private MeshInstance3D _atmosphereLayer;
+    private bool? _cachedAtmosphereVisible;
+    private ShaderMaterial _cachedAtmosphereMaterial;
+    private Vector3 _cachedAtmosphereSunDir = new(float.NaN, float.NaN, float.NaN);
 
     /// <summary>Contrast and saturation, in per cent of the renderer's own picture.</summary>
     private const float GradeContrast = 1.06f;
@@ -152,10 +155,24 @@ public sealed partial class GlobePresentation
     private void UpdateAtmosphereRim()
     {
         if (!IsInstanceValid(_atmosphereLayer)) return;
-        _atmosphereLayer.Visible = !_flatMap && !_mapLookPaper;
-        if (!_atmosphereLayer.Visible || !IsInstanceValid(_daySun)) return;
+        var vis = !_flatMap && !_mapLookPaper;
+        if (_cachedAtmosphereVisible != vis)
+        {
+            _cachedAtmosphereVisible = vis;
+            _atmosphereLayer.Visible = vis;
+        }
+        if (!vis || !IsInstanceValid(_daySun)) return;
         if (_atmosphereLayer.MaterialOverride is ShaderMaterial material)
-            material.SetShaderParameter("sun_direction", _daySun.GlobalBasis.Z);
+        {
+            var sunDir = _daySun.GlobalBasis.Z;
+            if (!ReferenceEquals(_cachedAtmosphereMaterial, material) ||
+                !sunDir.IsEqualApprox(_cachedAtmosphereSunDir))
+            {
+                _cachedAtmosphereMaterial = material;
+                _cachedAtmosphereSunDir = sunDir;
+                material.SetShaderParameter("sun_direction", sunDir);
+            }
+        }
     }
 
     private const string AtmosphereShader = @"shader_type spatial;

@@ -272,10 +272,11 @@ public sealed partial class Campaign
         return matches.Count == 0 ? NoStates : matches.ToArray();
     }
 
-    /// <summary>Drop the ownership index. Call after replacing or re-owning states.</summary>
+    /// <summary>Drop the ownership and state-province indexes. Call after replacing, carving, or re-owning states.</summary>
     public void InvalidateStateIndex()
     {
         _statesByNation = null;
+        ProvinceMap?.InvalidateStateProvinces();
         OwnershipRevision++;
     }
 
@@ -458,7 +459,11 @@ public sealed partial class Campaign
         if (_pendingProvinceOwner is not null && _pendingProvinceOwner.Length == topology.ProvinceToNation.Length)
             Array.Copy(_pendingProvinceOwner, topology.ProvinceToNation, _pendingProvinceOwner.Length);
         if (_pendingProvinceState is not null && _pendingProvinceState.Length == topology.ProvinceToState.Length)
+        {
             Array.Copy(_pendingProvinceState, topology.ProvinceToState, _pendingProvinceState.Length);
+            // Headquarters placement below reads the saved regions during attachment.
+            topology.InvalidateStateProvinces();
+        }
         _pendingProvinceOwner = null;
         _pendingProvinceState = null;
         foreach (var province in DestroyedProvinces)

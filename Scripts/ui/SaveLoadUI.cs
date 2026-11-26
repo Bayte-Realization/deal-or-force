@@ -354,12 +354,7 @@ public partial class DealOrForceGame
     private bool _waitingForSave;
 
     /// <summary>
-    /// Take the save on this frame and write it on a worker.
-    ///
-    /// The snapshot has to be taken here, because it reads the live world; compressing,
-    /// checksumming and writing it do not, and they were most of the cost - the frame that
-    /// autosaved a five-year campaign froze for close to three seconds, and every month the
-    /// freeze was longer. Now the frame pays for the snapshot only.
+    /// Snapshot on the thread that owns the live campaign, then write the detached data on a worker.
     ///
     /// One write at a time. An autosave that falls due while the last save is still being
     /// written is skipped - the next is a month away - and a save the player asked for waits
@@ -379,31 +374,23 @@ public partial class DealOrForceGame
         var targetCampaign = _campaign;
         var saveRoot = SaveRoot;
         var modFp = ModFingerprint;
-        var currentDate = _simRunner.IsActive && ReferenceEquals(_simRunner.Campaign, targetCampaign)
-            ? _simRunner.ReadPresentationDate(targetCampaign)
-            : targetCampaign.Date;
-        var effectiveName = string.IsNullOrWhiteSpace(displayName)
-            ? $"{targetCampaign.Player.DisplayName} · {currentDate.Display()}"
-            : displayName;
-
         System.Threading.Tasks.Task<SaveMetadata> write;
         if (WantsBackgroundSimulation &&
             _simRunner.IsActive &&
-            ReferenceEquals(_simRunner.Campaign, targetCampaign) &&
-            targetCampaign.DeferMainThreadNotifications)
+            ReferenceEquals(_simRunner.Campaign, targetCampaign))
         {
+            var preparation = _simRunner.QueueSavePreparation(targetCampaign, saveRoot, slot, modFp, displayName, autosave);
             if (IsInstanceValid(_saveStatus)) _saveStatus.Text = Tr("Saving…");
-            write = System.Threading.Tasks.Task.Run(() =>
-            {
-                _simRunner.RequestYield();
-                return SaveSystem.Prepare(saveRoot, slot, targetCampaign, modFp, effectiveName, autosave).Commit();
-            });
+            write = System.Threading.Tasks.Task.Run(async () => (await preparation.ConfigureAwait(false)).Commit());
         }
         else
         {
             SaveSystem.PreparedSave prepared;
             try
             {
+                var effectiveName = string.IsNullOrWhiteSpace(displayName)
+                    ? $"{targetCampaign.Player.DisplayName} · {targetCampaign.Date.Display()}"
+                    : displayName;
                 prepared = SaveSystem.Prepare(saveRoot, slot, targetCampaign, modFp, effectiveName, autosave);
             }
             catch (Exception exception)
@@ -419,10 +406,15 @@ public partial class DealOrForceGame
         try
         {
             var metadata = await write;
-            if (!IsInstanceValid(_saveStatus)) return;
+            if (!ReferenceEquals(_campaign, targetCampaign) || !IsInstanceValid(_saveStatus)) return;
             _saveStatus.Text = Simulation.Loc.Format("Saved {0} on {1}.", metadata.NationName, metadata.GameDate);
             if (!autosave) PlayStrategicCue("save_complete");
             if (_saveLoadLayer is { Visible: true }) RefreshSaveSlots();
+        }
+        catch (System.OperationCanceledException) when (!ReferenceEquals(_campaign, targetCampaign) ||
+                                                         !IsInstanceValid(this) || !IsInsideTree())
+        {
+            // The campaign was left before the worker could take its snapshot.
         }
         catch (Exception exception)
         {
@@ -436,11 +428,16 @@ public partial class DealOrForceGame
         var message = exception is CampaignIntegrityException
             ? Tr("Saving stopped: invalid simulation values. The last good save is unchanged.")
             : Simulation.Loc.Format("Save failed: {0}", exception.Message);
-        if (IsInstanceValid(_saveStatus)) _saveStatus.Text = message;
+        var currentCampaign = targetCampaign is null || ReferenceEquals(_campaign, targetCampaign);
+        if (currentCampaign && IsInstanceValid(_saveStatus)) _saveStatus.Text = message;
         if (exception is CampaignIntegrityException integrity)
         {
-            (targetCampaign ?? _campaign)?.BlockSimulation(integrity.Issue);
-            if (targetCampaign is null || ReferenceEquals(_campaign, targetCampaign))
+            var campaign = targetCampaign ?? _campaign;
+            if (_simRunner.IsActive && ReferenceEquals(_simRunner.Campaign, campaign))
+                _simRunner.RunWrite(world => world.BlockSimulation(integrity.Issue));
+            else
+                campaign?.BlockSimulation(integrity.Issue);
+            if (currentCampaign && IsInsideTree())
                 ShowCampaignFault(message, integrity.DiagnosticPath, integrity.Issue);
         }
         GD.PushError(message);
@@ -530,7 +527,7 @@ public partial class DealOrForceGame
         _waitingForSave = true;
         try
         {
-            await System.Threading.Tasks.Task.WhenAny(pending, System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(30)));
+            await pending;
         }
         catch (Exception) { /* SaveToSlot has already reported it */ }
         finally { _waitingForSave = false; }

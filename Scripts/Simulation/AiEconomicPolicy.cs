@@ -117,9 +117,19 @@ public static partial class AiStatecraft
     /// </summary>
     private static void Build(Campaign campaign, Nation nation, bool atWar)
     {
+        var defines = campaign.Defines;
         var starts = Math.Max(1, (int)MathF.Round(ConstructionCost.Size(campaign, nation) / 2f));
+        var limit = ConstructionCost.Limit(campaign, nation, defines.AiMaxConcurrentProjects);
+        var running = -1;
+        var buildingShipyard = false;
+        var congested = false;
+        ScenarioState[] states = null;
+
         for (var i = 0; i < starts; i++)
-            if (!BuildOne(campaign, nation, atWar, i)) return;
+        {
+            if (!BuildOne(campaign, nation, atWar, i, limit, ref running, ref buildingShipyard, ref congested, ref states))
+                return;
+        }
     }
 
     /// <summary>
@@ -128,22 +138,76 @@ public static partial class AiStatecraft
     /// country at war builds guns, and a country at peace builds the thing that makes it
     /// richer next year.
     /// </summary>
-    private static bool BuildOne(Campaign campaign, Nation nation, bool atWar, int slot)
+    private static string ConstructionFiscalKey(AiFiscalReason reason) => reason switch
+    {
+        AiFiscalReason.Ready => "construction_fiscal_Ready",
+        AiFiscalReason.InvalidAccounts => "construction_fiscal_InvalidAccounts",
+        AiFiscalReason.OverdueBills => "construction_fiscal_OverdueBills",
+        AiFiscalReason.DebtWorkout => "construction_fiscal_DebtWorkout",
+        AiFiscalReason.ShortRunway => "construction_fiscal_ShortRunway",
+        _ => "construction_fiscal_" + reason
+    };
+
+    private static string ConstructionStartedKey(BuildingKind building) => building switch
+    {
+        BuildingKind.Agriculture => "construction_started_Agriculture",
+        BuildingKind.CivilianIndustry => "construction_started_CivilianIndustry",
+        BuildingKind.Infrastructure => "construction_started_Infrastructure",
+        BuildingKind.University => "construction_started_University",
+        BuildingKind.Hospital => "construction_started_Hospital",
+        BuildingKind.Barracks => "construction_started_Barracks",
+        BuildingKind.ExtractionIndustry => "construction_started_ExtractionIndustry",
+        BuildingKind.PowerPlant => "construction_started_PowerPlant",
+        BuildingKind.ArmsIndustry => "construction_started_ArmsIndustry",
+        BuildingKind.Refinery => "construction_started_Refinery",
+        BuildingKind.ChemicalPlant => "construction_started_ChemicalPlant",
+        BuildingKind.Smelter => "construction_started_Smelter",
+        BuildingKind.ElectronicsPlant => "construction_started_ElectronicsPlant",
+        BuildingKind.Shipyard => "construction_started_Shipyard",
+        BuildingKind.Port => "construction_started_Port",
+        BuildingKind.RailNetwork => "construction_started_RailNetwork",
+        BuildingKind.ResearchLab => "construction_started_ResearchLab",
+        _ => "construction_started_" + building
+    };
+
+    private static bool BuildOne(Campaign campaign, Nation nation, bool atWar, int slot,
+        int limit, ref int running, ref bool buildingShipyard, ref bool congested, ref ScenarioState[] states)
     {
         var defines = campaign.Defines;
         var fiscal = AiFiscalPolicy.Assess(campaign, nation, defines.AiBuildTreasuryFloor);
-        if (!fiscal.CanSpend) { Count("construction_fiscal_" + fiscal.Reason); return false; }
-        var running = 0;
-        foreach (var project in campaign.Construction)
-            if (project.NationId == nation.Id && ++running >= ConstructionCost.Limit(campaign, nation, defines.AiMaxConcurrentProjects))
-            { Count("construction_sites_full"); return false; }
+        if (!fiscal.CanSpend) { Count(ConstructionFiscalKey(fiscal.Reason)); return false; }
 
-        var states = campaign.StatesOf(nation);
-        if (states.Length == 0) return false;
+        if (running < 0)
+        {
+            running = 0;
+            buildingShipyard = false;
+            var construction = campaign.Construction;
+            for (var ci = 0; ci < construction.Count; ci++)
+            {
+                var project = construction[ci];
+                if (project.NationId != nation.Id) continue;
+                running++;
+                if (project.Building == BuildingKind.Shipyard) buildingShipyard = true;
+            }
+            if (running >= limit) { Count("construction_sites_full"); return false; }
 
-        var congested = false;
-        foreach (var army in campaign.Armies)
-            if (army.NationId == nation.Id && army.SupplyCongestion < 0.75f) { congested = true; break; }
+            states = campaign.StatesOf(nation);
+            if (states.Length == 0) return false;
+
+            congested = false;
+            var armies = campaign.Armies;
+            for (var ai = 0; ai < armies.Count; ai++)
+            {
+                var army = armies[ai];
+                if (army.NationId == nation.Id && army.SupplyCongestion < 0.75f) { congested = true; break; }
+            }
+        }
+        else
+        {
+            if (running >= limit) { Count("construction_sites_full"); return false; }
+            if (states.Length == 0) return false;
+        }
+
         // A poor country's needs are schools and fields, but not only: one project in three goes
         // to them and the rest to what makes it richer. Answering every month with a university
         // while literacy stood under 0.72 kept India, Nigeria and Brazil building nothing that
@@ -156,14 +220,12 @@ public static partial class AiStatecraft
         // A navy waiting on its slipways gets a yard, one at a time and on some months, on the
         // coast that serves it best. The fleet of 2024 was all the yards a country ever had.
         ScenarioState yard = null;
-        if (!congested && !armsTurn && (campaign.ElapsedDays / 30 + slot) % 4 == 2 && Shipbuilding.YardsShort(campaign, nation))
+        if (!congested && !armsTurn && !buildingShipyard && (campaign.ElapsedDays / 30 + slot) % 4 == 2 && Shipbuilding.YardsShort(campaign, nation))
         {
-            var building = false;
-            foreach (var project in campaign.Construction)
-                if (project.NationId == nation.Id && project.Building == BuildingKind.Shipyard) { building = true; break; }
             var bestYard = 0f;
-            if (!building) foreach (var state in states)
+            for (var si = 0; si < states.Length; si++)
             {
+                var state = states[si];
                 var water = Waterfront.Yield(campaign, state.MapIndex, BuildingKind.Shipyard);
                 if (water <= 0f) continue;
                 var score = water * 4f + state.Population / 2_000_000f - state.Buildings.GetValueOrDefault(BuildingKind.Shipyard) * 0.5f;
@@ -195,25 +257,35 @@ public static partial class AiStatecraft
         // Put a generic priority where there is most to gain. A specialized market
         // investment keeps the region selected by the production/deposit planner.
         var bestScore = float.MinValue;
-        if (target is null) foreach (var state in states)
+        if (target is null)
         {
-            var already = state.Buildings.GetValueOrDefault(wanted);
-            var score = state.Population / 1_000_000f - already * defines.AiBuildSaturation;
-            if (score <= bestScore) continue;
-            bestScore = score;
-            target = state;
+            for (var si = 0; si < states.Length; si++)
+            {
+                var state = states[si];
+                var already = state.Buildings.GetValueOrDefault(wanted);
+                var score = state.Population / 1_000_000f - already * defines.AiBuildSaturation;
+                if (score <= bestScore) continue;
+                bestScore = score;
+                target = state;
+            }
         }
         if (target is null) return false;
         if (!AiFiscalPolicy.CanStartProject(campaign, nation, wanted, fiscal))
         { Count("construction_operating_buffer"); return false; }
 
+        var countBefore = campaign.Construction.Count;
         new QueueConstructionCommand
         {
             IssuerId = nation.Id,
             StateMapIndex = target.MapIndex,
             Building = wanted
         }.Apply(campaign);
-        Count("construction_started_" + wanted);
+        if (campaign.Construction.Count > countBefore)
+        {
+            running++;
+            if (wanted == BuildingKind.Shipyard) buildingShipyard = true;
+        }
+        Count(ConstructionStartedKey(wanted));
         return true;
     }
 }

@@ -334,7 +334,8 @@ public static class Factions
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
         if (campaign?.ProvinceMap is null) yield break;
-        SettleDefenselessRebelRemnants(campaign);
+        foreach (var _ in SettleDefenselessRebelRemnantsStages(campaign)) yield return 0;
+        if (Campaign.StageOverdue()) yield return 0;
         if (campaign.ElapsedDays % 7 != 4 || !campaign.FeatureEnabled("de_facto_factions")) yield break;
         var factions = _weeklyFactionScratch.GetOrCreateValue(campaign);
         factions.Clear();
@@ -349,7 +350,7 @@ public static class Factions
         for (var i = 0; i < factions.Count; i++)
         {
             var faction = factions[i];
-            if (++ticked % 4 == 0 || Campaign.StageOverdue()) yield return 0;
+            if (++ticked % 2 == 0 || Campaign.StageOverdue()) yield return 0;
             if (campaign.Fallen.Contains(faction.Id)) continue;
             var parent = campaign.NationById(faction.SecededFromId);
             if (parent is null || campaign.Fallen.Contains(parent.Id) || parent.Movement is not null) continue;
@@ -655,7 +656,12 @@ public static class Factions
     /// </summary>
     internal static void SettleDefenselessRebelRemnants(Campaign campaign)
     {
-        if (campaign?.ProvinceMap is null || campaign.ElapsedDays < 10) return;
+        foreach (var _ in SettleDefenselessRebelRemnantsStages(campaign)) { }
+    }
+
+    internal static IEnumerable<int> SettleDefenselessRebelRemnantsStages(Campaign campaign)
+    {
+        if (campaign?.ProvinceMap is null || campaign.ElapsedDays < 10) yield break;
         var candidates = _rebelCandidatesScratch ??= new List<Nation>();
         candidates.Clear();
         var nations = campaign.Nations;
@@ -667,26 +673,27 @@ public static class Factions
                 !n.Name.StartsWith("rising:", StringComparison.Ordinal)) continue;
             candidates.Add(n);
         }
-        if (candidates.Count == 0) return;
+        if (candidates.Count == 0) yield break;
 
         var liveWars = Warfare.LiveWars(campaign);
         for (var ci = 0; ci < candidates.Count; ci++)
         {
+            if (ci > 0 && Campaign.StageOverdue()) yield return 0;
             var rebel = candidates[ci];
             if (!campaign.HasOwnedLand(rebel)) continue;
+            var rebelStates = campaign.StatesOf(rebel);
+            if (rebelStates.Length == 0 || rebelStates.Length > 2) continue;
             var parent = campaign.NationById(rebel.SecededFromId);
             if (parent is null && !string.IsNullOrEmpty(rebel.FoundedInRevolt))
             {
-                var states = campaign.StatesOf(rebel);
-                if (states.Length > 0 && states[0].CoreTags.Count > 0)
-                    parent = campaign.NationByTag(states[0].CoreTags[0]);
+                if (rebelStates.Length > 0 && rebelStates[0].CoreTags.Count > 0)
+                    parent = campaign.NationByTag(rebelStates[0].CoreTags[0]);
             }
             if (parent is null && rebel.Name.StartsWith("rising:", StringComparison.Ordinal))
             {
-                var states = campaign.StatesOf(rebel);
-                if (states.Length > 0 && states[0].CoreTags.Count > 0)
+                if (rebelStates.Length > 0 && rebelStates[0].CoreTags.Count > 0)
                 {
-                    var coreTags = states[0].CoreTags;
+                    var coreTags = rebelStates[0].CoreTags;
                     for (var ki = 0; ki < coreTags.Count; ki++)
                     {
                         if (campaign.NationByTag(coreTags[ki]) is { } candidate && candidate.Id != rebel.Id && campaign.HasOwnedLand(candidate))
@@ -705,9 +712,6 @@ public static class Factions
                 if (!w.Ended && w.Opposes(parent.Id, rebel.Id)) { war = w; break; }
             }
             if (war is null) continue;
-
-            var rebelStates = campaign.StatesOf(rebel);
-            if (rebelStates.Length > 2) continue;
             // A country whose ground is its homeland and not the parent's is a
             // state that threw off an overlord, not the rump of a rising. Liechtenstein, Monaco
             // and San Marino, subjects for a few years, broke free and were "reabsorbed" the next
@@ -855,6 +859,11 @@ public static class Factions
     public static bool FightsOnWithoutGround(Campaign campaign, Nation faction)
     {
         if (campaign?.Defines is not { RisingsFightOnWithoutGround: true } || faction is null) return false;
+        // A named Movement returning to exile/underground when its last province falls
+        // lives on through MovementFall.GoIntoExile rather than staying a headless state.
+        if ((Movements.BaseDefinitionOf(faction) is not null || !string.IsNullOrEmpty(faction.GraduatedMovementId)) &&
+            Of(faction) is not { Insurgency: true })
+            return false;
         var atWar = false;
         var wars = Warfare.LiveWars(campaign);
         for (var index = 0; index < wars.Count && !atWar; index++)

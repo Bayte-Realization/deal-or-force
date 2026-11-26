@@ -677,6 +677,9 @@ public static partial class MovementRules
         state.DesignatedBy.Clear();
         state.RecognisedBy.Clear();
         campaign.Fallen.Remove(nation.Id);
+        if (!state.Exile && !state.Id.StartsWith(MovementCatalog.UndergroundPrefix, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(state.Id))
+            nation.GraduatedMovementId = state.Id;
         nation.Movement = null;
         if (!restoration) nation.LastSecessionDay = campaign.ElapsedDays;
         nation.NameProclaimed = true;

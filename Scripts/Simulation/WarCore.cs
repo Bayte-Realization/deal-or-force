@@ -610,7 +610,7 @@ public static partial class FrontPlanner
         if (lines.TryGetValue(key, out var cached) && cached.Stamp == stamp) return cached.Line;
 
         var result = new HashSet<int>();
-        var front = war.FriendlyFront(nationId);
+        var front = war.FriendlyFrontSet(nationId);
         // The seat of government on the front itself: the reserve stands in it. A country that
         // sent every brigade forward and left its capital to the local guards lost the war in the
         // afternoon the capital fell - the whole of a small country can be one province.
@@ -974,24 +974,35 @@ public static partial class FrontPlanner
     /// war is not over its share, so divisions change fronts when the need moves and not when the
     /// list is rebuilt, and the war that is short takes the divisions nearest to its front.
     /// </summary>
-    private static List<Army> ArmiesFor(Campaign campaign, StrategicWar war, int nationId)
+    private static List<Army> ArmiesFor(Campaign campaign, StrategicWar war, int nationId) =>
+        ArmiesFor(campaign, war, nationId, out _);
+
+    private static List<Army> ArmiesFor(Campaign campaign, StrategicWar war, int nationId, out SplitScratch rentedScratch)
     {
-        var armies = FieldArmy(campaign, nationId);
         var scratch = SplitBoards.GetOrCreateValue(campaign);
         var splitWars = scratch.SplitWars;
         splitWars.Clear();
-        var stamp = armies.Count;
-        foreach (var candidate in Warfare.OpenWars(campaign))
+        var openWars = Warfare.OpenWars(campaign);
+        for (var wi = 0; wi < openWars.Count; wi++)
+        {
+            var candidate = openWars[wi];
             if (!candidate.Ended && candidate.Involves(nationId))
-            {
                 splitWars.Add(candidate);
-                stamp = HashCode.Combine(stamp, candidate.Id);
-            }
-        if (splitWars.Count < 2) return armies;
+        }
+        var armies = scratch.RentArmyList();
+        FieldArmyInto(campaign, nationId, armies);
+        if (splitWars.Count < 2)
+        {
+            rentedScratch = scratch;
+            return armies;
+        }
 
         // Once per simulation step: all wars read the same split within that step.
         // A day-long derived cache survives hourly movement and cannot be reproduced
         // by a cold client loading a snapshot halfway through that day.
+        var stamp = armies.Count;
+        for (var wi = 0; wi < splitWars.Count; wi++)
+            stamp = HashCode.Combine(stamp, splitWars[wi].Id);
         if (!scratch.Splits.TryGetValue(nationId, out var split)) scratch.Splits[nationId] = split = new ArmySplit();
         if (split.Hour != campaign.ElapsedHours || split.Stamp != stamp)
         {
@@ -999,6 +1010,8 @@ public static partial class FrontPlanner
             split.Stamp = stamp;
             Split(campaign, nationId, splitWars, armies, split.ByWar, scratch);
         }
+        scratch.ReturnArmyList(armies);
+        rentedScratch = null;
         return split.ByWar.TryGetValue(war.Id, out var share) ? share : scratch.EmptyArmyList;
     }
 
@@ -1038,7 +1051,14 @@ public static partial class FrontPlanner
             if (n == 0) return new List<Army>();
             var list = SplitArmyPool[n - 1];
             SplitArmyPool.RemoveAt(n - 1);
+            list.Clear();
             return list;
+        }
+
+        public void ReturnArmyList(List<Army> list)
+        {
+            list.Clear();
+            if (SplitArmyPool.Count < 256) SplitArmyPool.Add(list);
         }
     }
 
@@ -1087,7 +1107,7 @@ public static partial class FrontPlanner
         {
             var war = wars[w];
             byWar[war.Id] = scratch.RentArmyList();
-            var front = war.FriendlyFront(nationId);
+            var front = war.FriendlyFrontSet(nationId);
             var frontList = scratch.SplitFrontPool[w];
             frontList.Clear();
             if (controllers is not null && nation is not null)
@@ -1157,7 +1177,7 @@ public static partial class FrontPlanner
             firstDistanceRow.Add(origin, row);
             var (latitude, longitude) = map.CenterOf(origin);
             for (var w = 0; w < count; w++)
-                distance[row + w] = SetArmyOrderCommand.FrontDistance(map, scratch.SplitFrontPool[w], latitude, longitude);
+                distance[row + w] = SampleFrontDistance(map, scratch.SplitFrontPool[w], latitude, longitude);
         }
 
         if (scratch.Serving.Length < armies.Count)
@@ -1226,6 +1246,25 @@ public static partial class FrontPlanner
         for (var i = 0; i < armies.Count; i++) byWar[wars[serving[i]].Id].Add(armies[i]);
     }
 
+    private static float SampleFrontDistance(ProvinceTopology map, List<int> front, float latitude, float longitude)
+    {
+        var count = front.Count;
+        if (count == 0) return float.MaxValue;
+        var scale = MathF.Cos(latitude * MathF.PI / 180f);
+        var best = float.MaxValue;
+        for (var i = 0; i < count; i++)
+        {
+            var (lat, lon) = map.CenterOf(front[i]);
+            var east = MathF.Abs(lon - longitude);
+            if (east > 180f) east = 360f - east;
+            east *= scale;
+            var north = lat - latitude;
+            var distance = east * east + north * north;
+            if (distance < best) best = distance;
+        }
+        return best;
+    }
+
     private static IEnumerable<int> AssignSideStages(Campaign campaign, StrategicWar war, int nationId, bool attacking, bool sliced)
     {
         var nation = campaign.NationById(nationId);
@@ -1241,105 +1280,117 @@ public static partial class FrontPlanner
         // the counts here are shares of how many formations there are, so twenty-seven
         // militia pushed real divisions out of defending and into attacking, and Ukraine lost
         // two thirds of its ground to a mechanic written to help it hold.
-        var armies = ArmiesFor(campaign, war, nationId);
-        if (armies.Count == 0) yield break;
-        var participantObjective = ObjectiveFor(campaign, war, nation);
-        // Strongest first.
-        //
-        // Worth recording what does NOT work here, because it looks obviously right: Power
-        // moves every day with losses and recovery, so similar divisions trade places
-        // constantly, and roles are handed out by POSITION in this list - so a swap across
-        // the spearhead/advance boundary flips two divisions' orders and restarts both their
-        // marches. Bucketing the power to damp that was tried at two coarsenesses and made
-        // the war worse both times: the ties it creates are broken by id, which is unrelated
-        // to strength, so weak divisions lead attacks. Ukraine lost thirty provinces at 0.1
-        // and thirty at 0.02 where it gained eighteen without it.
-        //
-        // The churn is real - 8,000-odd orders in three years against 2,900 arrivals - but
-        // the cure is not here. It is that a division should be re-posted when its post has
-        // stopped being useful, not when the list it came from was rebuilt.
-        armies.Sort(static (a, b) => b.Power != a.Power ? b.Power.CompareTo(a.Power) : a.Id.CompareTo(b.Id));
-
-        var advanceShare = AdvanceShare(campaign, war, nation, profile, attacking, out var pressing);
-        var advance = AdvanceCount(armies.Count, advanceShare, pressing);
-        var spearhead = armies.Count == 0 || profile.SpearheadShare <= 0 ? 0 : Math.Min(advance,
-            Math.Max(1, (int)MathF.Round(armies.Count * profile.SpearheadShare)));
-        var defend = (int)MathF.Round(armies.Count * profile.DefendShare);
-        for (var index = 0; index < armies.Count; index++)
+        var armies = ArmiesFor(campaign, war, nationId, out var rentedScratch);
+        if (armies.Count == 0)
         {
-            if (sliced && Campaign.StageOverdue()) yield return 0;
-            var army = armies[index];
-            // A division on a march it was sent on directly - railed somewhere, called to a port
-            // for the admiralty's landing - finishes it first. Handing it a role mid-journey
-            // threw the journey away and left it riding the rails to a post it was never sent
-            // to; when it arrives it is free again and gets its role then.
-            if (army.DirectOrder && (army.Route.Count > 0 || army.PlannedRoute.Count > 0)) continue;
-            var order = RoleAt(index, spearhead, advance, defend);
-
-            // Damping this is the wrong cure, and both attempts at it proved so. Bucketing
-            // the power made weak divisions lead attacks; holding a division in its job
-            // until it had moved two places in the order of battle cut the re-tasking by a
-            // tenth and cost Ukraine seventy-eight provinces, because an AI that answers a
-            // moving front slowly is an AI that loses.
+            rentedScratch?.ReturnArmyList(armies);
+            yield break;
+        }
+        try
+        {
+            var participantObjective = ObjectiveFor(campaign, war, nation);
+            // Strongest first.
             //
-            // The churn is load-bearing. What is wrong is not that a division's job changes
-            // - it is that changing the job used to throw away the march, which is handled
-            // where the post is chosen.
-
-            var stance = order == ArmyOrder.Spearhead || order == ArmyOrder.AdvanceFront
-                ? profile.OffensiveStance
-                : order == ArmyOrder.DefendFront ? profile.DefensiveStance : ArmyStance.Balanced;
-            // The capital is not a province like the others. A government still sitting in its
-            // own capital orders the divisions there to hold it, whatever the doctrine says:
-            // that is the one order a computer army was not giving itself, and losing the
-            // capital without a fight was the cheapest way to lose a war.
-            if (order == ArmyOrder.DefendFront && army.ProvinceId > 0 &&
-                army.ProvinceId == CapitalCore.EffectiveProvinceId(campaign, campaign.NationById(nationId)))
-                stance = ArmyStance.LastStand;
-
-            // Re-issuing an order a division already has is not free: it clears the route,
-            // picks a fresh target from a front list that shifts every time a province
-            // changes hands, and sends the division marching sideways - which costs
-            // planning. Doing that to the whole army every time the line moved meant an AI
-            // that spent its war walking up and down its own front and never attacked.
-            // A division is only re-tasked when what is being asked of it actually changed.
+            // Worth recording what does NOT work here, because it looks obviously right: Power
+            // moves every day with losses and recovery, so similar divisions trade places
+            // constantly, and roles are handed out by POSITION in this list - so a swap across
+            // the spearhead/advance boundary flips two divisions' orders and restarts both their
+            // marches. Bucketing the power to damp that was tried at two coarsenesses and made
+            // the war worse both times: the ties it creates are broken by id, which is unrelated
+            // to strength, so weak divisions lead attacks. Ukraine lost thirty provinces at 0.1
+            // and thirty at 0.02 where it gained eighteen without it.
             //
-            // Or when it is being handed to this war from another one the country is fighting.
-            if (army.OrderKind != order || (order == ArmyOrder.Spearhead &&
-                    army.ObjectiveStateMapIndex != participantObjective) ||
-                army.AssignedWarId != war.Id)
-                new SetArmyOrderCommand
+            // The churn is real - 8,000-odd orders in three years against 2,900 arrivals - but
+            // the cure is not here. It is that a division should be re-posted when its post has
+            // stopped being useful, not when the list it came from was rebuilt.
+            armies.Sort(static (a, b) => b.Power != a.Power ? b.Power.CompareTo(a.Power) : a.Id.CompareTo(b.Id));
+
+            var advanceShare = AdvanceShare(campaign, war, nation, profile, attacking, out var pressing);
+            var advance = AdvanceCount(armies.Count, advanceShare, pressing);
+            var spearhead = armies.Count == 0 || profile.SpearheadShare <= 0 ? 0 : Math.Min(advance,
+                Math.Max(1, (int)MathF.Round(armies.Count * profile.SpearheadShare)));
+            var defend = (int)MathF.Round(armies.Count * profile.DefendShare);
+            var capitalProvince = CapitalCore.EffectiveProvinceId(campaign, nation);
+            for (var index = 0; index < armies.Count; index++)
+            {
+                if (sliced && Campaign.StageOverdue()) yield return 0;
+                var army = armies[index];
+                // A division on a march it was sent on directly - railed somewhere, called to a port
+                // for the admiralty's landing - finishes it first. Handing it a role mid-journey
+                // threw the journey away and left it riding the rails to a post it was never sent
+                // to; when it arrives it is free again and gets its role then.
+                if (army.DirectOrder && (army.Route.Count > 0 || army.PlannedRoute.Count > 0)) continue;
+                var order = RoleAt(index, spearhead, advance, defend);
+
+                // Damping this is the wrong cure, and both attempts at it proved so. Bucketing
+                // the power made weak divisions lead attacks; holding a division in its job
+                // until it had moved two places in the order of battle cut the re-tasking by a
+                // tenth and cost Ukraine seventy-eight provinces, because an AI that answers a
+                // moving front slowly is an AI that loses.
+                //
+                // The churn is load-bearing. What is wrong is not that a division's job changes
+                // - it is that changing the job used to throw away the march, which is handled
+                // where the post is chosen.
+
+                var stance = order == ArmyOrder.Spearhead || order == ArmyOrder.AdvanceFront
+                    ? profile.OffensiveStance
+                    : order == ArmyOrder.DefendFront ? profile.DefensiveStance : ArmyStance.Balanced;
+                // The capital is not a province like the others. A government still sitting in its
+                // own capital orders the divisions there to hold it, whatever the doctrine says:
+                // that is the one order a computer army was not giving itself, and losing the
+                // capital without a fight was the cheapest way to lose a war.
+                if (order == ArmyOrder.DefendFront && army.ProvinceId > 0 &&
+                    army.ProvinceId == capitalProvince)
+                    stance = ArmyStance.LastStand;
+
+                // Re-issuing an order a division already has is not free: it clears the route,
+                // picks a fresh target from a front list that shifts every time a province
+                // changes hands, and sends the division marching sideways - which costs
+                // planning. Doing that to the whole army every time the line moved meant an AI
+                // that spent its war walking up and down its own front and never attacked.
+                // A division is only re-tasked when what is being asked of it actually changed.
+                //
+                // Or when it is being handed to this war from another one the country is fighting.
+                if (army.OrderKind != order || (order == ArmyOrder.Spearhead &&
+                        army.ObjectiveStateMapIndex != participantObjective) ||
+                    army.AssignedWarId != war.Id)
+                    new SetArmyOrderCommand
+                    {
+                        IssuerId = nationId,
+                        ArmyId = army.Id,
+                        WarId = war.Id,
+                        ObjectiveStateMapIndex = participantObjective,
+                        Order = order
+                    }.Apply(campaign);
+
+                if (army.Stance != stance)
+                    new SetArmyStanceCommand { IssuerId = nationId, ArmyId = army.Id, Stance = stance }.Apply(campaign);
+
+                bool execute;
+                if (StaffReasons.SupplyHoldsAttack(campaign, army))
+                    execute = false;
+                else if (order is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead))
                 {
-                    IssuerId = nationId,
-                    ArmyId = army.Id,
-                    WarId = war.Id,
-                    ObjectiveStateMapIndex = participantObjective,
-                    Order = order
-                }.Apply(campaign);
+                    execute = false;
+                }
+                else if (army.PlanActive)
+                {
+                    // Active offensive plan continues unless the division is exhausted in organisation or supply.
+                    var assessment = AssaultReadiness.Assess(campaign, army);
+                    execute = assessment.Reason is not (AssaultReadiness.Reason.LowOrganisation or AssaultReadiness.Reason.LowSupply);
+                }
+                else
+                {
+                    execute = army.Planning >= profile.ExecutePlanningThreshold;
+                }
 
-            if (army.Stance != stance)
-                new SetArmyStanceCommand { IssuerId = nationId, ArmyId = army.Id, Stance = stance }.Apply(campaign);
-
-            bool execute;
-            if (StaffReasons.SupplyHoldsAttack(campaign, army))
-                execute = false;
-            else if (order is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead))
-            {
-                execute = false;
+                if (army.PlanActive != execute)
+                    SetArmyPlanExecutionCommand.ApplyTo(campaign, army, nationId, execute);
             }
-            else if (army.PlanActive)
-            {
-                // Active offensive plan continues unless the division is exhausted in organisation or supply.
-                var assessment = AssaultReadiness.Assess(campaign, army);
-                execute = assessment.Reason is not (AssaultReadiness.Reason.LowOrganisation or AssaultReadiness.Reason.LowSupply);
-            }
-            else
-            {
-                execute = army.Planning >= profile.ExecutePlanningThreshold;
-            }
-
-            if (army.PlanActive != execute)
-                SetArmyPlanExecutionCommand.ApplyTo(campaign, army, nationId, execute);
+        }
+        finally
+        {
+            rentedScratch?.ReturnArmyList(armies);
         }
     }
 }

@@ -79,6 +79,7 @@ static class ExileOriginTests
         FoundingsAreStamped();
         NoRawIdsForNames();
         OldSavesSettle();
+        GraduatedMovementExilesAlongsideParent();
     }
 
     static void WhoHadAGovernment()
@@ -392,5 +393,32 @@ static class ExileOriginTests
         MovementFall.Endure(c2, front);
         Check(!RawId(front.Name) && front.Movement is { Dissolved: false },
             $"an underground from an old save gets a proper name at its review and carries on (now \"{front.Name}\")");
+    }
+
+    static void GraduatedMovementExilesAlongsideParent()
+    {
+        var (c, parent, holder, _) = Fixture();
+        var grad = c.AddNation(new Nation
+        {
+            Tag = "QXH", Name = "Movement State", MapIndex = 508, Population = 0, Gdp = 100f,
+            Treasury = 10f, Government = "presidential_republic", Ideology = "nationalism",
+            SecededFromId = parent.Id, RevoltParentId = parent.Id,
+            Movement = new MovementState { Id = "hamas", Exile = false, Landless = false }
+        });
+        grad.FoundedCultures.Add("russian");
+        c.Homelands[grad.Id] = new List<int> { 3001 };
+        MovementRules.GraduateToStatehood(c, grad);
+        Check(grad.Movement is null && grad.GraduatedMovementId == "hamas",
+            "graduation preserves GraduatedMovementId after clearing Movement");
+
+        // Parent already went into exile speaking for qx_home.
+        Abroad(parent, "exile_qxa", 0.5f, "qx_home");
+        c.Fallen.Add(parent.Id);
+        c.Defines.MovementExileBase = 1f;
+        MovementFall.Decide(c);
+        MovementRules.Week(c, grad);
+        Check(grad.Landless && grad.Movement is { Dissolved: false },
+            "a graduated catalog movement that loses its ground goes back into exile even when its former parent state is already in exile for the same region");
+        _ = holder;
     }
 }

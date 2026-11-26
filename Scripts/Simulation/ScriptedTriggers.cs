@@ -222,7 +222,8 @@ public sealed class ScriptedTrigger
                 errors?.Add($"{context}: unknown trigger key '{key}'.{hint}");
                 continue;
             }
-            trigger._bounds.Add((key, value, isMinimum, ClassifyScale(key)));
+            var normalizedKey = key.ToLowerInvariant();
+            trigger._bounds.Add((normalizedKey, value, isMinimum, ClassifyScale(normalizedKey)));
         }
         return trigger;
     }
@@ -417,7 +418,7 @@ public static class ScriptedValues
     {
         value = 0f;
         if (nation is null || string.IsNullOrWhiteSpace(key)) return false;
-        var trimmed = key.Trim();
+        var trimmed = (char.IsWhiteSpace(key[0]) || char.IsWhiteSpace(key[^1])) ? key.Trim() : key;
 
         if (trimmed.StartsWith("feature.", StringComparison.OrdinalIgnoreCase))
         { value = campaign is not null && campaign.FeatureEnabled(trimmed[8..]) ? 1f : 0f; return true; }
@@ -432,7 +433,8 @@ public static class ScriptedValues
             ScriptedEffects.TryResolveStockpileGood(trimmed[19..], out var covGood))
         { value = nation.StockpileCoverage.GetValueOrDefault(covGood, 1f); return true; }
 
-        switch (trimmed.Replace('-', '_').ToLowerInvariant())
+        var normalized = NormalizeKeyIfNeeded(trimmed);
+        switch (normalized)
         {
             case "year": value = campaign?.Date.Year ?? 0; return true;
             case "treasury": value = nation.Treasury; return true;
@@ -458,7 +460,7 @@ public static class ScriptedValues
             case "imperial_overstretch": value = nation.ImperialOverstretch; return true;
             case "available_air_formations": value = AvailableAirFormations(campaign, nation); return true;
             case "available_fleet_hulls": value = AvailableFleetHulls(campaign, nation); return true;
-            case "state.brain_drain": value = Average(campaign, nation, state => state.BrainDrainPressure); return true;
+            case "state.brain_drain": value = AverageState(campaign, nation, 0); return true;
             case "inflation": value = nation.Inflation; return true;
             case "key_rate": value = CentralBank.KeyRate(nation); return true;
             case "government_sets_key_rate": value = nation.GovernmentSetsKeyRate ? 1f : 0f; return true;
@@ -470,10 +472,10 @@ public static class ScriptedValues
             case "education_spending": value = nation.EducationSpending; return true;
             case "market_access": value = nation.MarketAccess; return true;
             case "population": value = nation.Population; return true;
-            case "state.standard_of_living": value = Average(campaign, nation, state => state.StandardOfLiving); return true;
-            case "state.radicalism": value = Average(campaign, nation, state => state.Radicalism); return true;
-            case "state.literacy": value = Average(campaign, nation, state => state.Literacy); return true;
-            case "state.war_damage": value = Average(campaign, nation, state => state.WarDamage); return true;
+            case "state.standard_of_living": value = AverageState(campaign, nation, 1); return true;
+            case "state.radicalism": value = AverageState(campaign, nation, 2); return true;
+            case "state.literacy": value = AverageState(campaign, nation, 3); return true;
+            case "state.war_damage": value = AverageState(campaign, nation, 4); return true;
             case "worst_war_damage": value = WarDamage.Worst(campaign, nation); return true;
             case "nuclear_tier":
             case "deterrence_tier": value = Deterrence.TierOf(campaign, nation); return true;
@@ -482,22 +484,22 @@ public static class ScriptedValues
             case "defcon": value = DefconSystem.CurrentLevel(campaign); return true;
             case "active_grand_projects": value = GrandProjects.CountActive(campaign, nation.Id); return true;
             case "completed_grand_projects": value = GrandProjects.CountCompleted(campaign, nation.Id); return true;
-            case "squeezed_chokepoints": value = CountChokepoints(campaign, nation, ChokepointStatus.Squeezed); return true;
-            case "healthy_supply_anchors": value = CountChokepoints(campaign, nation, ChokepointStatus.HealthyAnchor); return true;
-            case "chokepoint_exposures": value = StrategicChokepoints.ReadForNation(campaign, nation).Count; return true;
-            case "ally_count": value = campaign is null ? 0f : AllianceSystem.AlliesOf(campaign, nation).Count; return true;
-            case "active_wars": value = campaign is null ? 0f : Warfare.OpenWars(campaign).Count(w => !w.Ended && w.Involves(nation.Id)); return true;
+            case "squeezed_chokepoints": value = StrategicChokepoints.CountExposures(campaign, nation, ChokepointStatus.Squeezed); return true;
+            case "healthy_supply_anchors": value = StrategicChokepoints.CountExposures(campaign, nation, ChokepointStatus.HealthyAnchor); return true;
+            case "chokepoint_exposures": value = StrategicChokepoints.CountExposures(campaign, nation); return true;
+            case "ally_count": value = campaign is null ? 0f : AllianceSystem.AllyCount(campaign, nation); return true;
+            case "active_wars": value = CountOpenWars(campaign, nation.Id); return true;
             case "organization_count": value = CountOrganizations(campaign, nation.Id); return true;
-            case "subject_count": value = campaign is null ? 0f : SubjectSystem.SubjectsOf(campaign, nation).Count; return true;
+            case "subject_count": value = campaign is null ? 0f : SubjectSystem.SubjectCount(campaign, nation); return true;
             case "is_subject": value = nation.IsSubject ? 1f : 0f; return true;
             case "is_movement": value = nation.Movement is not null ? 1f : 0f; return true;
             case "active_movements": value = CountActiveMovements(campaign); return true;
             case "movement.cadres": value = nation.Movement?.Cadres ?? 0f; return true;
             case "movement.legitimacy": value = nation.Movement?.Legitimacy ?? 0f; return true;
             case "movement.heat": value = nation.Movement?.Heat ?? 0f; return true;
-            case "movement.support": value = nation.Movement is null || nation.Movement.Support.Count == 0 ? 0f : nation.Movement.Support.Values.Max(); return true;
-            case "state.urbanization": value = Average(campaign, nation, state => state.Urbanization); return true;
-            case "state.population": value = campaign is null ? 0f : campaign.StatesOf(nation).Sum(state => (float)state.Population); return true;
+            case "movement.support": value = MaxMovementSupport(nation.Movement); return true;
+            case "state.urbanization": value = AverageState(campaign, nation, 5); return true;
+            case "state.population": value = SumStatePopulation(campaign, nation); return true;
             case "mainland_reclamation_pending": value = MainlandReclamation.HasPendingReclamation(campaign, nation) ? 1f : 0f; return true;
             case "mainland_reclamation_war": value = MainlandReclamation.InReclamationWar(campaign, nation) ? 1f : 0f; return true;
             case "facing_mainland_reclamation": value = MainlandReclamation.FacingReclamationWar(campaign, nation) ? 1f : 0f; return true;
@@ -519,13 +521,72 @@ public static class ScriptedValues
         return active ? 0.5f : 0f;
     }
 
-    private static int CountChokepoints(Campaign campaign, Nation nation, ChokepointStatus status)
+    private static string NormalizeKeyIfNeeded(string key)
     {
-        var list = StrategicChokepoints.ReadForNation(campaign, nation);
+        var hasDash = false;
+        var hasUpper = false;
+        for (var i = 0; i < key.Length; i++)
+        {
+            var c = key[i];
+            if (c == '-') hasDash = true;
+            else if (c is >= 'A' and <= 'Z') hasUpper = true;
+        }
+        if (!hasDash && !hasUpper) return key;
+        if (hasDash) key = key.Replace('-', '_');
+        return hasUpper ? key.ToLowerInvariant() : key;
+    }
+
+    private static int CountOpenWars(Campaign campaign, int nationId)
+    {
+        if (campaign is null) return 0;
         var count = 0;
-        for (var i = 0; i < list.Count; i++)
-            if (list[i].Status == status) count++;
+        var wars = Warfare.LiveWars(campaign);
+        for (var i = 0; i < wars.Count; i++)
+        {
+            var war = wars[i];
+            if (!war.Ended && war.Involves(nationId)) count++;
+        }
         return count;
+    }
+
+    private static float MaxMovementSupport(MovementState movement)
+    {
+        if (movement is null || movement.Support.Count == 0) return 0f;
+        var best = float.MinValue;
+        foreach (var v in movement.Support.Values)
+            if (v > best) best = v;
+        return best;
+    }
+
+    private static float SumStatePopulation(Campaign campaign, Nation nation)
+    {
+        if (campaign is null) return 0f;
+        var owned = campaign.StatesOf(nation);
+        var sum = 0f;
+        for (var i = 0; i < owned.Length; i++) sum += owned[i].Population;
+        return sum;
+    }
+
+    private static float AverageState(Campaign campaign, Nation nation, int metric)
+    {
+        if (campaign is null) return 0f;
+        var owned = campaign.StatesOf(nation);
+        if (owned.Length == 0) return 0f;
+        double sum = 0;
+        for (var i = 0; i < owned.Length; i++)
+        {
+            var state = owned[i];
+            sum += metric switch
+            {
+                0 => state.BrainDrainPressure,
+                1 => state.StandardOfLiving,
+                2 => state.Radicalism,
+                3 => state.Literacy,
+                4 => state.WarDamage,
+                _ => state.Urbanization
+            };
+        }
+        return (float)(sum / owned.Length);
     }
 
     private static int CountOrganizations(Campaign campaign, int nationId)
@@ -579,12 +640,5 @@ public static class ScriptedValues
                 !fleet.InAction && !fleet.IsLoaded)
                 count += fleet.Hulls;
         return count;
-    }
-
-    private static float Average(Campaign campaign, Nation nation, Func<ScenarioState, float> read)
-    {
-        if (campaign is null) return 0f;
-        var owned = campaign.StatesOf(nation);
-        return owned.Length == 0 ? 0f : owned.Average(read);
     }
 }

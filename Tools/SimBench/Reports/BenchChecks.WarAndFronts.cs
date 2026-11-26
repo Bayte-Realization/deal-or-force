@@ -424,6 +424,7 @@ internal static partial class BenchChecks
         {
             if (!SeaLanes.Plan(campaign, italy.Id, italian.Latitude, italian.Longitude, latitude, longitude, course, out var open))
                 return $"{italy.Tag} cannot reach {to} even at peace";
+            var openCourse = course.ToArray();
             var war = new StrategicWar
             {
                 Id = 91_001, Name = "Bench strait war", AttackerId = italy.Id, DefenderId = holder.Id,
@@ -437,6 +438,9 @@ internal static partial class BenchChecks
             // Mediterranean or the Atlantic, but not three times as much from Brest as from Taranto.
             if (!mustFail && found && shut < open + 60f)
                 return $"at war with {holder.Tag}, {italy.Tag} reached {to} in {shut:0} degrees against {open:0} at peace: the canal was not shut";
+            if (!SeaLanes.Plan(campaign, italy.Id, italian.Latitude, italian.Longitude, latitude, longitude, course, out var reopened) ||
+                reopened != open || !course.SequenceEqual(openCourse))
+                return $"reopening the passage changed the original peacetime course to {to}";
             Console.WriteLine($"  straits: {italy.Tag} to {to} is {open:0}° at peace and " +
                               (found ? $"{shut:0}° round Africa" : "shut") + $" at war with {holder.Tag}.");
         }

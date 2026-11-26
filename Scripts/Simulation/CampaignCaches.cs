@@ -189,7 +189,12 @@ internal sealed class CampaignCaches
         public int FallenCount = -1;
         public readonly List<FormableNation> Building = new();
         public readonly HashSet<string> LivingTags = new(StringComparer.OrdinalIgnoreCase);
-        public readonly HashSet<string> FormedIds = new(StringComparer.OrdinalIgnoreCase);
+        public readonly HashSet<string> ReunitedTags = new(StringComparer.OrdinalIgnoreCase);
+        public ProvinceTopology RegionIndexMap;
+        public int RegionIndexOwnershipRevision = int.MinValue;
+        public int RegionIndexStateCount = -1;
+        public ushort[] RegionOfProvince = Array.Empty<ushort>();
+        public readonly Dictionary<string, (int[] Authored, int[] Regions)> AuthoredRegions = new(StringComparer.OrdinalIgnoreCase);
         public readonly Dictionary<int, List<ScenarioState>> StatesByRegion = new();
         public readonly Stack<List<ScenarioState>> StateListPool = new();
         public readonly HashSet<int> BrokenRegions = new();
@@ -343,6 +348,8 @@ internal sealed class CampaignCaches
         public readonly Dictionary<int, List<HashSet<int>>> Components = new();
         public readonly Dictionary<int, int> FirstProvince = new();
         public readonly Dictionary<uint, int> OwnerStateCounts = new();
+        public readonly List<HashSet<int>> ClusterPool = new();
+        public readonly List<List<HashSet<int>>> ComponentListPool = new();
         public bool Ready;
     }
 

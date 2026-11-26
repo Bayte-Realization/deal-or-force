@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace DealOrForce.Simulation;
 
@@ -24,6 +25,14 @@ internal sealed class CampaignAccessGate
     private long _readerRequestedAt;
     private int _readerMissStreak;
 
+    // Priority interactive lane: a map tap or dossier open that must not be dropped while time
+    // runs. Separate from the routine HUD request flag above so an ordinary frame read can never
+    // consume (clear) a tap's request. Runtime-only: nothing here is saved or fingerprinted.
+    private int _priorityReaderRequests;
+    private int _priorityReaderWaiters;
+    private long _priorityRequestedAt;
+    private const double PriorityRequestCeilingMs = 120.0;
+
     [ThreadStatic] private static CampaignAccessGate t_primaryGate;
     [ThreadStatic] private static int t_primaryDepth;
     [ThreadStatic] private static Dictionary<CampaignAccessGate, int> t_overflowDepths;
@@ -35,6 +44,91 @@ internal sealed class CampaignAccessGate
     public bool HasReaderRequest => Volatile.Read(ref _readerRequested);
     internal bool HasReaderRequested => Volatile.Read(ref _readerRequested);
     internal bool IsReaderStarving => Volatile.Read(ref _readerMissStreak) >= 2;
+
+    /// <summary>
+    /// An interactive reader (a tap, a dossier opened from the map) is waiting or holds a pending
+    /// request younger than <see cref="PriorityRequestCeilingMs"/>. The background worker yields its
+    /// write lock at the next stage boundary and does not re-acquire it while this is true.
+    /// A stale request (its owner never retried) stops blocking after the ceiling by itself.
+    /// </summary>
+    internal bool HasPriorityReaderRequested =>
+        Volatile.Read(ref _priorityReaderWaiters) > 0 ||
+        (Volatile.Read(ref _priorityReaderRequests) > 0 &&
+         Stopwatch.GetElapsedTime(Volatile.Read(ref _priorityRequestedAt)).TotalMilliseconds < PriorityRequestCeilingMs);
+
+    /// <summary>Hold a priority read request open until <see cref="ClearPriorityRead"/>. Pairs one to one.</summary>
+    public void RequestPriorityRead()
+    {
+        lock (_sync)
+        {
+            _priorityReaderRequests++;
+            Volatile.Write(ref _priorityRequestedAt, Stopwatch.GetTimestamp());
+            if (!_readerRequested) _readerRequestedAt = Stopwatch.GetTimestamp();
+            _readerRequested = true;
+        }
+    }
+
+    public void ClearPriorityRead()
+    {
+        lock (_sync)
+        {
+            if (_priorityReaderRequests > 0) _priorityReaderRequests--;
+            if (_priorityReaderRequests == 0) Monitor.PulseAll(_sync);
+        }
+    }
+
+    /// <summary>
+    /// A read for an interactive action: marks itself as a priority waiter so the background
+    /// worker preempts mid-stage and stays off the gate, then waits up to <paramref name="timeoutMs"/>.
+    /// </summary>
+    public bool TryEnterPriorityRead(int timeoutMs = 40)
+    {
+        if (GetDepth(this) > 0 || Volatile.Read(ref _writerThreadId) == Environment.CurrentManagedThreadId)
+        {
+            IncrementDepth(this);
+            return true;
+        }
+
+        lock (_sync)
+        {
+            if (!_writerActive)
+            {
+                _readers++;
+                _readerRequested = false;
+                _readerMissStreak = 0;
+                IncrementDepth(this);
+                return true;
+            }
+            if (timeoutMs <= 0) return false;
+
+            _priorityReaderWaiters++;
+            try
+            {
+                Volatile.Write(ref _priorityRequestedAt, Stopwatch.GetTimestamp());
+                if (!_readerRequested) _readerRequestedAt = Stopwatch.GetTimestamp();
+                _readerRequested = true;
+                var start = Stopwatch.GetTimestamp();
+                var freqMs = Stopwatch.Frequency / 1000.0;
+                while (_writerActive)
+                {
+                    var elapsedMs = (Stopwatch.GetTimestamp() - start) / freqMs;
+                    var rem = (int)Math.Ceiling(timeoutMs - elapsedMs);
+                    if (rem <= 0) return false;
+                    Monitor.Wait(_sync, rem);
+                }
+                _readers++;
+                _readerRequested = false;
+                _readerMissStreak = 0;
+                IncrementDepth(this);
+                return true;
+            }
+            finally
+            {
+                _priorityReaderWaiters--;
+                if (_priorityReaderWaiters == 0) Monitor.PulseAll(_sync);
+            }
+        }
+    }
 
     private static int GetDepth(CampaignAccessGate gate)
     {
@@ -161,8 +255,15 @@ internal sealed class CampaignAccessGate
             var acquired = false;
             try
             {
-                while (_writerActive || _readers > 0 || (asBackgroundWorker && _writeWaiters > 0))
-                    Monitor.Wait(_sync);
+                // The background worker also stays off while an interactive (priority) reader is
+                // pending, so a tap is never re-locked out between frames. That request expires on
+                // its own clock without a pulse, hence the short timed wait for the worker.
+                while (_writerActive || _readers > 0 ||
+                       (asBackgroundWorker && (_writeWaiters > 0 || HasPriorityReaderRequested)))
+                {
+                    if (asBackgroundWorker) Monitor.Wait(_sync, 4);
+                    else Monitor.Wait(_sync);
+                }
                 _writerActive = true;
                 _writerThreadId = tid;
                 _writerDepth = 1;
@@ -178,6 +279,18 @@ internal sealed class CampaignAccessGate
                     Monitor.PulseAll(_sync);
                 }
             }
+        }
+    }
+
+    internal bool TryEnterBackgroundWrite()
+    {
+        lock (_sync)
+        {
+            if (_writerActive || _readers > 0 || _writeWaiters > 0 || HasPriorityReaderRequested) return false;
+            _writerActive = true;
+            _writerThreadId = Environment.CurrentManagedThreadId;
+            _writerDepth = 1;
+            return true;
         }
     }
 
@@ -203,6 +316,29 @@ internal sealed class CampaignAccessGate
             _writerThreadId = 0;
             Monitor.PulseAll(_sync);
 
+            if (!hadUpgradedRead && yieldToRequestedReader && _writeWaiters == 0 && HasPriorityReaderRequested)
+            {
+                // An interactive tap is waiting: no work-ahead. Hold the gate open for up to two
+                // 30 FPS frames until the reader has come and gone, the request is cleared, or a
+                // command writer arrives. EnterWrite keeps the worker off after this anyway.
+                var windowMs = Math.Max(readerWindowMs, 65);
+                var pStart = Stopwatch.GetTimestamp();
+                var pFreqMs = Stopwatch.Frequency / 1000.0;
+                while (_writeWaiters == 0)
+                {
+                    if (_readers > 0)
+                    {
+                        while (_readers > 0) Monitor.Wait(_sync, 10);
+                        if (!HasPriorityReaderRequested || _writeWaiters > 0) break;
+                    }
+                    if (!HasPriorityReaderRequested) break;
+                    var rem = (int)Math.Ceiling(windowMs - (Stopwatch.GetTimestamp() - pStart) / pFreqMs);
+                    if (rem <= 0) break;
+                    Monitor.Wait(_sync, Math.Min(rem, 4));
+                }
+                return;
+            }
+
             if (!hadUpgradedRead && yieldToRequestedReader && _readerRequested && _writeWaiters == 0 && readerWindowMs > 0)
             {
                 // A missed read can use the last published view. On mobile, let the
@@ -212,7 +348,9 @@ internal sealed class CampaignAccessGate
                 if (!starvingReader && readerWorkAheadMs > 0 && Stopwatch.GetElapsedTime(_readerRequestedAt).TotalMilliseconds < readerWorkAheadMs)
                     return;
 
-                var effectiveWindowMs = starvingReader ? Math.Max(readerWindowMs, 55) : readerWindowMs;
+                // A starving 30 FPS routine reader gets one 33.3 ms frame plus margin (38 ms, down
+                // from 55 ms) so maxConsecutiveMisses stays <= 2 without stalling Speed 5.
+                var effectiveWindowMs = starvingReader ? Math.Max(readerWindowMs, 38) : readerWindowMs;
                 var start = Stopwatch.GetTimestamp();
                 var freqMs = Stopwatch.Frequency / 1000.0;
                 while (_readerRequested && _writeWaiters == 0)
@@ -613,6 +751,43 @@ public sealed class CampaignRenderSnapshot
             return previous;
         return (ushort[])source.Clone();
     }
+
+    internal CampaignRenderSnapshot WithClock(long version, Campaign campaign) =>
+        new(version,
+            campaign.ElapsedDays,
+            campaign.ElapsedHours,
+            ComputeDayOfYear(campaign.Date),
+            campaign.Date,
+            MapRevision,
+            WarRevision,
+            OwnershipRevision,
+            AllianceRevision,
+            CapitalRevision,
+            MovementRevision,
+            DestroyedProvinceCount,
+            campaign.IsPaused,
+            campaign.Speed,
+            WorldCurses.Frozen(campaign),
+            campaign.StepOpensNewDay,
+            PlayerId,
+            PlayerMapIndex,
+            ObserverMode,
+            campaign.SimulationFault ?? "",
+            campaign.Curse ?? "",
+            ControllerMapRevision,
+            ProvinceController,
+            OwnerRevision,
+            ProvinceOwner,
+            Nations,
+            _slotById,
+            _slotByMapIndex,
+            PlayerOverallRank,
+            PlayerOverallScore,
+            RankWeek,
+            RankMapRev,
+            RankWarRev,
+            RankPlayerId,
+            NationRanksById);
 }
 
 /// <summary>
@@ -966,9 +1141,13 @@ public sealed class CampaignHudSnapshot
                 if (o.ToId == pid && o.ExpiresDay > campaign.ElapsedDays && string.Equals(o.State, "pending", StringComparison.Ordinal))
                     incomingDeals++;
             }
-            foreach (var rel in campaign.Relations.Values)
+            var nations = campaign.Nations;
+            for (var i = 0; i < nations.Count; i++)
             {
-                if (rel.A != pid && rel.B != pid) continue;
+                var other = nations[i];
+                if (other.Id == pid) continue;
+                var rel = CampaignDiplomacy.Peek(campaign, pid, other.Id, out var awake);
+                if (!awake || rel is null) continue;
                 var propId = rel.AgreementOfferedBy;
                 if (propId < 0 || propId == pid) continue;
                 if (!AgreementSystem.OfferPending(campaign, rel)) continue;
@@ -1042,7 +1221,7 @@ public sealed class CampaignHudSnapshot
 public sealed class BackgroundSimRunner : IDisposable
 {
     private readonly object _wakeLock = new();
-    private Thread _thread;
+    private volatile Thread _thread;
     private volatile bool _stopRequested;
     private volatile bool _workerRunning;
     private volatile Campaign _campaign;
@@ -1084,6 +1263,7 @@ public sealed class BackgroundSimRunner : IDisposable
     private bool _pendingStepOpensNewDay;
     private bool _pendingAutosave;
     private Exception _pendingException;
+    private volatile Exception _workerFault;
     private bool _sawPendingPlayerEvent;
     private long _workerStepStartHours = -1;
     private long _workerAcquireTicks;
@@ -1092,14 +1272,44 @@ public sealed class BackgroundSimRunner : IDisposable
     private long _snapshotTicks;
     private long _snapshotBytes;
     private long _snapshotCount;
-    private long _yieldRequestedAtTicks;
+    private sealed record SaveRequest(string Root, string Slot, string ModFingerprint, string DisplayName, bool Autosave)
+    {
+        public readonly TaskCompletionSource<SaveSystem.PreparedSave> Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private volatile SaveRequest _saveRequest;
+    private bool _capturingSave;
 
     public CountryRankings.Weights RankingWeights { get; set; } = CountryRankings.Weights.Default;
     public bool MobilePacing { get; set; }
+    /// <summary>
+    /// Adaptive step length on every platform (1h/2h/4h/8h/24h for Speed 1..5 when the defined
+    /// step is one hour). Runtime-only: <see cref="Campaign.RuntimeStepHoursOverride"/> is not
+    /// saved or fingerprinted, and a defined step other than one hour is left alone.
+    /// </summary>
+    public bool AdaptiveStepPacing { get; set; } = true;
     public double MinSpeed5DayIntervalMs { get; set; }
     internal bool MeasurePacing { get; set; }
 
-    public void RequestYield() => Volatile.Write(ref _yieldRequestedAtTicks, Stopwatch.GetTimestamp());
+    internal static int AdaptiveStepHours(int speed) => MobileAdaptiveStepHours(speed);
+
+    /// <summary>
+    /// Wall seconds per campaign day under adaptive steps. Mobile keeps its tuned table; desktop
+    /// is slightly calmer at the low speeds and still uncapped at Speed 5.
+    /// </summary>
+    internal static double AdaptiveStepSecondsPerDay(Defines defines, int speed, bool mobilePacing)
+    {
+        if (mobilePacing) return MobileStepSecondsPerDay(defines, speed);
+        var baseSecondsPerDay = (double)(defines?.SecondsPerDay ?? 5f);
+        return speed switch
+        {
+            <= 1 => baseSecondsPerDay * 0.60,
+            2 => baseSecondsPerDay * 0.24,
+            3 => baseSecondsPerDay * 0.090,
+            4 => baseSecondsPerDay * 0.025,
+            _ => 0.0
+        };
+    }
 
     internal static int MobileAdaptiveStepHours(int speed) => speed switch
     {
@@ -1123,10 +1333,20 @@ public sealed class BackgroundSimRunner : IDisposable
         };
     }
 
-    private bool IsYieldRequested()
+    internal Task<SaveSystem.PreparedSave> QueueSavePreparation(Campaign campaign, string root, string slot,
+        string modFingerprint, string displayName, bool autosave)
     {
-        var ticks = Volatile.Read(ref _yieldRequestedAtTicks);
-        return ticks != 0 && Stopwatch.GetElapsedTime(ticks).TotalMilliseconds < 25.0;
+        lock (_wakeLock)
+        {
+            if (_stopRequested || !_workerRunning || !ReferenceEquals(campaign, _campaign))
+                return Task.FromCanceled<SaveSystem.PreparedSave>(new CancellationToken(canceled: true));
+            if (_saveRequest is not null || _capturingSave)
+                return Task.FromException<SaveSystem.PreparedSave>(new InvalidOperationException("A save is already being prepared."));
+            var request = new SaveRequest(root, slot, modFingerprint, displayName, autosave);
+            _saveRequest = request;
+            Monitor.PulseAll(_wakeLock);
+            return request.Completion.Task;
+        }
     }
 
     internal (double AcquireMs, double WorkMs, double ReleaseMs) ReadPacingTimings() => (
@@ -1170,6 +1390,7 @@ public sealed class BackgroundSimRunner : IDisposable
         _pendingStepOpensNewDay = false;
         _pendingAutosave = false;
         _pendingException = null;
+        _workerFault = null;
         _workerStepStartHours = -1;
         _workerAcquireTicks = _workerWorkTicks = _workerReleaseTicks = 0;
         _snapshotTicks = _snapshotBytes = _snapshotCount = 0;
@@ -1201,11 +1422,23 @@ public sealed class BackgroundSimRunner : IDisposable
     public void Stop()
     {
         var campaign = _campaign;
-        _stopRequested = true;
-        lock (_wakeLock) Monitor.PulseAll(_wakeLock);
+        bool finishCapture;
+        lock (_wakeLock)
+        {
+            _stopRequested = true;
+            finishCapture = _capturingSave;
+            _saveRequest?.Completion.TrySetCanceled();
+            _saveRequest = null;
+            Monitor.PulseAll(_wakeLock);
+        }
         var thread = _thread;
-        if (thread is not null && thread.IsAlive)
-            thread.Join(millisecondsTimeout: 2000);
+        if (thread is not null && thread.IsAlive && !ReferenceEquals(thread, Thread.CurrentThread))
+        {
+            // Once claimed, capture owns the campaign until it has detached its save data.
+            // Stop can cancel work waiting for the gate without waiting for a reader to leave.
+            if (finishCapture) thread.Join();
+            else thread.Join(millisecondsTimeout: 2000);
+        }
         _thread = null;
         _workerRunning = false;
         if (campaign is not null)
@@ -1326,26 +1559,33 @@ public sealed class BackgroundSimRunner : IDisposable
         if (clock is not null && ReferenceEquals(clock.Campaign, campaign)) clock.Publish(campaign.Date);
     }
 
-    private void PublishSnapshotLocked(Campaign campaign, bool force)
+    private void PublishSnapshotLocked(Campaign campaign, bool force, double minIntervalMs = 16.0)
     {
         PublishCompletedDate(campaign);
         var now = Stopwatch.GetTimestamp();
         var mapRev = campaign.MapRevision;
         var ownerRev = campaign.OwnershipRevision;
         var warRev = campaign.WarRevision;
+        var prevRender = campaign.RenderSnapshot;
+        var elapsedMs = Stopwatch.GetElapsedTime(_lastSnapshotPublishedTicks).TotalMilliseconds;
         if (!force &&
             mapRev == _lastSnapshotMapRev &&
             ownerRev == _lastSnapshotOwnerRev &&
             warRev == _lastSnapshotWarRev &&
             !campaign.IsPaused &&
-            Stopwatch.GetElapsedTime(_lastSnapshotPublishedTicks).TotalMilliseconds < 16.0)
+            prevRender is { Version: > 0 } &&
+            prevRender.NationRanksById.Count > 0 &&
+            elapsedMs < minIntervalMs)
+        {
+            if (prevRender.ElapsedDays != campaign.ElapsedDays || elapsedMs >= 60.0)
+                campaign.PublishRenderSnapshot(prevRender.WithClock(Interlocked.Increment(ref _snapshotVersion), campaign));
             return;
+        }
 
         var nextVer = Interlocked.Increment(ref _snapshotVersion);
         var measurePacing = MeasurePacing;
         var captureStarted = measurePacing ? Stopwatch.GetTimestamp() : 0;
         var allocated = measurePacing ? GC.GetAllocatedBytesForCurrentThread() : 0;
-        var prevRender = campaign.RenderSnapshot;
         var prevHud = Volatile.Read(ref _hudSnapshot);
         var snap = CampaignRenderSnapshot.Capture(campaign, prevRender, RankingWeights, nextVer);
         var hudSnap = CampaignHudSnapshot.Capture(campaign, nextVer, prevHud);
@@ -1363,6 +1603,75 @@ public sealed class BackgroundSimRunner : IDisposable
         _lastSnapshotWarRev = warRev;
     }
 
+    private void PrepareQueuedSave(Campaign campaign)
+    {
+        if (!campaign.AccessGate.TryEnterBackgroundWrite())
+        {
+            Thread.Sleep(1);
+            return;
+        }
+
+        SaveRequest request = null;
+        SaveSystem.PreparedSave prepared = null;
+        Exception failure = null;
+        var finishingStep = false;
+        try
+        {
+            lock (_wakeLock)
+            {
+                if (_stopRequested || _saveRequest is null || !ReferenceEquals(_thread, Thread.CurrentThread)) return;
+                request = _saveRequest;
+                _saveRequest = null;
+                _capturingSave = true;
+                if (_workerFault is { } fault)
+                    throw new InvalidOperationException("The simulation stopped before the save could be prepared.", fault);
+            }
+
+            if (campaign.MidStep)
+            {
+                finishingStep = true;
+                campaign.FinishStep();
+                PublishSnapshotLocked(campaign, force: true);
+                lock (_wakeLock)
+                {
+                    if (_workerStepStartHours >= 0 && _workerStepStartHours != campaign.ElapsedHours)
+                    {
+                        _pendingStepEvent = true;
+                        _pendingStepOpensNewDay |= campaign.StepOpensNewDay;
+                        _pendingAutosave = true;
+                    }
+                    _sawPendingPlayerEvent = campaign.HasPendingPlayerEvent();
+                }
+                finishingStep = false;
+            }
+
+            var displayName = string.IsNullOrWhiteSpace(request.DisplayName) && campaign.Player is { } player
+                ? $"{player.DisplayName} · {campaign.Date.Display()}"
+                : request.DisplayName;
+            prepared = SaveSystem.Prepare(request.Root, request.Slot, campaign, request.ModFingerprint, displayName, request.Autosave);
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+            if (ex is OutOfMemoryException or AccessViolationException) throw;
+            if (finishingStep)
+            {
+                _workerFault = ex;
+                lock (_wakeLock) _pendingException ??= ex;
+            }
+        }
+        finally
+        {
+            campaign.AccessGate.ExitWrite();
+            if (request is not null)
+            {
+                lock (_wakeLock) _capturingSave = false;
+                if (failure is null) request.Completion.TrySetResult(prepared);
+                else request.Completion.TrySetException(failure);
+            }
+        }
+    }
+
     private void WorkerLoop()
     {
         var lastTickTime = Stopwatch.GetTimestamp();
@@ -1372,21 +1681,32 @@ public sealed class BackgroundSimRunner : IDisposable
         var emaSpeed5DayMs = 0.0;
         try
         {
-            while (!_stopRequested)
+            while (!_stopRequested && ReferenceEquals(_thread, Thread.CurrentThread))
             {
                 var campaign = _campaign;
                 if (campaign is null) break;
 
-                if (_pausedDesired || _pendingException is not null || campaign.IsPaused || campaign.SimulationFault.Length > 0)
+                // In flight, an ordinary step reaches its own bounded finish. A paused
+                // world can finish an already-started step without opening another one.
+                if (_saveRequest is not null && (!campaign.MidStep || _pausedDesired || campaign.IsPaused ||
+                    _workerFault is not null || campaign.SimulationFault.Length > 0))
                 {
-                    if (!MobilePacing && !campaign.MidStep) campaign.RuntimeStepHoursOverride = 0;
+                    PrepareQueuedSave(campaign);
+                    lastTickTime = Stopwatch.GetTimestamp();
+                    continue;
+                }
+
+                if (_pausedDesired || _workerFault is not null || campaign.IsPaused || campaign.SimulationFault.Length > 0)
+                {
+                    if (!(AdaptiveStepPacing || MobilePacing) && !campaign.MidStep) campaign.RuntimeStepHoursOverride = 0;
                     accumulator = 0.0;
                     lastSpeed5DayTicks = 0;
                     emaSpeed5DayMs = 0.0;
                     lastTickTime = Stopwatch.GetTimestamp();
                     lock (_wakeLock)
                     {
-                        if (!_stopRequested && (_pausedDesired || _pendingException is not null || campaign.IsPaused || campaign.SimulationFault.Length > 0))
+                        if (!_stopRequested && _saveRequest is null &&
+                            (_pausedDesired || _workerFault is not null || campaign.IsPaused || campaign.SimulationFault.Length > 0))
                             Monitor.Wait(_wakeLock, 25);
                     }
                     lastTickTime = Stopwatch.GetTimestamp();
@@ -1419,9 +1739,10 @@ public sealed class BackgroundSimRunner : IDisposable
                 }
 
                 var mobilePacing = MobilePacing;
+                var adaptiveSteps = AdaptiveStepPacing || mobilePacing;
                 var continuingStep = campaign.MidStep;
                 if (!continuingStep)
-                    campaign.RuntimeStepHoursOverride = mobilePacing ? MobileAdaptiveStepHours(speed) : 0;
+                    campaign.RuntimeStepHoursOverride = adaptiveSteps ? AdaptiveStepHours(speed) : 0;
                 var now = Stopwatch.GetTimestamp();
                 var dt = Stopwatch.GetElapsedTime(lastTickTime).TotalSeconds;
                 lastTickTime = now;
@@ -1434,11 +1755,11 @@ public sealed class BackgroundSimRunner : IDisposable
                 }
                 else
                 {
-                    var effectiveTickHours = mobilePacing && campaign.Defines.HoursPerTick == 1
-                        ? MobileAdaptiveStepHours(speed)
+                    var effectiveTickHours = adaptiveSteps && campaign.Defines.HoursPerTick == 1
+                        ? AdaptiveStepHours(speed)
                         : campaign.TickHours;
-                    var secPerDay = mobilePacing
-                        ? MobileStepSecondsPerDay(campaign.Defines, speed)
+                    var secPerDay = adaptiveSteps
+                        ? AdaptiveStepSecondsPerDay(campaign.Defines, speed, mobilePacing)
                         : campaign.Defines.SecondsForSpeed(speed);
                     stepInterval = Math.Max(0.002, secPerDay * (effectiveTickHours / 24.0));
                     accumulator = Math.Min(accumulator + dt, speed == 4 ? Math.Max(stepInterval * 3.0, 0.05) : stepInterval * 1.25);
@@ -1463,12 +1784,6 @@ public sealed class BackgroundSimRunner : IDisposable
                     Thread.Yield();
                     continue;
                 }
-                if (IsYieldRequested())
-                {
-                    Thread.Sleep(1);
-                    continue;
-                }
-
                 var stepDone = false;
                 var openedDay = false;
                 var awaitingPlayer = false;
@@ -1481,20 +1796,23 @@ public sealed class BackgroundSimRunner : IDisposable
                 if (measurePacing) Interlocked.Add(ref _workerAcquireTicks, acquiredAt - stepWorkStarted);
                 try
                 {
+                    if (!ReferenceEquals(_thread, Thread.CurrentThread)) break;
                     if (_stopRequested || _pausedDesired || campaign.IsPaused || campaign.SimulationFault.Length > 0)
                     {
                         if (campaign.MidStep) campaign.FinishStep();
-                        if (!mobilePacing) campaign.RuntimeStepHoursOverride = 0;
+                        if (!adaptiveSteps) campaign.RuntimeStepHoursOverride = 0;
                         PublishSnapshotLocked(campaign, force: true);
                     }
                     else
                     {
                         campaign.Speed = speed;
                         if (!campaign.MidStep)
-                            campaign.RuntimeStepHoursOverride = mobilePacing ? MobileAdaptiveStepHours(speed) : 0;
+                            campaign.RuntimeStepHoursOverride = adaptiveSteps ? AdaptiveStepHours(speed) : 0;
                         // Batch consecutive steps at Speed 4/5 inside one write lock until a player
                         // modal arrives, a slice runs out mid-step, a reader/writer waits, or the slice budget expires.
-                        var sliceMs = speed >= 5 ? (mobilePacing ? 14.0 : 10.0) : speed == 4 ? (mobilePacing ? 10.0 : 6.5) : 5.0;
+                        // A priority reader or a command writer breaks both RunStages and this batch at the
+                        // next stage boundary, so the larger Speed-5 slice costs no input latency.
+                        var sliceMs = speed >= 5 ? (mobilePacing ? 56.0 : 48.0) : speed == 4 ? (mobilePacing ? 18.0 : 14.0) : 6.0;
                         var batchStarted = Stopwatch.GetTimestamp();
                         var anyStepDone = false;
                         var anyOpenedDay = false;
@@ -1503,7 +1821,7 @@ public sealed class BackgroundSimRunner : IDisposable
                         {
                             if (!campaign.MidStep)
                             {
-                                campaign.RuntimeStepHoursOverride = mobilePacing ? MobileAdaptiveStepHours(speed) : 0;
+                                campaign.RuntimeStepHoursOverride = adaptiveSteps ? AdaptiveStepHours(speed) : 0;
                                 _workerStepStartHours = campaign.ElapsedHours;
                             }
                             var remainingMs = Math.Max(0.0, sliceMs - Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds);
@@ -1520,11 +1838,14 @@ public sealed class BackgroundSimRunner : IDisposable
 
                             if (speed < 4 || anyAwaitingPlayer) break;
                             if (_stopRequested || _pausedDesired || campaign.IsPaused || campaign.SimulationFault.Length > 0) break;
-                            if (campaign.AccessGate.HasWriteWaiter || IsYieldRequested()) break;
-                            if (Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= sliceMs) break;
+                            if (campaign.AccessGate.HasPriorityReaderRequested || campaign.AccessGate.HasWriteWaiter ||
+                                _saveRequest is not null) break;
+                            var batchElapsedMs = Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds;
+                            if (batchElapsedMs >= sliceMs) break;
                             if (campaign.AccessGate.HasReaderRequested &&
-                                (!mobilePacing || campaign.AccessGate.IsReaderStarving ||
-                                 Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds >= 8.0))
+                                (speed >= 5
+                                    ? batchElapsedMs >= (mobilePacing ? 32.0 : 24.0) || campaign.AccessGate.IsReaderStarving
+                                    : batchElapsedMs >= 8.0))
                                 break;
                             if (speed == 4)
                             {
@@ -1538,19 +1859,23 @@ public sealed class BackgroundSimRunner : IDisposable
                         openedDay = anyOpenedDay;
                         awaitingPlayer = anyAwaitingPlayer;
                         if (!campaign.MidStep)
-                            PublishSnapshotLocked(campaign, force: campaign.IsPaused || anyAwaitingPlayer || anyOpenedDay);
+                            PublishSnapshotLocked(campaign,
+                                force: campaign.IsPaused || anyAwaitingPlayer || (speed < 5 && anyOpenedDay),
+                                minIntervalMs: speed >= 5 ? (mobilePacing ? 80.0 : 33.0) : 16.0);
                     }
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException && ex is not AccessViolationException)
                 {
                     caught = ex;
+                    if (ReferenceEquals(_thread, Thread.CurrentThread)) _workerFault = ex;
                 }
                 finally
                 {
                     var releasingAt = measurePacing ? Stopwatch.GetTimestamp() : 0;
                     if (measurePacing) Interlocked.Add(ref _workerWorkTicks, releasingAt - acquiredAt);
-                    campaign.AccessGate.ExitWrite(yieldToRequestedReader: true, readerWindowMs: mobilePacing ? 10 : 24,
-                        readerWorkAheadMs: mobilePacing ? 18 : 0);
+                    campaign.AccessGate.ExitWrite(yieldToRequestedReader: true,
+                        readerWindowMs: speed >= 5 ? (mobilePacing ? 6 : 10) : (mobilePacing ? 10 : 20),
+                        readerWorkAheadMs: mobilePacing ? 20 : 12);
                     if (measurePacing) Interlocked.Add(ref _workerReleaseTicks, Stopwatch.GetTimestamp() - releasingAt);
                 }
 
@@ -1561,6 +1886,7 @@ public sealed class BackgroundSimRunner : IDisposable
                 {
                     lock (_wakeLock)
                     {
+                        if (!ReferenceEquals(_thread, Thread.CurrentThread)) break;
                         if (caught is not null) _pendingException ??= caught;
                         if (stepDone)
                         {
@@ -1607,7 +1933,15 @@ public sealed class BackgroundSimRunner : IDisposable
         }
         finally
         {
-            _workerRunning = false;
+            lock (_wakeLock)
+            {
+                if (ReferenceEquals(_thread, Thread.CurrentThread))
+                {
+                    _workerRunning = false;
+                    _saveRequest?.Completion.TrySetCanceled();
+                    _saveRequest = null;
+                }
+            }
         }
     }
 

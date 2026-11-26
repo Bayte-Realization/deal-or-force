@@ -108,6 +108,11 @@ public sealed partial class GlobePresentation
         public float Latitude, Longitude;
         public MeshInstance3D Node;
         public ShaderMaterial Material;
+        public int LastToday = int.MinValue;
+        public float LastZoom = float.NaN;
+        public bool LastFlat;
+        public float LastFade = float.NaN;
+        public float LastPhase = float.NaN;
     }
 
     private bool _eventPulsesShown = true;
@@ -193,6 +198,7 @@ void fragment() {
         var zoom = _flatMap ? Mathf.Clamp(_flatZoom / 1.6f, 0.45f, 2f) : Mathf.Clamp(_distance / 9f, 0.45f, 2f);
         var wideLodFade = 1f - Mathf.SmoothStep(15.5f, 22.0f, ViewDistance) * 0.55f;
         var time = (float)Time.GetTicksMsec() / 1000f;
+        var phaseStep = _pulseQualityTier >= 0.5f ? 0.02f : 0.001f;
         for (var i = _pulses.Count - 1; i >= 0; i--)
         {
             var pulse = _pulses[i];
@@ -203,23 +209,42 @@ void fragment() {
                 _pulses.RemoveAt(i);
                 continue;
             }
-            var position = _flatMap
-                ? LocalFlatPoint(pulse.Latitude, pulse.Longitude, FlatMarkerZ + 0.001f)
-                : LocalSurfacePoint(pulse.Latitude, pulse.Longitude, GlobeRadius * 1.0024f);
-            var up = _flatMap ? Vector3.Back : position.Normalized();
-            var east = up.Cross(Vector3.Up);
-            if (east.LengthSquared() < 1e-6f) east = Vector3.Right;
-            east = east.Normalized();
-            var north = east.Cross(up).Normalized();
-            // A quad faces +Z: lay it on the ground, its face along the local up.
             var highPriority = pulse.Kind is "world_war_began" or "nuclear_strike" or "nuclear_retaliation" or "nuclear_devastation";
             var lodAlpha = highPriority ? 1f : wideLodFade;
-            var size = PulseSize * zoom * (1f + 0.25f * (1f - age)) * (highPriority ? 1.18f : 1f);
-            pulse.Node.Transform = new Transform3D(new Basis(east * size, north * size, up * size), position);
-            pulse.Material.SetShaderParameter("phase", time * 0.6f + pulse.Sequence * 0.37f);
-            pulse.Material.SetShaderParameter("fade", (1f - Mathf.SmoothStep(0.65f, 1f, age)) * lodAlpha);
+            if (pulse.LastToday != today || pulse.LastFlat != _flatMap ||
+                !float.IsFinite(pulse.LastZoom) || MathF.Abs(zoom - pulse.LastZoom) > 1e-4f)
+            {
+                pulse.LastToday = today;
+                pulse.LastFlat = _flatMap;
+                pulse.LastZoom = zoom;
+                var position = _flatMap
+                    ? LocalFlatPoint(pulse.Latitude, pulse.Longitude, FlatMarkerZ + 0.001f)
+                    : LocalSurfacePoint(pulse.Latitude, pulse.Longitude, SurfacePulseRadius());
+                var up = _flatMap ? Vector3.Back : position.Normalized();
+                var east = up.Cross(Vector3.Up);
+                if (east.LengthSquared() < 1e-6f) east = Vector3.Right;
+                east = east.Normalized();
+                var north = east.Cross(up).Normalized();
+                // A quad faces +Z: lay it on the ground, its face along the local up.
+                var size = PulseSize * zoom * (1f + 0.25f * (1f - age)) * (highPriority ? 1.18f : 1f);
+                pulse.Node.Transform = new Transform3D(new Basis(east * size, north * size, up * size), position);
+            }
+            var phase = time * 0.6f + pulse.Sequence * 0.37f;
+            if (!float.IsFinite(pulse.LastPhase) || MathF.Abs(phase - pulse.LastPhase) >= phaseStep)
+            {
+                pulse.LastPhase = phase;
+                pulse.Material.SetShaderParameter("phase", phase);
+            }
+            var fade = (1f - Mathf.SmoothStep(0.65f, 1f, age)) * lodAlpha;
+            if (!float.IsFinite(pulse.LastFade) || MathF.Abs(fade - pulse.LastFade) > 0.001f || fade <= 0f || fade >= 1f)
+            {
+                pulse.LastFade = fade;
+                pulse.Material.SetShaderParameter("fade", fade);
+            }
         }
     }
+
+    private float SurfacePulseRadius() => GlobeRadius * 1.0024f;
 
     /// <summary>Every public event of weight since the last look becomes a mark, the oldest giving way past the limit.</summary>
     private void TakeNewEvents()

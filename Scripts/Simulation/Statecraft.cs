@@ -339,8 +339,12 @@ public static class Statecraft
 
     private static bool InCivilWar(Campaign campaign, Nation nation)
     {
-        foreach (var war in Warfare.LiveWars(campaign))
+        var live = Warfare.LiveWars(campaign);
+        for (var wi = 0; wi < live.Count; wi++)
+        {
+            var war = live[wi];
             if (war is { Ended: false, CivilConflict: true } && war.Involves(nation.Id)) return true;
+        }
         return false;
     }
 
@@ -353,16 +357,20 @@ public static class Statecraft
         // They took something of ours, and we have not forgotten. The opinion system has
         // been remembering exactly this since the day it was written.
         if (relation is not null)
-            foreach (var reason in relation.Reasons)
+        {
+            var reasons = relation.Reasons;
+            for (var ri = 0; ri < reasons.Count; ri++)
             {
-                if (string.Equals(reason.Id, "took_our_land", StringComparison.OrdinalIgnoreCase))
+                var reasonId = reasons[ri].Id;
+                if (string.Equals(reasonId, "took_our_land", StringComparison.OrdinalIgnoreCase))
                     return "reconquest";
 
                 // They were told to hand a region over and said no. The demand and the
                 // refusal are both remembered; this is the refusal doing its work.
-                if (string.Equals(reason.Id, "refused_our_ultimatum", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(reasonId, "refused_our_ultimatum", StringComparison.OrdinalIgnoreCase))
                     return "ultimatum_refusal";
             }
+        }
 
         // Our people live there. Answered out of the demography rather than a claim flag,
         // so it is true of exactly the regions where it is true.
@@ -370,15 +378,24 @@ public static class Statecraft
         if (topology is not null && CampaignDiplomacy.SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
         {
             var defenderStates = campaign.StatesOf(defender);
+            string lastCulture = null;
+            var lastPrimary = false;
             for (var si = 0; si < defenderStates.Length; si++)
             {
                 var state = defenderStates[si];
                 if (state.Population <= 0) continue;
                 var ours = 0L;
-                for (var gi = 0; gi < state.PopulationGroups.Count; gi++)
+                var groups = state.PopulationGroups;
+                for (var gi = 0; gi < groups.Count; gi++)
                 {
-                    var group = state.PopulationGroups[gi];
-                    if (DemographyCatalog.IsPrimary(attacker.Tag, group.Culture)) ours += group.Size;
+                    var group = groups[gi];
+                    var culture = group.Culture;
+                    if (!string.Equals(culture, lastCulture, StringComparison.Ordinal))
+                    {
+                        lastCulture = culture;
+                        lastPrimary = DemographyCatalog.IsPrimary(attacker.Tag, culture);
+                    }
+                    if (lastPrimary) ours += group.Size;
                 }
                 if (ours * 2 > state.Population) return "irredentism";
             }
@@ -478,8 +495,10 @@ public static class Statecraft
     /// </summary>
     public static Nation AllyUnderAttack(Campaign campaign, Nation attacker, Nation defender)
     {
-        foreach (var war in Warfare.LiveWars(campaign))
+        var wars = Warfare.LiveWars(campaign);
+        for (var wi = 0; wi < wars.Count; wi++)
         {
+            var war = wars[wi];
             if (war.Ended || war.CivilConflict || !war.Involves(defender.Id)) continue;
             var victimId = war.AttackerId == defender.Id ? war.DefenderId : -1;
             if (victimId < 0) continue;

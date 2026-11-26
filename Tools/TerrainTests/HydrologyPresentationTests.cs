@@ -117,5 +117,56 @@ static class HydrologyPresentationTests
         Check(TerrainCatalog.Water.RiverProfiles.Single().FeatureNames.Contains("Dnipro"), "shipped Dnipro profile loads through moddable water settings");
         Check(HydrologyCatalog.RiverFeatures.Count(r => TerrainCatalog.Water.RiverProfiles.Single().FeatureNames.Contains(r.Name)) == 3,
             "profile matches canonical English names of the real river and reservoir centreline");
+        VerifyRiverCentreAtlas();
+    }
+
+    private static void VerifyRiverCentreAtlas()
+    {
+        const int width = 2049;
+        const int height = 1025;
+        const int tileSide = HydrologySurfaceData.RiverTileSide;
+        const int columns = (width + tileSide - 1) / tileSide;
+        var dense = new byte[width * height * 4];
+        void SetSample(int x, int y)
+        {
+            var at = (y * width + x) * 4;
+            dense[at] = (byte)x;
+            dense[at + 1] = (byte)y;
+            dense[at + 2] = 196;
+            dense[at + 3] = 255;
+        }
+        for (var tile = 0; tile < 256; tile++)
+            SetSample(tile % columns * tileSide, tile / columns * tileSide);
+        SetSample(31, 31);
+        SetSample(width - 1, height - 1);
+
+        var atlas = HydrologySurfaceData.PackRiverCentreline(dense, width, height)
+            ?? throw new Exception("expected a sparse centreline atlas");
+        if (atlas.Pixels.Length >= dense.Length || atlas.HeaderRows != 2)
+            throw new Exception("expected a smaller atlas with a multi-row directory");
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var index = (y / tileSide * columns + x / tileSide) * 4;
+            var ordinal = atlas.Pixels[index] | atlas.Pixels[index + 1] << 8;
+            var source = (y * width + x) * 4;
+            if (ordinal == 0)
+            {
+                if (dense[source + 2] != 0) throw new Exception($"wet sample omitted at ({x}, {y})");
+                continue;
+            }
+
+            var tile = ordinal - 1;
+            var tileColumns = atlas.Width / tileSide;
+            var atlasX = tile % tileColumns * tileSide + x % tileSide;
+            var atlasY = atlas.HeaderRows + tile / tileColumns * tileSide + y % tileSide;
+            var target = (atlasY * atlas.Width + atlasX) * 4;
+            if (!dense.AsSpan(source, 4).SequenceEqual(atlas.Pixels.AsSpan(target, 4)))
+                throw new Exception($"centreline sample changed at ({x}, {y})");
+        }
+        Array.Fill(dense, (byte)255);
+        if (HydrologySurfaceData.PackRiverCentreline(dense, width, height) is not null)
+            throw new Exception("dense centreline should keep the original texture");
+        Console.WriteLine("PASS hydrology: centreline atlas preserves all samples at tile boundaries, including partial tiles and 16-bit tile indices");
     }
 }

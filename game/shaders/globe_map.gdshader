@@ -8,6 +8,8 @@ uniform sampler2D hydrology_map : filter_linear, repeat_enable;
 // Where the nearest river's real course lies from each texel (RG, 16ths of a texel from 128) and
 // that river's importance (B, 0 = none near). Read texel by texel, never filtered.
 uniform sampler2D river_centre_map : filter_nearest, repeat_enable;
+uniform int river_atlas_header_rows = 0;
+uniform vec2 river_source_size = vec2(0.0);
 uniform sampler2D crossover_excavations : filter_nearest, repeat_enable;
 uniform float crossover_excavations_active = 0.0;
 uniform sampler2D lake_surface : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -869,6 +871,26 @@ void vertex() {
         }
     }
 }
+// The compact atlas stores exact texels in 32x32 tiles. RG in the header gives
+// the one-based tile ordinal. Empty tiles need no river samples.
+const int RIVER_TILE_SIDE = 32;
+
+ivec2 river_fetch_cell(ivec2 at, ivec2 size) {
+    return ivec2((at.x % size.x + size.x) % size.x, clamp(at.y, 0, size.y - 1));
+}
+
+ivec2 river_atlas_origin(ivec2 tile, ivec2 source_size, ivec2 storage_size) {
+    int source_columns = (source_size.x + RIVER_TILE_SIDE - 1) / RIVER_TILE_SIDE;
+    int index = tile.y * source_columns + tile.x;
+    ivec2 header_at = ivec2(index % storage_size.x, index / storage_size.x);
+    ivec2 encoded = ivec2(texelFetch(river_centre_map, header_at, 0).rg * 255.0 + 0.5);
+    int ordinal = encoded.x + 256 * encoded.y - 1;
+    if (ordinal < 0) return ivec2(-1);
+    int atlas_columns = storage_size.x / RIVER_TILE_SIDE;
+    return ivec2((ordinal % atlas_columns) * RIVER_TILE_SIDE,
+        river_atlas_header_rows + (ordinal / atlas_columns) * RIVER_TILE_SIDE);
+}
+
 void fragment() {
     float excavation = crossover_excavations_active * texture(crossover_excavations, UV).r;
     // How far this point is from the nearest frontier or shore, in cells (FrontierField). Read
@@ -1376,7 +1398,9 @@ void fragment() {
     // hydrology_map is compact R8: pure ocean pixels (~70% of globe) skip hydrology_map & river_centre_map fetches.
     vec2 hydro_size = vec2(textureSize(hydrology_map, 0));
     float hydro_px = max(max(length(uv_dx * hydro_size), length(uv_dy * hydro_size)), 0.0001);
-    ivec2 river_map_size = textureSize(river_centre_map, 0);
+    ivec2 river_storage_size = max(textureSize(river_centre_map, 0), ivec2(1));
+    bool river_packed = river_atlas_header_rows > 0;
+    ivec2 river_map_size = river_packed ? ivec2(river_source_size) : river_storage_size;
     vec2 river_size_f = vec2(river_map_size);
     float river_texel_px = max(max(length(uv_dx * river_size_f), length(uv_dy * river_size_f)), 0.0001);
     vec2 water_uv = vec2(UV.x * 2.0, UV.y) * water_repeat;
@@ -1402,23 +1426,37 @@ void fragment() {
         vec2 river_first_course = vec2(0.0);
         bool river_has_course = false;
         bool river_coherent = true;
-        for (int ry = 0; ry < 2; ry++) {
-            for (int rx = 0; rx < 2; rx++) {
-                ivec2 at = river_cell + ivec2(rx, ry);
-                ivec2 fetch = ivec2((at.x % river_map_size.x + river_map_size.x) % river_map_size.x,
-                    clamp(at.y, 0, river_map_size.y - 1));
-                vec4 entry = texelFetch(river_centre_map, fetch, 0);
-                if (entry.b <= 0.0) continue;
-                vec2 course = vec2(at) + (entry.rg * 255.0 - 128.0) / 16.0;
-                if (!river_has_course) { river_first_course = course; river_has_course = true; }
-                else if (length(course - river_first_course) > 1.6) river_coherent = false;
-                float weight = (rx == 0 ? 1.0 - river_fraction.x : river_fraction.x) *
-                    (ry == 0 ? 1.0 - river_fraction.y : river_fraction.y);
-                river_course_sum += course * weight;
-                river_importance_sum += entry.b * weight;
-                river_weight += weight;
-                float reach = length(river_point - course);
-                if (reach < river_centre) { river_centre = reach; river_importance = entry.b; }
+        bool same_tile = false;
+        ivec2 shared_origin = ivec2(-1);
+        if (river_packed) {
+            ivec2 tile = river_fetch_cell(river_cell, river_map_size) / RIVER_TILE_SIDE;
+            same_tile = all(equal(tile, river_fetch_cell(river_cell + ivec2(1), river_map_size) / RIVER_TILE_SIDE));
+            if (same_tile) shared_origin = river_atlas_origin(tile, river_map_size, river_storage_size);
+        }
+        if (!same_tile || shared_origin.x >= 0) {
+            for (int ry = 0; ry < 2; ry++) {
+                for (int rx = 0; rx < 2; rx++) {
+                    ivec2 at = river_cell + ivec2(rx, ry);
+                    ivec2 fetch = river_fetch_cell(at, river_map_size);
+                    if (river_packed) {
+                        ivec2 tile = fetch / RIVER_TILE_SIDE;
+                        ivec2 origin = same_tile ? shared_origin : river_atlas_origin(tile, river_map_size, river_storage_size);
+                        if (origin.x < 0) continue;
+                        fetch = origin + fetch - tile * RIVER_TILE_SIDE;
+                    }
+                    vec4 entry = texelFetch(river_centre_map, fetch, 0);
+                    if (entry.b <= 0.0) continue;
+                    vec2 course = vec2(at) + (entry.rg * 255.0 - 128.0) / 16.0;
+                    if (!river_has_course) { river_first_course = course; river_has_course = true; }
+                    else if (length(course - river_first_course) > 1.6) river_coherent = false;
+                    float weight = (rx == 0 ? 1.0 - river_fraction.x : river_fraction.x) *
+                        (ry == 0 ? 1.0 - river_fraction.y : river_fraction.y);
+                    river_course_sum += course * weight;
+                    river_importance_sum += entry.b * weight;
+                    river_weight += weight;
+                    float reach = length(river_point - course);
+                    if (reach < river_centre) { river_centre = reach; river_importance = entry.b; }
+                }
             }
         }
         if (river_coherent && river_weight > 0.0001) {

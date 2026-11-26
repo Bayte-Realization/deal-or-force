@@ -1,17 +1,17 @@
-using static DealOrForce.TerritoryLabelLayout;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Godot;
-using DealOrForce.Simulation;
-using SourceEarthData = DealOrForce.Simulation.WorldMapSource;
-
-namespace DealOrForce;
-
-public sealed partial class GlobePresentation
-{
+using static DealOrForce.TerritoryLabelLayout;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Godot;
+using DealOrForce.Simulation;
+using SourceEarthData = DealOrForce.Simulation.WorldMapSource;
+
+namespace DealOrForce;
+
+public sealed partial class GlobePresentation
+{
     private readonly List<(Node3D Node, Vector3 Normal)> _armyMarkers = new();
     private readonly Dictionary<Node3D, IReadOnlyList<Simulation.Army>> _armyByMarker = new();
 
@@ -323,16 +323,19 @@ public sealed partial class GlobePresentation
 
     public void SelectArmies(IEnumerable<int> armyIds)
     {
-        var selected = armyIds.ToHashSet();
-        if (!TryBeginActionRead(out var campaign)) selected.Clear();
-        else
+        var selected = armyIds.Where(id => id >= 0).ToHashSet();
+        if (selected.Count > 0)
         {
-            try
+            if (!TryBeginActionRead(out var campaign)) selected.Clear();
+            else
             {
-                selected.IntersectWith(campaign.Armies
-                    .Where(army => Simulation.ArmyInteraction.CanSelect(campaign, army)).Select(army => army.Id));
+                try
+                {
+                    selected.IntersectWith(campaign.Armies
+                        .Where(army => Simulation.ArmyInteraction.CanSelect(campaign, army)).Select(army => army.Id));
+                }
+                finally { campaign.ExitRead(); }
             }
-            finally { campaign.ExitRead(); }
         }
         _selectedArmyIds.Clear();
         _selectedArmyIds.UnionWith(selected);
@@ -862,4 +865,4 @@ public sealed partial class GlobePresentation
         ? (int)MathF.Round(division.Divisions * Simulation.MilitaryBootstrap.DivisionSize * division.Strength)
         : Math.Max(0, division.Personnel);
 
-}
+}

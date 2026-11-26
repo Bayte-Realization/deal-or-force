@@ -174,13 +174,10 @@ public static class DemographicCycle
         foreach (var _ in Stages(campaign)) { }
     }
 
-    /// <summary>
-    /// How many regions one stage of the cycle works through before the frame gets its turn back.
-    /// Sixteen while a region cost a quarter of a millisecond; a region now costs a sixth of
-    /// that (Assimilate), so sixty-four are a shorter stage than sixteen were, and a loop long
-    /// enough for the thread pool's workers to arrive before it is over.
-    /// </summary>
-    private const int StageRegions = 256;
+    // A bounded step checks its time budget between batches. The synchronous path can
+    // use larger batches to spread the worker hand-off cost over more regions.
+    private const int StageRegions = 64;
+    private const int UnboundedStageRegions = 256;
     [ThreadStatic] private static List<ScenarioState> _dueStatesScratch;
 
     /// <summary>
@@ -209,16 +206,21 @@ public static class DemographicCycle
 
         campaign.NationsByMapIndex();
         if (campaign.Nations.Count > 0) campaign.HasOwnedLand(campaign.Nations[0]);
-        KinTable(campaign);
+        var kinTable = KinTable(campaign);
+        var nationsByMap = campaign.NationsByMapIndex();
         var shield = PopulationFolding.Enabled(campaign) ? PopulationFolding.Prepare(campaign) : null;
         var useParallel = DeterministicParallel.Enabled(campaign);
         var anyChanged = false;
         var dueCount = dueStates.Count;
+        // A whole-step caller (a replay, the bench, a client catching up) has no frame to hand
+        // back, so the day's due regions go to the workers as one loop: one wake-up of the pool
+        // instead of one per batch. A bounded step keeps its batches and its budget checks.
+        var batchSize = Campaign.IsUnboundedStep ? Math.Max(UnboundedStageRegions, dueCount) : StageRegions;
 
-        for (var first = 0; first < dueCount; first += StageRegions)
+        for (var first = 0; first < dueCount; first += batchSize)
         {
             if (first > 0 && Campaign.StageOverdue()) yield return 0;
-            var last = Math.Min(first + StageRegions, dueCount);
+            var last = Math.Min(first + batchSize, dueCount);
             if (last - first >= DeterministicParallel.MinItems && useParallel)
             {
                 DeterministicParallel.ForRange(campaign, first, last, (from, to) =>
@@ -237,8 +239,8 @@ public static class DemographicCycle
                             out var nextYoungShare, out var nextOldShare, out _);
                         state.YoungShare = nextYoungShare;
                         state.OldShare = nextOldShare;
-                        MoveCultures(campaign, state, shield);
-                        MovementRules.MarkPeopleStateDirty(campaign, state);
+                        if (MoveCultures(campaign, state, shield, kinTable, nationsByMap))
+                            MovementRules.MarkPeopleStateDirty(campaign, state);
                     }
                 });
                 anyChanged = true;
@@ -260,8 +262,8 @@ public static class DemographicCycle
                         out var nextYoungShare, out var nextOldShare, out _);
                     state.YoungShare = nextYoungShare;
                     state.OldShare = nextOldShare;
-                    MoveCultures(campaign, state, shield);
-                    MovementRules.MarkPeopleStateDirty(campaign, state);
+                    if (MoveCultures(campaign, state, shield, kinTable, nationsByMap))
+                        MovementRules.MarkPeopleStateDirty(campaign, state);
                 }
             }
         }
@@ -276,9 +278,35 @@ public static class DemographicCycle
     /// and then be relabelled as its largest minority, so the refugees of South Sudan and Congo
     /// became Ganda in Uganda and Ganda appeared all over Tanzania - five points a year.
     /// </summary>
-    [ThreadStatic] private static Dictionary<string, int> _coalesceCulturesScratch;
-    [ThreadStatic] private static Dictionary<string, int> _coalesceFaithsScratch;
-    [ThreadStatic] private static Dictionary<string, int> _coalesceTradesScratch;
+    private sealed class CoalesceInterner
+    {
+        private readonly Dictionary<string, int> _byRef = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<string, int> _byText = new(StringComparer.OrdinalIgnoreCase);
+
+        public int Count => _byText.Count;
+
+        public void Reset()
+        {
+            _byRef.Clear();
+            _byText.Clear();
+        }
+
+        public int GetOrAdd(string value)
+        {
+            if (_byRef.TryGetValue(value, out var id)) return id;
+            if (!_byText.TryGetValue(value, out id))
+            {
+                id = _byText.Count;
+                _byText[value] = id;
+            }
+            if (_byRef.Count < 32768) _byRef[value] = id;
+            return id;
+        }
+    }
+
+    [ThreadStatic] private static CoalesceInterner _coalesceCultures;
+    [ThreadStatic] private static CoalesceInterner _coalesceFaiths;
+    [ThreadStatic] private static CoalesceInterner _coalesceTrades;
 
     private static void MergeGroupWeighted(PopulationGroup host, PopulationGroup gone)
     {
@@ -295,11 +323,15 @@ public static class DemographicCycle
         gone.Size = 0;
     }
 
-    private static void MoveCultures(Campaign campaign, ScenarioState state, PopulationFolding.Shield shield)
+    private static void MoveCultures(Campaign campaign, ScenarioState state, PopulationFolding.Shield shield) =>
+        MoveCultures(campaign, state, shield, KinTable(campaign), campaign.NationsByMapIndex());
+
+    private static bool MoveCultures(Campaign campaign, ScenarioState state, PopulationFolding.Shield shield,
+        KinCache kinTable, Dictionary<int, Nation> nationsByMap)
     {
         var groups = state.PopulationGroups;
-        if (groups.Count == 0 || state.Population <= 0) return;
-        Assimilate(campaign, state, groups);
+        if (groups.Count == 0 || state.Population <= 0) return false;
+        var changed = Assimilate(campaign, state, groups, kinTable, nationsByMap);
 
         // First coalesce exact-key duplicate cohorts ((Class, Sector, Culture, Religion, Profession))
         // and, when Count > 16, fold tiny (<= 250) profession/class splinters into the largest
@@ -308,88 +340,24 @@ public static class DemographicCycle
         var count = groups.Count;
         if (count > 1)
         {
-            var cultureIds = _coalesceCulturesScratch ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var faithIds = _coalesceFaithsScratch ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var tradeIds = _coalesceTradesScratch ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            cultureIds.Clear();
-            faithIds.Clear();
-            tradeIds.Clear();
+            var cultureIds = _coalesceCultures ??= new CoalesceInterner();
+            var faithIds = _coalesceFaiths ??= new CoalesceInterner();
+            var tradeIds = _coalesceTrades ??= new CoalesceInterner();
+            if (cultureIds.Count >= 16384) cultureIds.Reset();
+            if (faithIds.Count >= 16384) faithIds.Reset();
+            if (tradeIds.Count >= 16384) tradeIds.Reset();
 
-            using var exactHosts = new HeapSpanDictionary<long, int>(count);
-            using var pairBest = new HeapSpanDictionary<long, int>(count > 16 ? Math.Min(count, 64) : 1);
-            using var groupPairs = new HeapPooledList<long>(count);
-
-            string lastCulture = null, lastFaith = null, lastTrade = null;
-            int cultureId = -1, faithId = -1, tradeId = -1;
-            var checkMicro = count > 16;
-
-            for (var i = 0; i < count; i++)
-            {
-                var g = groups[i];
-                if (g.Size <= 0)
-                {
-                    if (checkMicro) groupPairs.Add(-1L);
-                    continue;
-                }
-
-                var cName = g.Culture ?? "";
-                if (cultureId < 0 || !ReferenceEquals(cName, lastCulture))
-                {
-                    lastCulture = cName;
-                    if (!cultureIds.TryGetValue(cName, out cultureId))
-                        cultureIds[cName] = cultureId = cultureIds.Count;
-                }
-                var rName = g.Religion ?? "";
-                if (faithId < 0 || !ReferenceEquals(rName, lastFaith))
-                {
-                    lastFaith = rName;
-                    if (!faithIds.TryGetValue(rName, out faithId))
-                        faithIds[rName] = faithId = faithIds.Count;
-                }
-                var pName = g.Profession ?? "";
-                if (tradeId < 0 || !ReferenceEquals(pName, lastTrade))
-                {
-                    lastTrade = pName;
-                    if (!tradeIds.TryGetValue(pName, out tradeId))
-                        tradeIds[pName] = tradeId = tradeIds.Count;
-                }
-
-                // Pack full 5-tuple cohort identity when indices fit cleanly (always true per state).
-                if (cultureId < 65535 && faithId < 65535 && tradeId < 65535)
-                {
-                    var exactKey = ((long)cultureId << 40) | ((long)faithId << 24) | ((long)tradeId << 8) |
-                                   (((long)(int)g.Class & 0xF) << 4) | ((long)(int)g.Sector & 0xF);
-                    if (exactHosts.TryGetValue(exactKey, out var hostIdx))
-                    {
-                        MergeGroupWeighted(groups[hostIdx], g);
-                        if (checkMicro) groupPairs.Add(-1L);
-                        continue;
-                    }
-                    exactHosts[exactKey] = i;
-                }
-
-                if (checkMicro)
-                {
-                    var pairKey = ((long)cultureId << 20) | (uint)faithId;
-                    groupPairs.Add(pairKey);
-                    if (!pairBest.TryGetValue(pairKey, out var bestIdx) || g.Size > groups[bestIdx].Size)
-                        pairBest[pairKey] = i;
-                }
-            }
-
-            if (checkMicro)
+            var checkMicro = false;
+            if (count > 16)
             {
                 for (var i = 0; i < count; i++)
                 {
-                    var tiny = groups[i];
-                    if (tiny.Size <= 0 || tiny.Size > 250) continue;
-                    var pairKey = groupPairs[i];
-                    if (pairKey < 0 || !pairBest.TryGetValue(pairKey, out var hostIdx) || hostIdx == i) continue;
-                    var host = groups[hostIdx];
-                    if (host.Size <= tiny.Size) continue;
-                    MergeGroupWeighted(host, tiny);
+                    if ((uint)(groups[i].Size - 1) < 250u) { checkMicro = true; break; }
                 }
             }
+            changed |= checkMicro
+                ? CoalesceWithMicro(groups, count, cultureIds, faithIds, tradeIds)
+                : CoalesceExactOnly(groups, count, cultureIds, faithIds, tradeIds);
         }
 
         // And the slivers a century of migration leaves, into their nearest kin (PopulationFolding).
@@ -400,7 +368,134 @@ public static class DemographicCycle
         var write = 0;
         for (var i = 0; i < groups.Count; i++)
             if (groups[i].Size > 0) groups[write++] = groups[i];
-        if (write < groups.Count) groups.RemoveRange(write, groups.Count - write);
+        if (write < groups.Count)
+        {
+            groups.RemoveRange(write, groups.Count - write);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static bool CoalesceExactOnly(List<PopulationGroup> groups, int count,
+        CoalesceInterner cultureIds, CoalesceInterner faithIds, CoalesceInterner tradeIds)
+    {
+        using var exactHosts = new HeapSpanDictionary<long, int>(count);
+        string lastCulture = null, lastFaith = null, lastTrade = null;
+        int cultureId = -1, faithId = -1, tradeId = -1;
+        var merged = false;
+
+        for (var i = 0; i < count; i++)
+        {
+            var g = groups[i];
+            if (g.Size <= 0) continue;
+
+            var cName = g.Culture ?? "";
+            if (cultureId < 0 || !ReferenceEquals(cName, lastCulture))
+            {
+                lastCulture = cName;
+                cultureId = cultureIds.GetOrAdd(cName);
+            }
+            var rName = g.Religion ?? "";
+            if (faithId < 0 || !ReferenceEquals(rName, lastFaith))
+            {
+                lastFaith = rName;
+                faithId = faithIds.GetOrAdd(rName);
+            }
+            var pName = g.Profession ?? "";
+            if (tradeId < 0 || !ReferenceEquals(pName, lastTrade))
+            {
+                lastTrade = pName;
+                tradeId = tradeIds.GetOrAdd(pName);
+            }
+
+            if (cultureId < 65535 && faithId < 65535 && tradeId < 65535)
+            {
+                var exactKey = ((long)cultureId << 40) | ((long)faithId << 24) | ((long)tradeId << 8) |
+                               (((long)(int)g.Class & 0xF) << 4) | ((long)(int)g.Sector & 0xF);
+                if (exactHosts.TryGetValue(exactKey, out var hostIdx))
+                {
+                    MergeGroupWeighted(groups[hostIdx], g);
+                    merged = true;
+                    continue;
+                }
+                exactHosts[exactKey] = i;
+            }
+        }
+        return merged;
+    }
+
+    private static bool CoalesceWithMicro(List<PopulationGroup> groups, int count,
+        CoalesceInterner cultureIds, CoalesceInterner faithIds, CoalesceInterner tradeIds)
+    {
+        using var exactHosts = new HeapSpanDictionary<long, int>(count);
+        using var pairBest = new HeapSpanDictionary<long, int>(Math.Min(count, 64));
+        using var groupPairs = new HeapPooledList<long>(count);
+
+        string lastCulture = null, lastFaith = null, lastTrade = null;
+        int cultureId = -1, faithId = -1, tradeId = -1;
+        var merged = false;
+
+        for (var i = 0; i < count; i++)
+        {
+            var g = groups[i];
+            if (g.Size <= 0)
+            {
+                groupPairs.Add(-1L);
+                continue;
+            }
+
+            var cName = g.Culture ?? "";
+            if (cultureId < 0 || !ReferenceEquals(cName, lastCulture))
+            {
+                lastCulture = cName;
+                cultureId = cultureIds.GetOrAdd(cName);
+            }
+            var rName = g.Religion ?? "";
+            if (faithId < 0 || !ReferenceEquals(rName, lastFaith))
+            {
+                lastFaith = rName;
+                faithId = faithIds.GetOrAdd(rName);
+            }
+            var pName = g.Profession ?? "";
+            if (tradeId < 0 || !ReferenceEquals(pName, lastTrade))
+            {
+                lastTrade = pName;
+                tradeId = tradeIds.GetOrAdd(pName);
+            }
+
+            // Pack full 5-tuple cohort identity when indices fit cleanly (always true per state).
+            if (cultureId < 65535 && faithId < 65535 && tradeId < 65535)
+            {
+                var exactKey = ((long)cultureId << 40) | ((long)faithId << 24) | ((long)tradeId << 8) |
+                               (((long)(int)g.Class & 0xF) << 4) | ((long)(int)g.Sector & 0xF);
+                if (exactHosts.TryGetValue(exactKey, out var hostIdx))
+                {
+                    MergeGroupWeighted(groups[hostIdx], g);
+                    merged = true;
+                    groupPairs.Add(-1L);
+                    continue;
+                }
+                exactHosts[exactKey] = i;
+            }
+
+            var pairKey = ((long)cultureId << 20) | (uint)faithId;
+            groupPairs.Add(pairKey);
+            if (!pairBest.TryGetValue(pairKey, out var bestIdx) || g.Size > groups[bestIdx].Size)
+                pairBest[pairKey] = i;
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            var tiny = groups[i];
+            if (tiny.Size <= 0 || tiny.Size > 250) continue;
+            var pairKey = groupPairs[i];
+            if (pairKey < 0 || !pairBest.TryGetValue(pairKey, out var hostIdx) || hostIdx == i) continue;
+            var host = groups[hostIdx];
+            if (host.Size <= tiny.Size) continue;
+            MergeGroupWeighted(host, tiny);
+            merged = true;
+        }
+        return merged;
     }
 
     // One per thread: regions are worked side by side (Stages).
@@ -502,36 +597,44 @@ public static class DemographicCycle
     /// A people the country counts among its own (Belgium's Flemish and Walloons) is not
     /// assimilated into another of them.
     /// </summary>
-    private static void Assimilate(Campaign campaign, ScenarioState state, List<PopulationGroup> groups)
+    private static bool Assimilate(Campaign campaign, ScenarioState state, List<PopulationGroup> groups,
+        KinCache kinTable, Dictionary<int, Nation> nationsByMap)
     {
         var defines = campaign.Defines;
         var annual = defines.DemographyAssimilationAnnual;
-        if (annual <= 0f || groups.Count < 2) return;
-        var owner = campaign.NationsByMapIndex().GetValueOrDefault(state.NationMapIndex);
-        if (owner is null) return;
+        if (annual <= 0f || groups.Count < 2) return false;
+        var owner = nationsByMap.GetValueOrDefault(state.NationMapIndex);
+        if (owner is null) return false;
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
         var population = Math.Max(1L, state.Population);
 
-        // A region lists its people a people at a time - a hundred groups, a handful of peoples -
-        // and neighbouring groups hold the very same name object, so a run of them is added up
-        // before the table is asked: two case-blind hashes a run instead of two a group. A people
-        // still enters the table where its first group stands, under that group's own spelling.
-        PeopleHere.Clear();
+        // Fast-path homogeneous regions (all positive groups share the exact same Culture reference):
+        // avoid touching PeopleHere at all when there is no second culture in the state.
         string run = null;
         long runPeople = 0;
-        for (var i = 0; i < groups.Count; i++)
+        var peoplePopulated = false;
+        var count = groups.Count;
+        for (var i = 0; i < count; i++)
         {
             var group = groups[i];
             if (group.Size <= 0 || string.IsNullOrEmpty(group.Culture)) continue;
             if (ReferenceEquals(group.Culture, run)) { runPeople += group.Size; continue; }
             if (run is not null)
-                System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(PeopleHere, run, out _) += runPeople;
+            {
+                if (!peoplePopulated)
+                {
+                    PeopleHere.Clear();
+                    peoplePopulated = true;
+                }
+                CollectionsMarshal.GetValueRefOrAddDefault(PeopleHere, run, out _) += runPeople;
+            }
             run = group.Culture;
             runPeople = group.Size;
         }
+        if (!peoplePopulated) return false;
         if (run is not null)
-            System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(PeopleHere, run, out _) += runPeople;
-        if (PeopleHere.Count < 2) return;
+            CollectionsMarshal.GetValueRefOrAddDefault(PeopleHere, run, out _) += runPeople;
+        if (PeopleHere.Count < 2) return false;
         string majority = null;
         long majorityPeople = 0;
         foreach (var (culture, people) in PeopleHere)
@@ -555,8 +658,6 @@ public static class DemographicCycle
         var policy = NationalModifiers.FactorSlot(owner, NationalModifiers.SlotAssimilation);
 
         // Built for today by the stage, on its own thread, before the regions were handed out.
-        var kinTable = KinCaches.GetValue(campaign, static _ => new KinCache());
-
         string lastCulture = null;
         var stays = false;
         float kin = 1f, size = 1f;
@@ -565,8 +666,8 @@ public static class DemographicCycle
         var religionRead = false;
         var faith = 1f;
         List<PopulationGroup> targetGroups = null;
+        var changed = false;
 
-        var count = groups.Count;
         for (var i = 0; i < count; i++)
         {
             var group = groups[i];
@@ -574,12 +675,14 @@ public static class DemographicCycle
             if (!ReferenceEquals(group.Culture, lastCulture))
             {
                 lastCulture = group.Culture;
-                stays = string.Equals(lastCulture, target, StringComparison.OrdinalIgnoreCase) ||
+                stays = ReferenceEquals(lastCulture, target) ||
+                        string.Equals(lastCulture, target, StringComparison.OrdinalIgnoreCase) ||
                         (ownerPrimary is not null && ownerPrimary.Contains(lastCulture));
                 if (!stays)
                 {
                     var family = DemographyCatalog.Culture(lastCulture)?.Group ?? "";
-                    kin = family.Length > 0 && string.Equals(family, targetFamily, StringComparison.OrdinalIgnoreCase) ? 2f : 1f;
+                    kin = family.Length > 0 && (ReferenceEquals(family, targetFamily) ||
+                        string.Equals(family, targetFamily, StringComparison.OrdinalIgnoreCase)) ? 2f : 1f;
                     size = Math.Clamp(1f - PeopleHere.GetValueOrDefault(lastCulture) / (float)population, 0.2f, 1f);
                     hasKin = HasKinState(campaign, kinTable, owner, lastCulture);
                 }
@@ -597,6 +700,7 @@ public static class DemographicCycle
                 moved = Math.Min(group.Size, group.Size <= 3 ? group.Size : 1L);
             if (moved <= 0) continue;
             group.Size -= moved;
+            changed = true;
             if (targetGroups is null)
             {
                 // Who they join is looked for among the groups already counted under that people
@@ -606,26 +710,32 @@ public static class DemographicCycle
                 targetGroups.Clear();
                 string seen = null;
                 var seenIsTarget = false;
-                foreach (var candidate in groups)
+                for (var ci = 0; ci < count; ci++)
                 {
+                    var candidate = groups[ci];
                     if (candidate.Culture is null) continue;
                     if (!ReferenceEquals(candidate.Culture, seen))
                     {
                         seen = candidate.Culture;
-                        seenIsTarget = string.Equals(seen, target, StringComparison.OrdinalIgnoreCase);
+                        seenIsTarget = ReferenceEquals(seen, target) ||
+                                       string.Equals(seen, target, StringComparison.OrdinalIgnoreCase);
                     }
                     if (seenIsTarget) targetGroups.Add(candidate);
                 }
             }
             Counterpart(groups, targetGroups, group, target).Size += moved;
         }
+        return changed;
     }
 
     private static bool SharesFaith(string religion, IReadOnlyList<(string Religion, float Share)> faiths)
     {
         if (string.IsNullOrEmpty(religion) || faiths.Count == 0) return true;
         for (var i = 0; i < faiths.Count; i++)
-            if (string.Equals(faiths[i].Religion, religion, StringComparison.OrdinalIgnoreCase)) return true;
+        {
+            var r = faiths[i].Religion;
+            if (ReferenceEquals(r, religion) || string.Equals(r, religion, StringComparison.OrdinalIgnoreCase)) return true;
+        }
         return false;
     }
 
@@ -637,10 +747,20 @@ public static class DemographicCycle
     private static PopulationGroup Counterpart(List<PopulationGroup> groups, List<PopulationGroup> ofCulture,
         PopulationGroup like, string culture)
     {
-        foreach (var group in ofCulture)
-            if (string.Equals(group.Religion, like.Religion, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(group.Profession, like.Profession, StringComparison.OrdinalIgnoreCase) &&
-                group.Class == like.Class && group.Sector == like.Sector) return group;
+        // The two integer tests first: they are what most candidates fail on, and asking them
+        // before the two case-blind string comparisons changes nothing about which group is the
+        // first to pass all four. Indexed, so the list's enumerator is not touched per call.
+        var likeClass = like.Class;
+        var likeSector = like.Sector;
+        var likeReligion = like.Religion;
+        var likeProfession = like.Profession;
+        for (var i = 0; i < ofCulture.Count; i++)
+        {
+            var group = ofCulture[i];
+            if (group.Class == likeClass && group.Sector == likeSector &&
+                (ReferenceEquals(group.Religion, likeReligion) || string.Equals(group.Religion, likeReligion, StringComparison.OrdinalIgnoreCase)) &&
+                (ReferenceEquals(group.Profession, likeProfession) || string.Equals(group.Profession, likeProfession, StringComparison.OrdinalIgnoreCase))) return group;
+        }
         var created = new PopulationGroup
         {
             Class = like.Class, Sector = like.Sector, Culture = culture, Religion = like.Religion,

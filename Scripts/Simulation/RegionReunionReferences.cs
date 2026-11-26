@@ -47,6 +47,7 @@ internal static class RegionReunionReferences
                 m.Infiltrated[parent.MapIndex] = m.Infiltrated.GetValueOrDefault(parent.MapIndex) + fighters;
             for (var i = 0; i < m.Homeland.Count; i++)
                 if (m.Homeland[i] == child.Id) m.Homeland[i] = parent.Id;
+            if (m.Exile) Movements.InvalidateExileDefinition(m);
         }
         c.MovementRevision++;
     }

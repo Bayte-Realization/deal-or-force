@@ -46,6 +46,13 @@ public sealed partial class Campaign
     [ThreadStatic] private static long _stageStarted;
     [ThreadStatic] private static long _stepDeadline;
     [ThreadStatic] private static bool _unboundedStep;
+    /// <summary>
+    /// The gate of the campaign whose bounded step this thread is running, or null. Lets
+    /// <see cref="StageOverdue"/> hand the frame back the moment an interactive reader or a
+    /// command writer is waiting. Like every yield, it decides when a frame pauses, never what
+    /// the step does. Not saved.
+    /// </summary>
+    [ThreadStatic] private static CampaignAccessGate _stageAccessGate;
 
     internal static bool IsUnboundedStep => _unboundedStep;
 
@@ -92,6 +99,7 @@ public sealed partial class Campaign
     public static bool StageOverdue()
     {
         if (_unboundedStep) return false;
+        if (_stageAccessGate is { } gate && (gate.HasPriorityReaderRequested || gate.IsReaderStarving || gate.HasWriteWaiter)) return true;
         var now = System.Diagnostics.Stopwatch.GetTimestamp();
         if (_stepDeadline != 0 && now >= _stepDeadline)
         {
@@ -160,8 +168,10 @@ public sealed partial class Campaign
         var startedHours = _stepStartedHours;
         var prevDeadline = _stepDeadline;
         var prevUnbounded = _unboundedStep;
+        var prevGate = _stageAccessGate;
         _stepDeadline = stepDeadline;
         _unboundedStep = !bounded;
+        _stageAccessGate = bounded ? AccessGate : null;
         _runningStages = true;
         try
         {
@@ -169,6 +179,8 @@ public sealed partial class Campaign
             {
                 if (ranAny && bounded)
                 {
+                    // An interactive tap or a command is waiting: hand the gate back now.
+                    if (AccessGate.HasPriorityReaderRequested || AccessGate.HasWriteWaiter) break;
                     var now = System.Diagnostics.Stopwatch.GetTimestamp();
                     if (stepPreEntryCutoff != 0 && now >= stepPreEntryCutoff) break;
                     if (heavyBounded && _heavyNext &&
@@ -181,6 +193,7 @@ public sealed partial class Campaign
                 _stageStarted = heavyBounded ? stageStarted : System.Diagnostics.Stopwatch.GetTimestamp();
                 _heavyNext = false;
                 if (!stages.MoveNext()) { finished = true; break; }
+                if (bounded && (AccessGate.HasPriorityReaderRequested || AccessGate.HasWriteWaiter)) break;
                 // An unbounded step never takes the heavy break. The ceiling is a second
                 // stop only for a call that asked for one.
                 if (bounded && System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds >= milliseconds) break;
@@ -208,6 +221,7 @@ public sealed partial class Campaign
         {
             _stepDeadline = prevDeadline;
             _unboundedStep = prevUnbounded;
+            _stageAccessGate = prevGate;
             _runningStages = false;
             if (finished)
             {
@@ -1196,7 +1210,16 @@ public sealed partial class Campaign
                 }
             }
             yield return 0;
-            using (SimProfiler.Measure("history")) History.Capture(this);
+            using (var history = History.CaptureStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("history")) more = history.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
 
             // Whether any part of any country has finished deciding it is not part of it.
@@ -1385,7 +1408,16 @@ public sealed partial class Campaign
                 }
             }
             yield return 0;
-            using (SimProfiler.Measure("grand projects")) global::DealOrForce.Simulation.GrandProjects.Tick(this);
+            using (var grandProjects = global::DealOrForce.Simulation.GrandProjects.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("grand projects")) more = grandProjects.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             using (var prestige = PrestigeSystem.TickStages(this).GetEnumerator())
             {

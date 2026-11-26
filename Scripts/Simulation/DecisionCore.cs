@@ -218,7 +218,11 @@ public static class DecisionCatalog
         !campaign.FeatureEnabled("decisions") || nation.DecisionAvailableDay.GetValueOrDefault(definition.Id) > campaign.ElapsedDays ||
         nation.Treasury < Cost(nation, definition) ||
         !DecisionResources.CanAfford(nation, definition) ||
-        (definition.Kind == DecisionKind.EmergencyMobilisation && !AtWar(campaign, nation)) ||
+        IsBlockedAfterCost(campaign, nation, definition, nationInWar: null);
+
+    /// <summary>Remaining checks after the cabinet already verified feature, cooldown, cash and resources.</summary>
+    internal static bool IsBlockedAfterCost(Campaign campaign, Nation nation, DecisionDefinition definition, bool? nationInWar) =>
+        (definition.Kind == DecisionKind.EmergencyMobilisation && !(nationInWar ?? AtWar(campaign, nation))) ||
         (definition.Trigger is { IsEmpty: false } && !definition.Trigger.Matches(campaign, nation));
 
     /// <summary>By hand: Wars.Any(lambda) captures the nation and allocates to say so.</summary>
@@ -275,8 +279,11 @@ public sealed class TakeDecisionCommand : ICampaignCommand
                 nation.Stability = M.Clamp01(nation.Stability - 0.025f);
                 nation.WarSupport = M.Clamp01(nation.WarSupport + 0.08f);
                 nation.Gdp *= 0.998f;
-                foreach (var army in campaign.Armies.Where(army => army.NationId == nation.Id))
+                var armies = campaign.Armies;
+                for (var ai = 0; ai < armies.Count; ai++)
                 {
+                    var army = armies[ai];
+                    if (army.NationId != nation.Id) continue;
                     army.Organisation = M.Clamp01(army.Organisation + 0.22f);
                     army.Strength = M.Clamp01(army.Strength + 0.08f);
                 }

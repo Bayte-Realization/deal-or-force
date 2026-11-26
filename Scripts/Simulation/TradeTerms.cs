@@ -397,11 +397,16 @@ public static class TradeTermsCatalog
         Order();
     }
 
-    private static void Order() =>
+    private static void Order()
+    {
         _ordered = Presets.Values.OrderBy(p => p.Order <= 0 ? int.MaxValue : p.Order).ThenBy(p => p.Id, StringComparer.Ordinal).ToArray();
+        _composed = Array.FindAll(_ordered, static p => p.Order > 0);
+    }
+
+    private static TradePreset[] _composed = Array.Empty<TradePreset>();
 
     /// <summary>The presets the computer composes from, in the order it tries them.</summary>
-    public static IEnumerable<TradePreset> Composed => _ordered.Where(p => p.Order > 0);
+    public static IReadOnlyList<TradePreset> Composed => _composed;
 
     /// <summary>
     /// A preset made into terms between a proposer and a partner. The scopes name goods from the
@@ -479,20 +484,36 @@ public static class TradeTermsCatalog
     public static TradeTerms Ordinary(Campaign c, Nation proposer, Nation partner) =>
         Build(c, Find("ordinary"), proposer, partner) ?? TradeTerms.Legacy();
 
+    [ThreadStatic] private static List<(string Id, float Score)> _bestScoredScratch;
+
     /// <summary>
     /// The goods the buyer most needs from the seller, best first: what the buyer lacks against what
     /// the seller can spare, at base price. "Best good" in the presets and in the deal window.
     /// </summary>
     public static string[] Best(Campaign c, Nation buyer, Nation seller, int count)
     {
-        var scored = new List<(string Id, float Score)>();
+        var takeLimit = Math.Max(0, count);
+        if (takeLimit == 0) return Array.Empty<string>();
+        var scored = _bestScoredScratch ??= new List<(string Id, float Score)>(16);
+        scored.Clear();
         foreach (var good in CommodityCatalog.All)
         {
             var score = MathF.Min(Shortfall(buyer, good), Spare(seller, good)) * CommodityCatalog.Get(good).BasePrice;
             if (score > 0.0001f) scored.Add((CommodityCatalog.IdOf(good), score));
         }
-        return scored.OrderByDescending(s => s.Score).ThenBy(s => s.Id, StringComparer.Ordinal)
-            .Take(Math.Max(0, count)).Select(s => s.Id).ToArray();
+        var total = scored.Count;
+        if (total == 0) return Array.Empty<string>();
+        if (total > 1)
+            scored.Sort(static (left, right) =>
+            {
+                var cmp = right.Score.CompareTo(left.Score);
+                return cmp != 0 ? cmp : string.CompareOrdinal(left.Id, right.Id);
+            });
+        var take = Math.Min(takeLimit, total);
+        var result = new string[take];
+        for (var i = 0; i < take; i++) result[i] = scored[i].Id;
+        scored.Clear();
+        return result;
     }
 
     /// <summary>The good a receiver would want guaranteed: the one it is shortest of that the giver can spare.</summary>
@@ -528,7 +549,9 @@ public static class TradeTermsCatalog
     public static float TermFactor(Defines d, int years, bool cost)
     {
         var table = cost ? d.TradeTermCost : d.TradeTermGain;
-        if (table is not { Length: 4 } || table.Any(v => !float.IsFinite(v))) table = cost ? new[] { .8f, 1f, 1.3f, 1.5f } : new[] { .7f, 1f, 1.2f, 1.25f };
+        if (table is not { Length: 4 } || !float.IsFinite(table[0]) || !float.IsFinite(table[1]) ||
+            !float.IsFinite(table[2]) || !float.IsFinite(table[3]))
+            table = cost ? new[] { .8f, 1f, 1.3f, 1.5f } : new[] { .7f, 1f, 1.2f, 1.25f };
         if (years <= 0) return table[3];
         if (years <= 5) return table[0] + (table[1] - table[0]) * (years - 2) / 3f;
         return MathF.Min(table[2], table[1] + (table[2] - table[1]) * (years - 5) / 5f);

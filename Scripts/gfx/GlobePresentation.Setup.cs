@@ -1,17 +1,17 @@
-using static DealOrForce.TerritoryLabelLayout;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Godot;
-using DealOrForce.Simulation;
-using SourceEarthData = DealOrForce.Simulation.WorldMapSource;
-
-namespace DealOrForce;
-
-public sealed partial class GlobePresentation
-{
+using static DealOrForce.TerritoryLabelLayout;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Godot;
+using DealOrForce.Simulation;
+using SourceEarthData = DealOrForce.Simulation.WorldMapSource;
+
+namespace DealOrForce;
+
+public sealed partial class GlobePresentation
+{
     private bool _loadingInputBlocked;
     public bool LoadingInputBlocked
     {
@@ -73,6 +73,7 @@ public sealed partial class GlobePresentation
 
     public void BindCampaign(Simulation.Campaign campaign)
     {
+        CancelPendingMapSelection();
         _campaign = campaign;
         // A mushroom cloud queued by the last world is not this world's weather: the queue is
         // process-wide and a saved day number means nothing under a new calendar.
@@ -220,6 +221,7 @@ public sealed partial class GlobePresentation
         var buildFrontier = FrontierFieldWanted();
         var reducedMap = ReducedMap;
         var lowMemoryMobile = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var compactRivers = lowMemoryMobile || Array.IndexOf(OS.GetCmdlineUserArgs(), "--verify-compact-rivers") >= 0;
         var cacheDir = Path.Combine(GamePaths.Root, "cache");
         var shippedCache = Simulation.GameDataLoader.FindDataFile("cache", Simulation.MapBootCache.FileName);
         var shippedHydrologyCache = Simulation.GameDataLoader.FindDataFile("cache", Simulation.MapBootCache.HydrologyFileName);
@@ -227,7 +229,7 @@ public sealed partial class GlobePresentation
         _mapWorkerStage = "Checking map boot cache";
         _mapWorkerProgress = 42;
         _mapTask = Task.Run(() => BuildPoliticalMap(
-            colors, shades, buildFrontier, reducedMap, lowMemoryMobile, cacheDir, shippedCache, shippedHydrologyCache, shippedPoliticalRasterCache,
+            colors, shades, buildFrontier, reducedMap, lowMemoryMobile, compactRivers, cacheDir, shippedCache, shippedHydrologyCache, shippedPoliticalRasterCache,
             (stage, progress) =>
             {
                 _mapWorkerStage = stage;
@@ -714,4 +716,4 @@ public sealed partial class GlobePresentation
         return node;
     }
 
-}
+}

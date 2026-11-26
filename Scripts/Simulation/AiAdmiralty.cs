@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -137,6 +138,7 @@ public static class AiAdmiralty
             {
                 if (fleet.Mission != FleetMission.Anchored) { SendHome(campaign, fleet); continue; }
                 if (TryLoad(campaign, fleet, nation)) LaunchIfPossible(campaign, fleet, nation, enemy, war);
+                else foreach (var _ in SummonToPortStages(campaign, fleet, nation)) yield return 0;
                 continue;
             }
 
@@ -365,8 +367,6 @@ public static class AiAdmiralty
     /// <summary>Take aboard whatever is standing at the fleet's own port, marines first.</summary>
     private static bool TryLoad(Campaign campaign, Fleet fleet, Nation nation)
     {
-        if (fleet.Mission != FleetMission.Anchored) { SendHome(campaign, fleet); return false; }
-
         Loadable.Clear();
         var capacity = NavalInvasion.Capacity(campaign, fleet);
         var limit = Math.Clamp(Math.Max(campaign.Defines.AiInvasionMaxFormations, (int)MathF.Floor(capacity)), 1, 6);
@@ -377,14 +377,7 @@ public static class AiAdmiralty
             if (!NavalInvasion.CanEmbark(campaign, fleet, army, out _)) continue;
             Loadable.Add(army);
         }
-        if (Loadable.Count == 0)
-        {
-            // Nobody at the quayside. An invasion the AI wants and never mounts because its
-            // divisions are all standing on a front six hundred miles inland is not an AI
-            // with an invasion; so it sends for formations to embark.
-            SummonToPort(campaign, fleet, nation);
-            return false;
-        }
+        if (Loadable.Count == 0) return false;
 
         // Embark amphibious-trained marines and fresh offensive divisions first.
         Loadable.Sort((left, right) =>
@@ -407,22 +400,18 @@ public static class AiAdmiralty
             loadedDivisions += army.Divisions;
             embarked++;
         }
-        if (embarked == 0)
-        {
-            SummonToPort(campaign, fleet, nation);
-            return false;
-        }
-        return true;
+        return embarked > 0;
     }
 
     /// <summary>
     /// March up to a wave's worth of idle / non-front formations (preferring marines) to the
     /// fleet's port, while always keeping a home garrison behind if few divisions remain.
     /// </summary>
-    private static void SummonToPort(Campaign campaign, Fleet fleet, Nation nation)
+    internal static IEnumerable<int> SummonToPortStages(Campaign campaign, Fleet fleet, Nation nation)
     {
         var topology = campaign.ProvinceMap;
-        if (topology is null || fleet.HomeProvinceId <= 0) return;
+        var port = fleet.HomeProvinceId;
+        if (topology is null || port <= 0) yield break;
 
         var capacity = Math.Clamp((int)MathF.Floor(NavalInvasion.Capacity(campaign, fleet)), 1, 4);
         var candidates = new List<(Army Army, float Amphibious, float Distance)>();
@@ -434,26 +423,27 @@ public static class AiAdmiralty
             if (army.TemplateId == MilitiaCore.TemplateId || army.FrontLineId >= 0) continue;
             if (army.Route.Count > 0)
             {
-                if (army.OrderProvinceId == fleet.HomeProvinceId) alreadyHeading++;
+                if (army.OrderProvinceId == port) alreadyHeading++;
                 continue;
             }
             if (army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead or ArmyOrder.DefendFront)
             {
                 if (WalksToFront(campaign, nation, army.AssignedWarId).Contains(army.ProvinceId)) continue;
             }
-            if (army.ProvinceId != fleet.HomeProvinceId && topology.FindRoute(army.ProvinceId,
-                    fleet.HomeProvinceId, (ushort)nation.MapIndex, campaign.ProvinceController).Length == 0) continue;
             var centre = topology.CenterOf(army.ProvinceId);
             var distance = NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude,
                 centre.Latitude, centre.Longitude);
             candidates.Add((army, UnitTypeCatalog.Get(army.TemplateId).Amphibious, distance));
         }
-        if (candidates.Count == 0 || alreadyHeading >= capacity) return;
+        if (candidates.Count == 0 || alreadyHeading >= capacity) yield break;
+        foreach (var _ in PruneUnreachableFromPortStages(topology, campaign.ProvinceController, port, (ushort)nation.MapIndex, candidates))
+            yield return 0;
+        if (candidates.Count == 0) yield break;
 
         // Leave at least 2 divisions on the home landmass when summoning an expeditionary wave.
         var maxSummon = Math.Min(capacity - alreadyHeading, Math.Max(1, candidates.Count - 2));
         if (candidates.Count <= 2) maxSummon = alreadyHeading > 0 ? 0 : 1;
-        if (maxSummon <= 0) return;
+        if (maxSummon <= 0) yield break;
 
         candidates.Sort((left, right) =>
         {
@@ -465,11 +455,64 @@ public static class AiAdmiralty
 
         for (var i = 0; i < maxSummon && i < candidates.Count; i++)
         {
+            if (Campaign.StageOverdue()) yield return 0;
             new MoveArmyCommand
             {
-                IssuerId = nation.Id, ArmyId = candidates[i].Army.Id, TargetProvinceId = fleet.HomeProvinceId
+                IssuerId = nation.Id, ArmyId = candidates[i].Army.Id, TargetProvinceId = port
             }.Apply(campaign);
         }
+    }
+
+    private static IEnumerable<int> PruneUnreachableFromPortStages(ProvinceTopology topology, ushort[] controllers,
+        int port, ushort owner, List<(Army Army, float Amphibious, float Distance)> candidates)
+    {
+        if (!candidates.Exists(candidate => candidate.Army.ProvinceId != port)) yield break;
+        var adjacency = topology.Neighbors;
+        if (port >= adjacency.Length || controllers is null || controllers.Length < adjacency.Length ||
+            controllers[port] != owner || topology.IsWater(port))
+        {
+            candidates.RemoveAll(candidate => candidate.Army.ProvinceId != port);
+            yield break;
+        }
+
+        // Land adjacency and authored crossings go both ways. One traversal answers
+        // every origin; the accepted MoveArmyCommands still choose their own routes.
+        const byte Candidate = 1;
+        const byte Visited = 2;
+        var provinces = ArrayPool<byte>.Shared.Rent(adjacency.Length);
+        try
+        {
+            Array.Clear(provinces, 0, adjacency.Length);
+            provinces[port] = Visited;
+            var remaining = 0;
+            foreach (var candidate in candidates)
+            {
+                var origin = candidate.Army.ProvinceId;
+                if ((uint)origin >= (uint)adjacency.Length || provinces[origin] != 0 ||
+                    controllers[origin] != owner || topology.IsWater(origin)) continue;
+                provinces[origin] = Candidate;
+                remaining++;
+            }
+
+            var frontier = new Queue<int>();
+            frontier.Enqueue(port);
+            var visited = 0;
+            while (remaining > 0 && frontier.TryDequeue(out var province))
+            {
+                foreach (var next in adjacency[province])
+                {
+                    var previous = provinces[next];
+                    if (previous == Visited || controllers[next] != owner || topology.IsWater(next)) continue;
+                    provinces[next] = Visited;
+                    if (previous == Candidate) remaining--;
+                    frontier.Enqueue(next);
+                }
+                if ((++visited & 255) == 0 && Campaign.StageOverdue()) yield return 0;
+            }
+            candidates.RemoveAll(candidate => (uint)candidate.Army.ProvinceId >= (uint)adjacency.Length ||
+                provinces[candidate.Army.ProvinceId] != Visited);
+        }
+        finally { ArrayPool<byte>.Shared.Return(provinces); }
     }
 
     /// <summary>

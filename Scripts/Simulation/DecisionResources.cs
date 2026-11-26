@@ -33,7 +33,7 @@ public static class DecisionResources
         var ordered = new List<DecisionResourceCost>();
         foreach (var key in Order)
             if (values.TryGetValue(key, out var amount) && amount > 0) ordered.Add(new(key, amount));
-        costs = ordered.AsReadOnly();
+        costs = ordered.Count == 0 ? Array.Empty<DecisionResourceCost>() : ordered.ToArray();
         return true;
     }
 
@@ -57,27 +57,38 @@ public static class DecisionResources
 
     public static bool CanAfford(Nation nation, DecisionDefinition decision, bool keepAiReserve = false)
     {
-        foreach (var cost in Of(decision))
+        if (nation is null) return false;
+        var costs = Of(decision);
+        for (var i = 0; i < costs.Count; i++)
         {
+            var cost = costs[i];
             var balance = Balance(nation, cost.Currency);
             if (!float.IsFinite(balance) || balance < cost.Amount) return false;
         }
         if (keepAiReserve && decision.AiResourceReserve is { } reserves)
-            foreach (var item in reserves)
+        {
+            for (var ri = 0; ri < reserves.Count; ri++)
             {
+                var item = reserves[ri];
                 var payment = 0f;
-                foreach (var cost in Of(decision))
+                for (var ci = 0; ci < costs.Count; ci++)
+                {
+                    var cost = costs[ci];
                     if (cost.Currency == item.Currency) { payment = cost.Amount; break; }
+                }
                 var balance = Balance(nation, item.Currency);
                 if (!float.IsFinite(balance) || balance < payment + item.Amount) return false;
             }
-        return nation is not null;
+        }
+        return true;
     }
 
     public static string Refusal(Nation nation, DecisionDefinition decision)
     {
-        foreach (var cost in Of(decision))
+        var costs = Of(decision);
+        for (var i = 0; i < costs.Count; i++)
         {
+            var cost = costs[i];
             var balance = Balance(nation, cost.Currency);
             if (!float.IsFinite(balance) || balance < cost.Amount)
                 return Loc.Format("Insufficient {0}: need {1}, available {2}.", Name(cost.Currency),
@@ -88,8 +99,10 @@ public static class DecisionResources
 
     internal static void Spend(Nation nation, DecisionDefinition decision)
     {
-        foreach (var cost in Of(decision))
+        var costs = Of(decision);
+        for (var i = 0; i < costs.Count; i++)
         {
+            var cost = costs[i];
             var after = MathF.Max(0, Balance(nation, cost.Currency) - cost.Amount);
             switch (cost.Currency)
             {

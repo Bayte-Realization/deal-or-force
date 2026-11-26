@@ -452,6 +452,15 @@ public static class StatePartition
         return ReunifyChanged(campaign, topology);
     }
 
+    [ThreadStatic] private static Dictionary<int, List<ScenarioState>> _reunifyFamilies;
+    [ThreadStatic] private static Stack<List<ScenarioState>> _reunifyChildrenPool;
+    [ThreadStatic] private static HashSet<int> _reunifyNeededRegions;
+    [ThreadStatic] private static Dictionary<int, List<int>> _reunifyProvincesOf;
+    [ThreadStatic] private static Stack<List<int>> _reunifyIntPool;
+    [ThreadStatic] private static List<(ScenarioState State, ushort Owner)> _reunifySurvivors;
+    private static readonly Comparison<ScenarioState> CompareStateByMapIndex =
+        static (a, b) => a.MapIndex.CompareTo(b.MapIndex);
+
     // Keep the slow pass separate: its captured predicates would otherwise allocate
     // a display class even when the public cache guard returned without scanning.
     private static int ReunifyChanged(Campaign campaign, ProvinceTopology topology)
@@ -471,71 +480,121 @@ public static class StatePartition
 
         campaign.ReunifyBlockedPairs.Clear();
 
-        var families = new Dictionary<int, List<ScenarioState>>();
-        foreach (var state in campaign.States)
-        {
-            if (state.ParentMapIndex == 0) continue;
-            if (!families.TryGetValue(state.ParentMapIndex, out var children))
-                families[state.ParentMapIndex] = children = new List<ScenarioState>();
-            children.Add(state);
-        }
-        if (families.Count == 0)
-        {
-            campaign.LastReunifyMapRevision = campaign.MapRevision;
-            campaign.LastReunifyStateCount = campaign.States.Count;
-            return 0;
-        }
-
-        var neededRegions = new HashSet<int>();
-        foreach (var (parentIndex, children) in families)
-        {
-            neededRegions.Add(parentIndex);
-            foreach (var child in children)
-                neededRegions.Add(child.MapIndex);
-        }
-
-        var provincesOf = new Dictionary<int, List<int>>();
-        for (var province = 1; province <= topology.ProvinceCount; province++)
-        {
-            var region = topology.ProvinceToState[province];
-            if (region == 0 || !neededRegions.Contains(region)) continue;
-            if (!provincesOf.TryGetValue(region, out var list)) provincesOf[region] = list = new List<int>();
-            list.Add(province);
-        }
+        var families = _reunifyFamilies ??= new Dictionary<int, List<ScenarioState>>();
+        var childrenPool = _reunifyChildrenPool ??= new Stack<List<ScenarioState>>();
+        var neededRegions = _reunifyNeededRegions ??= new HashSet<int>();
+        var provincesOf = _reunifyProvincesOf ??= new Dictionary<int, List<int>>();
+        var intPool = _reunifyIntPool ??= new Stack<List<int>>();
+        var survivors = _reunifySurvivors ??= new List<(ScenarioState State, ushort Owner)>();
+        families.Clear();
+        neededRegions.Clear();
+        provincesOf.Clear();
+        survivors.Clear();
 
         var merged = 0;
-        foreach (var (parentIndex, children) in families)
+        try
         {
-            var parent = campaign.StateByMapIndex(parentIndex);
-            if (parent is null) continue;
-
-            // Reunion is not all-or-nothing. Orientale may have one recovered piece and
-            // two still abroad: the recovered piece joins home NOW, without taking the
-            // foreign ones with it. Keep the original identity where possible, otherwise
-            // the lowest map id, so peers and repeated loads choose the same survivor.
-            var survivors = new List<(ScenarioState State, ushort Owner)>();
-            foreach (var piece in children.Prepend(parent).OrderBy(s => s == parent ? 0 : 1).ThenBy(s => s.MapIndex))
+            for (var si = 0; si < campaign.States.Count; si++)
             {
-                provincesOf.TryGetValue(piece.MapIndex, out var owned);
-                var owner = owned is { Count: > 0 } ? topology.ProvinceToNation[owned[0]] : (ushort)piece.NationMapIndex;
-                // RepartitionWorld/Annex normally settle this first. Never let an
-                // inconsistent legacy piece silently transfer another country's land.
-                if (owned is not null && owned.Any(p => topology.ProvinceToNation[p] != owner)) continue;
-                var match = survivors.FindIndex(s => s.Owner == owner && MayAbsorb(campaign, s.State, piece));
-                if (match < 0)
+                var state = campaign.States[si];
+                if (state.ParentMapIndex == 0) continue;
+                if (!families.TryGetValue(state.ParentMapIndex, out var children))
                 {
-                    foreach (var blockedSurvivor in survivors)
-                        if (blockedSurvivor.Owner == owner)
-                            campaign.ReunifyBlockedPairs.Add((blockedSurvivor.State, piece));
-                    survivors.Add((piece, owner));
-                    continue;
+                    children = childrenPool.Count > 0 ? childrenPool.Pop() : new List<ScenarioState>();
+                    families[state.ParentMapIndex] = children;
                 }
-                var survivor = survivors[match].State;
-                Absorb(campaign, topology, survivor, piece, provincesOf);
-                survivor.NationMapIndex = owner;
-                survivor.NationId = campaign.NationByMapIndex(owner)?.Tag ?? survivor.NationId;
-                merged++;
+                children.Add(state);
             }
+            if (families.Count == 0)
+            {
+                campaign.LastReunifyMapRevision = campaign.MapRevision;
+                campaign.LastReunifyStateCount = campaign.States.Count;
+                return 0;
+            }
+
+            foreach (var (parentIndex, children) in families)
+            {
+                neededRegions.Add(parentIndex);
+                for (var ci = 0; ci < children.Count; ci++)
+                    neededRegions.Add(children[ci].MapIndex);
+            }
+
+            for (var province = 1; province <= topology.ProvinceCount; province++)
+            {
+                var region = topology.ProvinceToState[province];
+                if (region == 0 || !neededRegions.Contains(region)) continue;
+                if (!provincesOf.TryGetValue(region, out var list))
+                {
+                    list = intPool.Count > 0 ? intPool.Pop() : new List<int>();
+                    provincesOf[region] = list;
+                }
+                list.Add(province);
+            }
+
+            foreach (var (parentIndex, children) in families)
+            {
+                var parent = campaign.StateByMapIndex(parentIndex);
+                if (parent is null) continue;
+
+                // Reunion is not all-or-nothing. Orientale may have one recovered piece and
+                // two still abroad: the recovered piece joins home NOW, without taking the
+                // foreign ones with it. Keep the original identity where possible, otherwise
+                // the lowest map id, so peers and repeated loads choose the same survivor.
+                survivors.Clear();
+                if (children.Count > 1) children.Sort(CompareStateByMapIndex);
+                for (var pi = -1; pi < children.Count; pi++)
+                {
+                    var piece = pi < 0 ? parent : children[pi];
+                    provincesOf.TryGetValue(piece.MapIndex, out var owned);
+                    var owner = owned is { Count: > 0 } ? topology.ProvinceToNation[owned[0]] : (ushort)piece.NationMapIndex;
+                    // RepartitionWorld/Annex normally settle this first. Never let an
+                    // inconsistent legacy piece silently transfer another country's land.
+                    var mixedOwner = false;
+                    if (owned is not null)
+                    {
+                        for (var oi = 0; oi < owned.Count; oi++)
+                        {
+                            if (topology.ProvinceToNation[owned[oi]] != owner) { mixedOwner = true; break; }
+                        }
+                    }
+                    if (mixedOwner) continue;
+                    var match = -1;
+                    for (var sIdx = 0; sIdx < survivors.Count; sIdx++)
+                    {
+                        var candidate = survivors[sIdx];
+                        if (candidate.Owner == owner && MayAbsorb(campaign, candidate.State, piece)) { match = sIdx; break; }
+                    }
+                    if (match < 0)
+                    {
+                        for (var bIdx = 0; bIdx < survivors.Count; bIdx++)
+                            if (survivors[bIdx].Owner == owner) campaign.ReunifyBlockedPairs.Add((survivors[bIdx].State, piece));
+                        survivors.Add((piece, owner));
+                        continue;
+                    }
+                    var survivor = survivors[match].State;
+                    Absorb(campaign, topology, survivor, piece, provincesOf);
+                    survivor.NationMapIndex = owner;
+                    survivor.NationId = campaign.NationByMapIndex(owner)?.Tag ?? survivor.NationId;
+                    merged++;
+                }
+            }
+        }
+        finally
+        {
+            survivors.Clear();
+            neededRegions.Clear();
+            foreach (var list in families.Values)
+            {
+                list.Clear();
+                childrenPool.Push(list);
+            }
+            families.Clear();
+            foreach (var list in provincesOf.Values)
+            {
+                list.Clear();
+                intPool.Push(list);
+            }
+            provincesOf.Clear();
         }
 
         if (merged > 0)
@@ -577,11 +636,17 @@ public static class StatePartition
         ParallelAdministrationFootprint.Merge(campaign, parent, child, parentGround, childGround, parent.Population, child.Population);
         if (provincesOf.TryGetValue(child.MapIndex, out var owned))
         {
-            foreach (var province in owned) topology.ProvinceToState[province] = (ushort)parent.MapIndex;
+            for (var oi = 0; oi < owned.Count; oi++) topology.ProvinceToState[owned[oi]] = (ushort)parent.MapIndex;
             if (!provincesOf.TryGetValue(parent.MapIndex, out var combined))
-                provincesOf[parent.MapIndex] = combined = new List<int>();
+            {
+                var intPool = _reunifyIntPool ??= new Stack<List<int>>();
+                combined = intPool.Count > 0 ? intPool.Pop() : new List<int>();
+                provincesOf[parent.MapIndex] = combined;
+            }
             combined.AddRange(owned);
             provincesOf.Remove(child.MapIndex);
+            owned.Clear();
+            (_reunifyIntPool ??= new Stack<List<int>>()).Push(owned);
             campaign.InvalidateStateIndex();
         }
 

@@ -140,8 +140,10 @@ public static class AirReconnaissance
 
         try
         {
+            var nationsChecked = 0;
             foreach (var (nationId, formations) in c.SupportByNation)
             {
+                if (++nationsChecked % 32 == 0 && Campaign.StageOverdue()) yield return 0;
                 flights.Clear();
                 for (var i = 0; i < formations.Count; i++)
                     if (Flying(c, formations[i], out _)) flights.Add(formations[i]);
@@ -192,6 +194,7 @@ public static class AirReconnaissance
                         if (pLat < globalMinLat || pLat > globalMaxLat) continue;
                         enemyProvs.Add((p, pLat));
                     }
+                    if (Campaign.StageOverdue()) yield return 0;
                 }
                 if (enemyProvs.Count == 0) continue;
                 if (Campaign.StageOverdue()) yield return 0;
@@ -203,18 +206,28 @@ public static class AirReconnaissance
                     var sight = SightKm(c, formation, type);
                     var origin = map.CenterOf(formation.BaseProvinceId);
                     var band = sight / 111f;
+                    var cosLat = MathF.Max(0.15f, MathF.Cos(origin.Latitude * (MathF.PI / 180f)));
+                    var lonBand = band / cosLat + 0.5f;
                     var nearest = -1;
                     var nearestKm = float.MaxValue;
                     for (var i = 0; i < enemyProvs.Count; i++)
                     {
                         var (p, pLat) = enemyProvs[i];
-                        if (MathF.Abs(pLat - origin.Latitude) > band) continue;
-                        var km = SupportCore.DistanceKm(c, formation.BaseProvinceId, p);
-                        if (km <= sight && (km < nearestKm || (km == nearestKm && p < nearest)))
+                        if (MathF.Abs(pLat - origin.Latitude) <= band)
                         {
-                            nearestKm = km;
-                            nearest = p;
+                            var center = map.CenterOf(p);
+                            var dLon = MathF.Abs(center.Longitude - origin.Longitude);
+                            if (dLon <= lonBand || 360f - dLon <= lonBand)
+                            {
+                                var km = SupportCore.DistanceKm(c, formation.BaseProvinceId, p);
+                                if (km <= sight && (km < nearestKm || (km == nearestKm && p < nearest)))
+                                {
+                                    nearestKm = km;
+                                    nearest = p;
+                                }
+                            }
                         }
+                        if ((i & 511) == 511 && Campaign.StageOverdue()) yield return 0;
                     }
                     if (nearest >= 0)
                     {

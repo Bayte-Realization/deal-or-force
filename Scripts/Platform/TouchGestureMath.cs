@@ -70,7 +70,8 @@ public readonly record struct TouchGestureConfig(
         var scale = Math.Clamp(profile.UiScaleFactor, 1.0f, 1.6f);
         return Default with
         {
-            PanDeadzonePx = 12f * scale,
+            PanDeadzonePx = 15f * scale,
+            MaxTapDurationSec = 0.42f,
             LongPressMaxMovePx = 10f * scale,
             PinchMinSpanPx = 24f * scale
         };
@@ -144,6 +145,7 @@ public sealed class TouchGestureMachine
     private float _maxTravelFromStartPx;
 
     private float _prevPinchSpanPx;
+    private float _pinchRefSpanPx;
     private float _prevPinchAngleRad;
     private TouchPoint2D _prevPinchMidpoint;
     private float _pinchAngleAccumulatorRad;
@@ -494,6 +496,7 @@ public sealed class TouchGestureMachine
         _startA = TouchPoint2D.Zero;
         _maxTravelFromStartPx = 0f;
         _prevPinchSpanPx = 0f;
+        _pinchRefSpanPx = 0f;
         _prevPinchAngleRad = 0f;
         _prevPinchMidpoint = TouchPoint2D.Zero;
         _pinchAngleAccumulatorRad = 0f;
@@ -511,6 +514,7 @@ public sealed class TouchGestureMachine
         _panVelocityPxPerSec = TouchPoint2D.Zero;
         _inertiaVelocityPxPerSec = TouchPoint2D.Zero;
         _prevPinchSpanPx = _posA.DistanceTo(_posB);
+        _pinchRefSpanPx = _prevPinchSpanPx;
         _prevPinchMidpoint = TouchPoint2D.Midpoint(_posA, _posB);
         var diff = _posB - _posA;
         _prevPinchAngleRad = MathF.Atan2(diff.Y, diff.X);
@@ -536,18 +540,24 @@ public sealed class TouchGestureMachine
             rawAngleDelta = WrapAngleRadians(currentAngle - _prevPinchAngleRad);
         }
 
-        // Strict pinch anti-drift: during an active zoom (spanRatioDelta >= 0.025), suppress
-        // twist rotation and vertical tilt completely so pinching never drifts the globe.
+        // Strict pinch anti-drift: during an active zoom (per-frame >= 2.5% OR cumulative >= 3%
+        // from the last reset span), suppress twist rotation and vertical tilt completely so smooth
+        // 60-120 Hz pinches with natural thumb arc never drift the globe sideways.
         var midDelta = midpoint - _prevPinchMidpoint;
         var dA = _posA - prevA;
         var dB = _posB - prevB;
+        if (_pinchRefSpanPx < _config.PinchMinSpanPx && currentSpan >= _config.PinchMinSpanPx)
+            _pinchRefSpanPx = currentSpan;
         var spanRatioDelta = MathF.Abs(zoomScale - 1f);
-        var spanStable = spanRatioDelta < _config.PinchSpanStableThreshold;
+        var cumulativeSpanMoved = _pinchRefSpanPx >= _config.PinchMinSpanPx &&
+            MathF.Abs(currentSpan / _pinchRefSpanPx - 1f) >= 0.03f;
+        var spanStable = spanRatioDelta < _config.PinchSpanStableThreshold && !cumulativeSpanMoved;
 
         var rotateDelta = 0f;
         var tiltDelta = 0f;
         if (!spanStable)
         {
+            _pinchRefSpanPx = currentSpan;
             _pinchAngleAccumulatorRad = 0f;
             _pinchRotateUnlocked = false;
             _tiltAccumulatorPx = 0f;

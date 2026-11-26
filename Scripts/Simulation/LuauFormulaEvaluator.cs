@@ -32,9 +32,10 @@ public readonly record struct NationFormulaSnapshot(
         var atWar = 0f;
         if (campaign is not null)
         {
-            for (var i = 0; i < campaign.Wars.Count; i++)
+            var activeWars = campaign.ActiveWarsList;
+            for (var i = 0; i < activeWars.Count; i++)
             {
-                var w = campaign.Wars[i];
+                var w = activeWars[i];
                 if (!w.Ended && w.Involves(nation.Id)) { atWar = 1f; break; }
             }
         }

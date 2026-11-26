@@ -17,8 +17,18 @@ static class SocialMemoryTests
         Check(SocialMemory.Image(a, "nation:unknown") is null && !a.PublicImages.ContainsKey("nation:unknown"), "UI lookups never create beliefs");
         a.Stability = 0.8f; a.StandardOfLiving = 0.8f; a.ShortageIndex = 0f;
         var region = c.StatesOf(a).First(); region.StandardOfLiving = 0.8f; region.Radicalism = 0.1f;
+        var coalition = new Coalition { TargetId = b.Id, FormedDay = 1 };
+        coalition.MemberIds.Add(a.Id);
+        c.Coalitions.Add(coalition);
+        var coalitionKey = SocialMemory.CoalitionKey(coalition);
+        var staleCoalitionKey = SocialMemory.CoalitionKey(new Coalition { TargetId = b.Id, FormedDay = 0 });
+        a.PublicImages[staleCoalitionKey] = new PublicImage();
         Day(7); SocialMemory.Tick(c);
+        Check(a.PublicImages.TryGetValue(coalitionKey, out var currentImage) && currentImage.Target == 0.65f &&
+            !a.PublicImages.ContainsKey(staleCoalitionKey), "organisation review keeps current coalitions and prunes stale ones");
+        c.Coalitions.Remove(coalition);
         Day(3657); SocialMemory.Tick(c);
+        Check(!a.PublicImages.ContainsKey(coalitionKey), "the next review forgets a dissolved coalition");
         Check(a.InstitutionalHabit > 0.65f && region.BorderHabit > 0.5f, "peaceful years establish habits");
         Check(region.BorderHabit > 0.8f, "the world as it was drawn is already an old border");
         Check(SocialMemory.BorderRelief(c, region) <= 0.25f, "old borders never erase all secession pressure");

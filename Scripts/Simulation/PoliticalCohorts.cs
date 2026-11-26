@@ -113,7 +113,8 @@ public static class PoliticalCohorts
     internal static void Review(Campaign c, Nation n, int days, AlienationTable known, int place)
     {
         if (c is null || n is null) return;
-        var validTable = known is not null && known.Holds(place, n, c.StatesOf(n));
+        var states = c.StatesOf(n);
+        var validTable = known is not null && known.Holds(place, n, states);
         if (!(validTable ? known.CohortsOn : On(c, "political_cohorts"))) return;
         var span = Math.Max(0, days);
         var debt = span > 0 && (validTable ? known.IsInDebt(n) : InDebt(c, n));
@@ -125,7 +126,10 @@ public static class PoliticalCohorts
         var shortage = n.ShortageIndex;
         var stability = n.Stability;
         var nationalLiving = n.StandardOfLiving;
-        var states = c.StatesOf(n);
+        var capitalMapIndex = n.CapitalStateMapIndex;
+        var mil = M.Clamp01(n.MilitarySpending * 6f);
+        var taxStress = M.Clamp01((n.TaxRate - 0.22f) * 2.2f);
+        var marketAccess = M.Clamp01(n.MarketAccess);
         var row = validTable ? known.RowOf(place) : -1;
         double moodPeople = 0, moodLaw = 0, moodGov = 0, moodDiv = 0;
         double blocPeople = 0, b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0;
@@ -135,15 +139,18 @@ public static class PoliticalCohorts
             if (state is null || state.Population <= 0) continue;
             var fresh = state.PoliticalDivergence < 0f || state.LawApproval < 0f || state.GovernmentApproval < 0f;
             if (fresh) Seed(n, state);
-            var alienation = row >= 0 ? known.Values[row + index] : StateIdentity.RegionAlienation(c, n, state);
+            var alienation = row >= 0
+                ? known.Values[row + index]
+                : row == -2 ? 0f : StateIdentity.RegionAlienation(c, n, state);
             if (state.PoliticalBlocs is not { Length: 5 })
-                SeedBlocs(n, state, atWar, debt, alienation);
+                SeedBlocs(n, state, atWar, debt, alienation, mil, taxStress, marketAccess);
             if (span > 0 && !fresh)
             {
+                var capital = state.MapIndex == capitalMapIndex;
                 Drift(state, step, debt, losing, recentPolitics, shortage, stability, nationalLiving,
-                    state.MapIndex == n.CapitalStateMapIndex, alienation);
-                DriftBlocs(n, state, blocStep, atWar, losing, debt, shortage, stability, nationalLiving,
-                    state.MapIndex == n.CapitalStateMapIndex, alienation);
+                    capital, alienation);
+                DriftBlocs(state, blocStep, atWar, losing, debt, shortage, stability, nationalLiving,
+                    capital, alienation, mil, taxStress, marketAccess);
             }
             var pop = (double)state.Population;
             if (state.PoliticalDivergence >= 0f)
@@ -229,6 +236,7 @@ public static class PoliticalCohorts
             ClearSummary();
             CohortsOn = On(c, "political_cohorts");
             DebtOn = On(c, "public_debt");
+            var stateIdentityOn = On(c, "state_identity");
             _nations = c.Nations.Count;
             if (_row.Length < _nations)
             {
@@ -250,6 +258,14 @@ public static class PoliticalCohorts
                 _regions[place] = regions;
                 _religion[place] = nation.DeclaredReligion;
                 _culture[place] = nation.DeclaredCulture;
+                var hasIdentity = stateIdentityOn &&
+                    ((!string.IsNullOrWhiteSpace(nation.DeclaredReligion) && !StateIdentity.IsSecular(nation.DeclaredReligion)) ||
+                     !string.IsNullOrWhiteSpace(nation.DeclaredCulture));
+                if (!hasIdentity)
+                {
+                    _row[place] = -2;
+                    continue;
+                }
                 _row[place] = count;
                 if (_owner.Length < count + regions.Length)
                 {
@@ -761,20 +777,19 @@ public static class PoliticalCohorts
         return M.Clamp(raw * 0.55f, 0f, 0.35f);
     }
 
-    private static void ComputeBlocTargets(Nation n, ScenarioState s, bool atWar, bool losing, bool debt,
-        float shortage, float stability, float nationalLiving, bool capital, float alienation, Span<float> target)
+    private static void ComputeBlocTargets(ScenarioState s, bool atWar, bool losing, bool debt,
+        float shortage, float stability, float nationalLiving, bool capital, float alienation,
+        float mil, float taxStress, float marketAccess, Span<float> target)
     {
         var lit = M.Clamp01(s.Literacy);
         var urb = M.Clamp01(s.Urbanization);
         var sol = M.Clamp01(s.StandardOfLiving);
         var rad = M.Clamp01(s.Radicalism);
-        var mil = M.Clamp01(n.MilitarySpending * 6f);
-        var taxStress = M.Clamp01((n.TaxRate - 0.22f) * 2.2f);
         var solGap = MathF.Max(0f, nationalLiving - sol);
 
         var tReform = 0.14f + lit * 0.24f + urb * 0.14f + sol * 0.12f - (atWar ? 0.08f : 0f);
         var tSecurity = 0.12f + mil * 0.22f + (atWar ? 0.20f : 0f) + (losing ? 0.10f : 0f) + rad * 0.08f;
-        var tIndust = 0.14f + urb * 0.22f + M.Clamp01(n.MarketAccess) * 0.14f - taxStress * 0.10f - (debt ? 0.06f : 0f);
+        var tIndust = 0.14f + urb * 0.22f + marketAccess * 0.14f - taxStress * 0.10f - (debt ? 0.06f : 0f);
         var tTrad = 0.14f + (1f - urb) * 0.22f + (1f - lit) * 0.14f + stability * 0.10f;
         var tReg = 0.06f + alienation * 0.34f + solGap * 0.45f + rad * 0.20f + shortage * 0.18f + (debt ? 0.08f : 0f) + taxStress * 0.08f;
         if (capital) tReg *= 0.40f;
@@ -789,23 +804,26 @@ public static class PoliticalCohorts
         for (var i = 0; i < BlocCount; i++) target[i] *= inv;
     }
 
-    private static void SeedBlocs(Nation n, ScenarioState s, bool atWar, bool debt, float alienation)
+    private static void SeedBlocs(Nation n, ScenarioState s, bool atWar, bool debt, float alienation,
+        float mil, float taxStress, float marketAccess)
     {
         Span<float> target = stackalloc float[BlocCount];
-        ComputeBlocTargets(n, s, atWar, false, debt, n.ShortageIndex, n.Stability, n.StandardOfLiving,
-            s.MapIndex == n.CapitalStateMapIndex, alienation, target);
+        ComputeBlocTargets(s, atWar, false, debt, n.ShortageIndex, n.Stability, n.StandardOfLiving,
+            s.MapIndex == n.CapitalStateMapIndex, alienation, mil, taxStress, marketAccess, target);
         var arr = new float[BlocCount];
         for (var i = 0; i < BlocCount; i++) arr[i] = target[i];
         NormalizeBlocs(arr);
         s.PoliticalBlocs = arr;
     }
 
-    private static void DriftBlocs(Nation n, ScenarioState s, float step, bool atWar, bool losing, bool debt,
-        float shortage, float stability, float nationalLiving, bool capital, float alienation)
+    private static void DriftBlocs(ScenarioState s, float step, bool atWar, bool losing, bool debt,
+        float shortage, float stability, float nationalLiving, bool capital, float alienation,
+        float mil, float taxStress, float marketAccess)
     {
         if (step <= 0f || s.PoliticalBlocs is not { Length: BlocCount } blocs) return;
         Span<float> target = stackalloc float[BlocCount];
-        ComputeBlocTargets(n, s, atWar, losing, debt, shortage, stability, nationalLiving, capital, alienation, target);
+        ComputeBlocTargets(s, atWar, losing, debt, shortage, stability, nationalLiving, capital, alienation,
+            mil, taxStress, marketAccess, target);
         for (var i = 0; i < BlocCount; i++)
             blocs[i] = Move(blocs[i], target[i], step);
         NormalizeBlocs(blocs);

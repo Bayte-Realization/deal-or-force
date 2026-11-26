@@ -56,14 +56,56 @@ public static partial class DeterministicParallel
     public static bool TouchCapEnabled { get; set; } = OperatingSystem.IsAndroid();
 
     /// <summary>
-    /// The workers one pass may use: on touch/Android capped to <c>Math.Clamp(cores / 2, 2, 4)</c> to
-    /// keep off slow E-cores; on desktop one fewer than logical processors up to eight, because passes
+    /// The big.LITTLE rule for phones (Galaxy S22 and its kind: one prime core, three big ones and four
+    /// slow Cortex-A510 efficiency cores). A barrier waits for its slowest worker, so extra workers
+    /// landing on efficiency cores make every loop as slow as those cores. When this is on, a pass
+    /// gets at most <c>Math.Clamp(cores / 2, 2, 4)</c> workers (fitting the prime + performance cluster)
+    /// and a loop's minimum item threshold is raised modestly via <see cref="ResolveMinItems"/>
+    /// (<c>Math.Max(minItems, Math.Min(minItems * 2, 24))</c>) so real AI/nation passes still run in
+    /// parallel while tiny 16-item loops stay serial under MonoVM. Pure .NET, no engine type: defaults
+    /// to on for Android. Only the wall time changes - every pass computes by index and merges in
+    /// index order, so the world is the same with it on or off.
+    /// </summary>
+    public static bool MobileBigLittleCap { get; set; } = OperatingSystem.IsAndroid();
+
+    /// <summary>The ceiling used by <see cref="ResolveMinItems"/> when <see cref="MobileBigLittleCap"/> is on.</summary>
+    public const int MobileMinItems = 24;
+
+    /// <summary>The same ceiling, aliased for readability.</summary>
+    public const int MobileMinItemsCap = MobileMinItems;
+
+    /// <summary>
+    /// The workers one pass may use: under <see cref="MobileBigLittleCap"/> the big/prime cores
+    /// (<c>Math.Clamp(cores / 2, 2, 4)</c>); on touch/Android capped to <c>Math.Clamp(cores / 2, 2, 4)</c>
+    /// to keep off slow E-cores; on desktop one fewer than logical processors up to eight, because passes
     /// are memory-bound long before they are core-bound and the ninth worker buys a cache fight rather
     /// than throughput.
     /// </summary>
-    public static int Workers => TouchCapEnabled
+    public static int Workers => MobileBigLittleCap
         ? Math.Clamp(Environment.ProcessorCount / 2, 2, 4)
-        : Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 8));
+        : TouchCapEnabled
+            ? Math.Clamp(Environment.ProcessorCount / 2, 2, 4)
+            : Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 8));
+
+    /// <summary>The item threshold a loop actually uses: the caller's, scaled modestly on a phone.</summary>
+    internal static int EffectiveMinItems(int minItems) => ResolveMinItems(minItems, MobileBigLittleCap);
+
+    internal static int ResolveMinItems(int minItems, bool mobileCap) =>
+        mobileCap ? Math.Max(minItems, Math.Min(minItems * 2, MobileMinItemsCap)) : minItems;
+
+    /// <summary>
+    /// How many workers a loop of <paramref name="itemCount"/> items would be spread over, as a pure
+    /// function of its inputs - 1 means it runs on the calling thread. For tests and probes; the loops
+    /// themselves also honour <see cref="ForceSerial"/>, the environment switch and the lease.
+    /// </summary>
+    internal static int ResolveWorkerCount(int itemCount, int minItems, bool mobileCap, int processorCount)
+    {
+        if (itemCount <= 0 || itemCount < ResolveMinItems(minItems, mobileCap)) return 1;
+        var workers = mobileCap
+            ? Math.Clamp(processorCount / 2, 2, 4)
+            : Math.Max(1, Math.Min(processorCount - 1, 8));
+        return Math.Max(1, Math.Min(workers, Math.Max(1, processorCount)));
+    }
 
     /// <summary>
     /// <c>BDOF_NO_PARALLEL=1</c> in the environment keeps every loop on the calling thread.
@@ -136,7 +178,7 @@ public static partial class DeterministicParallel
         var count = toExclusive - from;
         if (count <= 0) return false;
 
-        if (!allowed || count < minItems || !TryLease())
+        if (!allowed || count < EffectiveMinItems(minItems) || !TryLease())
         {
             Interlocked.Increment(ref _serialRuns);
             for (var index = from; index < toExclusive; index++) body(index);
@@ -222,7 +264,7 @@ public static partial class DeterministicParallel
         if (count > slots.Length)
             throw new ArgumentException("the slot array is shorter than the count", nameof(slots));
 
-        if (!allowed || count < minItems || !TryLease())
+        if (!allowed || count < EffectiveMinItems(minItems) || !TryLease())
         {
             Interlocked.Increment(ref _serialRuns);
             for (var index = 0; index < count; index++) apply(index, compute(index));

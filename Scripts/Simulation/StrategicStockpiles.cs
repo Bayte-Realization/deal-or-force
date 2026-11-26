@@ -457,7 +457,7 @@ public static class StrategicStockpiles
         var allArmies = campaign.Armies;
         for (var ai = 0; ai < allArmies.Count; ai++)
         {
-            if (++scanned % 2048 == 0 && Campaign.StageOverdue()) yield return 0;
+            if (++scanned % 1024 == 0 && Campaign.StageOverdue()) yield return 0;
             var army = allArmies[ai];
             var nid = army.NationId;
             if ((uint)nid < (uint)denseLen)
@@ -534,7 +534,7 @@ public static class StrategicStockpiles
         for (var ni = 0; ni < activeNations.Count; ni++)
         {
             var nation = activeNations[ni];
-            if (++ticked % 32 == 0 && Campaign.StageOverdue()) yield return 0;
+            if (++ticked % 8 == 0 && Campaign.StageOverdue()) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null) continue;
             if (!nation.StockpilesSeeded) EnsureSeeded(campaign, nation);
             else EnsureArsenal(campaign, nation);

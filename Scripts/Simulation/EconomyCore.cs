@@ -1242,6 +1242,7 @@ public static class EconomySystem
         UpdateNationGdpFromProduction(campaign, nation);
 
         var focusRadicalism = cabinet.Radicalism + government.Radicalism + ideology.Radicalism;
+        var cycleRadicalism = (macroWave < -0.15f ? (-macroWave - 0.15f) * 0.0022f : 0f) + sclerosis * 0.0010f;
         var foodSupply = nation.Market.TryGetValue(Commodity.Food, out var fq) ? Math.Clamp(fq.Satisfaction, 0f, 1f) : 1f;
         var medSupply = nation.Market.TryGetValue(Commodity.Pharmaceuticals, out var mq) ? Math.Clamp(mq.Satisfaction, 0f, 1f) : 1f;
         var energySupplyClamped = Math.Clamp(energySupply, 0f, 1f);
@@ -1250,7 +1251,7 @@ public static class EconomySystem
         prepList.Add(new EconomyNationPrep(
             nation, states, conditions, atWar,
             budget.Radicalism, focusRadicalism, foodSupply, energySupplyClamped, medSupply,
-            cabinet, government, ideology, budget.Living, budget.Stability, mismatch));
+            cabinet, government, ideology, budget.Living, budget.Stability, mismatch, cycleRadicalism));
         for (var s = 0; s < states.Length; s++)
             workList.Add((prepIdx, states[s]));
     }
@@ -1329,7 +1330,8 @@ public static class EconomySystem
         IdeologyDefinition Ideology,
         float BudgetLiving,
         float BudgetStability,
-        float Mismatch);
+        float Mismatch,
+        float CycleRadicalism);
 
     private static void FlushEconomyBatch(Campaign campaign, HeapPooledList<EconomyNationPrep> preps,
         HeapPooledList<(int PrepIndex, ScenarioState State)> work)
@@ -1347,7 +1349,7 @@ public static class EconomySystem
                         var (prepIdx, state) = work[i];
                         var p = preps[prepIdx];
                         WeekState(campaign, p.Nation, p.AnnualGrowth, p.AtWar,
-                            p.WelfareRadicalism, p.FocusRadicalism, p.FoodSupply, p.EnergySupply, p.MedSupply, state);
+                            p.WelfareRadicalism, p.FocusRadicalism, p.FoodSupply, p.EnergySupply, p.MedSupply, p.CycleRadicalism, state);
                     }
                 }, minItems: FlatStateParallelMin);
             }
@@ -1358,7 +1360,7 @@ public static class EconomySystem
                     var (prepIdx, state) = work[i];
                     var p = preps[prepIdx];
                     WeekState(campaign, p.Nation, p.AnnualGrowth, p.AtWar,
-                        p.WelfareRadicalism, p.FocusRadicalism, p.FoodSupply, p.EnergySupply, p.MedSupply, state);
+                        p.WelfareRadicalism, p.FocusRadicalism, p.FoodSupply, p.EnergySupply, p.MedSupply, p.CycleRadicalism, state);
                 }
             }
 
@@ -1410,20 +1412,23 @@ public static class EconomySystem
             nation.StabilityBias = 0.12f + (nation.StabilityBias - 0.12f) * 0.999f;
         else if (nation.StabilityBias < -0.10f)
             nation.StabilityBias = -0.10f + (nation.StabilityBias + 0.10f) * 0.999f;
-        var settledStability = StabilityCore.Target(campaign, nation, nation.StabilityDrivers);
+        var settledStability = StabilityCore.Target(campaign, nation, nation.IsHuman ? nation.StabilityDrivers : null);
         nation.Stability = M.Lerp(nation.Stability, settledStability, M.Clamp01(StabilityCore.Weights.Approach));
 
         var focusWarSupport = p.Cabinet.WarSupport + p.Government.WarSupport + p.Ideology.WarSupport;
         var settledWarSupport = M.Clamp01(nation.WarSupport + focusWarSupport);
-        nation.WarSupportDrivers.Begin("War support, weekly", "share");
-        nation.WarSupportDrivers.Add("Government focus on national security", focusWarSupport);
-        nation.WarSupportDrivers.Settle(settledWarSupport - nation.WarSupport, "held at its limit");
+        if (nation.IsHuman)
+        {
+            nation.WarSupportDrivers.Begin("War support, weekly", "share");
+            nation.WarSupportDrivers.Add("Government focus on national security", focusWarSupport);
+            nation.WarSupportDrivers.Settle(settledWarSupport - nation.WarSupport, "held at its limit");
+        }
         nation.WarSupport = settledWarSupport;
     }
 
     private static void WeekState(Campaign campaign, Nation nation, float annualGrowth, bool atWar,
         float welfareRadicalism, float focusRadicalism, float foodSupply, float energySupply, float medicineSupply,
-        ScenarioState state)
+        float cycleRadicalism, ScenarioState state)
     {
         if (campaign.Defines.HouseholdDynamicsEnabled)
             HouseholdEconomy.ReviewFast(campaign, nation, state, annualGrowth, foodSupply, energySupply, medicineSupply, atWar);
@@ -1434,9 +1439,6 @@ public static class EconomySystem
             AdjustStatePopulation(state, (long)Math.Round(state.Population * weeklyGrowth));
         }
         state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
-        var macroWave = GeopoliticalCycle.MacroEconomicWave(campaign, nation);
-        var sclerosis = GeopoliticalCycle.InstitutionalSclerosis(campaign, nation);
-        var cycleRadicalism = (macroWave < -0.15f ? (-macroWave - 0.15f) * 0.0022f : 0f) + sclerosis * 0.0010f;
         state.Radicalism = M.Clamp01(state.Radicalism +
             RadicalismCore.WeeklyChange(campaign, nation, state, atWar, welfareRadicalism, focusRadicalism) +
             cycleRadicalism);

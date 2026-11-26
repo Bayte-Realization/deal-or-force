@@ -167,7 +167,7 @@ public static class Attrition
         // Sending home the prisoners of a war that has ended is the same kind of thing.
         if (campaign.StepOpensNewDay)
         {
-            RebuildTheLost(campaign);
+            foreach (var _ in RebuildTheLostStages(campaign)) yield return 0;
             yield return 0;
             WarLosses.Repatriate(campaign);
         }
@@ -284,8 +284,10 @@ public static class Attrition
     {
         yield return 0;
 
-        foreach (var army in Broken)
+        for (var bi = 0; bi < Broken.Count; bi++)
         {
+            if (bi > 0 && bi % 8 == 0 && Campaign.StageOverdue()) yield return 0;
+            var army = Broken[bi];
             // Three ways to be here, and they are three different stories. A pocket ground
             // down in a battle was taken: what is left of it are the other side's prisoners.
             // A pocket nobody was attacking cannot have starved to this - hunger stops at its
@@ -330,13 +332,16 @@ public static class Attrition
         // The battle it was standing in, and the line it was posted to, both hold its id
         // rather than the formation itself. A dangling id is harmless where it is read -
         // the lookup simply misses - but leaving it would put it in a save, so it goes.
-        foreach (var battle in campaign.Battles)
+        var battles = campaign.Battles;
+        for (var i = 0; i < battles.Count; i++)
         {
+            var battle = battles[i];
             if (battle.Ended) continue;
             battle.Attackers.Remove(army.Id);
             battle.Defenders.Remove(army.Id);
         }
-        foreach (var line in campaign.FrontLines) line.Posts.Remove(army.Id);
+        var lines = campaign.FrontLines;
+        for (var i = 0; i < lines.Count; i++) lines[i].Posts.Remove(army.Id);
 
         // The same tally the rest of warfare reports through, so the bench and the in-game
         // console say this out loud rather than leaving a formation to quietly vanish from
@@ -410,18 +415,31 @@ public static class Attrition
     /// </summary>
     private static void RebuildTheLost(Campaign campaign)
     {
+        foreach (var _ in RebuildTheLostStages(campaign)) { }
+    }
+
+    private static IEnumerable<int> RebuildTheLostStages(Campaign campaign)
+    {
         var defines = campaign.Defines;
 
         // Every country's army, counted in one pass over the divisions rather than one pass
         // per country. The difference is three hundred thousand steps a day against thirteen
         // hundred, for the same answer.
         Standing.Clear();
-        foreach (var army in campaign.Armies)
-            Standing[army.NationId] = Standing.GetValueOrDefault(army.NationId) + army.Divisions;
-
-        foreach (var nation in campaign.ActiveNations)
+        var armies = campaign.Armies;
+        for (var i = 0; i < armies.Count; i++)
         {
+            var army = armies[i];
+            Standing[army.NationId] = Standing.GetValueOrDefault(army.NationId) + army.Divisions;
+        }
+
+        var active = campaign.ActiveNations;
+        var checkedCount = 0;
+        for (var ni = 0; ni < active.Count; ni++)
+        {
+            var nation = active[ni];
             if (nation.Population <= 0) continue;
+            if (++checkedCount % 16 == 0 && Campaign.StageOverdue()) yield return 0;
             var strength = Standing.GetValueOrDefault(nation.Id);
 
             // What it began with, learned on first sight and never changed after.

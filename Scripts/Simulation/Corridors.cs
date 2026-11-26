@@ -278,17 +278,17 @@ public static partial class Corridors
     public static List<int> Corridor(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main) =>
         FillCorridor(c, nation, piece, main, null);
 
+    [ThreadStatic] private static CorridorBfsState _corrBfsScratch;
+
     private static List<int> FillCorridor(Campaign c, Nation nation, HashSet<int> piece, HashSet<int> main, List<int> buffer)
     {
         var path = buffer ?? new List<int>();
-        var state = new CorridorBfsState
-        {
-            StampArray = _corrStampArray,
-            Cost = _corrCost,
-            From = _corrFrom,
-            Deque = _corrDeque,
-            Stamp = _corrStamp
-        };
+        var state = _corrBfsScratch ??= new CorridorBfsState();
+        state.StampArray = _corrStampArray;
+        state.Cost = _corrCost;
+        state.From = _corrFrom;
+        state.Deque = _corrDeque;
+        state.Stamp = _corrStamp;
         foreach (var _ in FillCorridorStages(c, nation, piece, main, state, path, yieldable: false)) { }
         _corrStampArray = state.StampArray;
         _corrCost = state.Cost;
@@ -729,6 +729,17 @@ public static partial class Corridors
         if (cache.States.Length != map.ProvinceToState.Length) cache.States = new ushort[map.ProvinceToState.Length];
         Array.Copy(map.ProvinceToState, cache.States, map.ProvinceToState.Length);
         cache.Pores.Clear();
+        foreach (var existingList in cache.Components.Values)
+        {
+            for (var ci = 0; ci < existingList.Count; ci++)
+            {
+                var hs = existingList[ci];
+                hs.Clear();
+                cache.ClusterPool.Add(hs);
+            }
+            existingList.Clear();
+            cache.ComponentListPool.Add(existingList);
+        }
         cache.Components.Clear();
         cache.FirstProvince.Clear();
         cache.OwnerStateCounts.Clear();
@@ -747,7 +758,18 @@ public static partial class Corridors
             if (seen[start] || map.IsWater(start)) continue;
             var owner = cache.Owners[start];
             if (owner == 0) { seen[start] = true; continue; }
-            var cluster = new HashSet<int>();
+            HashSet<int> cluster;
+            var clusterPool = cache.ClusterPool;
+            if (clusterPool.Count > 0)
+            {
+                var last = clusterPool.Count - 1;
+                cluster = clusterPool[last];
+                clusterPool.RemoveAt(last);
+            }
+            else
+            {
+                cluster = new HashSet<int>();
+            }
             rim.Clear();
             var open = false;
             queue.Clear();
@@ -782,7 +804,20 @@ public static partial class Corridors
                 if ((++workSinceYield & 127) == 0 && Campaign.StageOverdue()) yield return 0;
             }
             if (!cache.Components.TryGetValue(owner, out var list))
-                cache.Components[owner] = list = new List<HashSet<int>>();
+            {
+                var listPool = cache.ComponentListPool;
+                if (listPool.Count > 0)
+                {
+                    var last = listPool.Count - 1;
+                    list = listPool[last];
+                    listPool.RemoveAt(last);
+                }
+                else
+                {
+                    list = new List<HashSet<int>>();
+                }
+                cache.Components[owner] = list;
+            }
             list.Add(cluster);
             if (open || cluster.Count == 0 || cluster.Count > limit || rim.Count != 1) continue;
             var surrounder = 0;
@@ -949,7 +984,17 @@ public static partial class Corridors
         return new CutOffReport(piece.Count, name, path.Count, paying, true, "");
     }
 
-    private static string Key(Nation other) => "corridor/" + other.Id;
+    private static readonly string[] CorridorKeys = BuildCorridorKeys(384);
+
+    private static string[] BuildCorridorKeys(int count)
+    {
+        var keys = new string[count];
+        for (var i = 0; i < count; i++) keys[i] = "corridor/" + i;
+        return keys;
+    }
+
+    private static string Key(Nation other) =>
+        (uint)other.Id < (uint)CorridorKeys.Length ? CorridorKeys[other.Id] : "corridor/" + other.Id;
 
     private static bool Approachable(Campaign c, Nation nation, Nation other)
     {

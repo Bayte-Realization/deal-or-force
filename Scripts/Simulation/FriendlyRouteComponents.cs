@@ -10,34 +10,44 @@ namespace DealOrForce.Simulation;
 internal sealed class FriendlyRouteComponents : IDisposable
 {
     private int[] _parent;
-    private readonly int _length;
+    private int _length;
 
-    internal FriendlyRouteComponents(ProvinceTopology map, ushort[] controllers, IReadOnlySet<ushort> allowed)
+    internal FriendlyRouteComponents(ProvinceTopology map, ushort[] controllers, IReadOnlySet<ushort> allowed) =>
+        Rebuild(map, controllers, allowed);
+
+    internal void Rebuild(ProvinceTopology map, ushort[] controllers, IReadOnlySet<ushort> allowed)
     {
-        _length = map?.Neighbors?.Length ?? 0;
-        if (_length == 0 || controllers is null || controllers.Length < _length || allowed is null) return;
-        using var measured = SimProfiler.Measure("          disengage:components");
-        var parent = ArrayPool<int>.Shared.Rent(_length);
-        try
+        var nextLength = map?.Neighbors?.Length ?? 0;
+        if (nextLength == 0 || controllers is null || controllers.Length < nextLength || allowed is null)
         {
-            Array.Clear(parent, 0, _length);
-            for (var p = 1; p < _length; p++)
-                if (!map.IsWater(p) && allowed.Contains(controllers[p])) parent[p] = p;
-            for (var p = 1; p < _length; p++)
-            {
-                if (parent[p] == 0) continue;
-                foreach (var next in map.Neighbors[p])
-                {
-                    if (next <= 0 || next >= _length || parent[next] == 0) continue;
-                    var a = Root(parent, p); var b = Root(parent, next);
-                    if (a != b) parent[Math.Max(a, b)] = Math.Min(a, b);
-                }
-            }
-            for (var p = 1; p < _length; p++)
-                if (parent[p] != 0) parent[p] = Root(parent, p);
-            _parent = parent;
+            _length = 0;
+            return;
         }
-        catch { ArrayPool<int>.Shared.Return(parent); throw; }
+        using var measured = SimProfiler.Measure("          disengage:components");
+        if (_parent is null || _parent.Length < nextLength)
+        {
+            var old = _parent;
+            _parent = null;
+            if (old is not null) ArrayPool<int>.Shared.Return(old);
+            _parent = ArrayPool<int>.Shared.Rent(nextLength);
+        }
+        _length = nextLength;
+        var parent = _parent;
+        Array.Clear(parent, 0, nextLength);
+        for (var p = 1; p < nextLength; p++)
+            if (!map.IsWater(p) && allowed.Contains(controllers[p])) parent[p] = p;
+        for (var p = 1; p < nextLength; p++)
+        {
+            if (parent[p] == 0) continue;
+            foreach (var next in map.Neighbors[p])
+            {
+                if (next <= 0 || next >= nextLength || parent[next] == 0) continue;
+                var a = Root(parent, p); var b = Root(parent, next);
+                if (a != b) parent[Math.Max(a, b)] = Math.Min(a, b);
+            }
+        }
+        for (var p = 1; p < nextLength; p++)
+            if (parent[p] != 0) parent[p] = Root(parent, p);
     }
 
     private static int Root(int[] parent, int p)

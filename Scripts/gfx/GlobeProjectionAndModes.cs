@@ -135,6 +135,25 @@ public sealed partial class GlobePresentation
         ClampFlatCamera();
     }
 
+    /// <summary>
+    /// Direct 1:1 multiplicative flat-map pinch zoom anchored at the 2-finger midpoint.
+    /// Applies target and current camera state together so continuous touch frames never
+    /// sample from a lagging lerp and slide sideways.
+    /// </summary>
+    private void PinchZoomFlatMapAt(Vector2 pixel, float scaleFactor)
+    {
+        var worldAnchor = new Vector2(_flatX, _flatY) + FlatPointerOffset(pixel) * _flatZoom;
+        var newZoom = Mathf.Clamp(_flatZoom / Math.Max(0.1f, scaleFactor), MinimumFlatZoom, MaximumFlatZoom);
+        var center = worldAnchor - FlatPointerOffset(pixel) * newZoom;
+        _flatZoom = _targetFlatZoom = newZoom;
+        _flatX = _targetFlatX = center.X;
+        _flatY = _targetFlatY = center.Y;
+        _flatZoomAnchorActive = false;
+        ClampFlatCamera();
+        _flatX = _targetFlatX;
+        _flatY = _targetFlatY;
+    }
+
     private void UpdateFlatZoomAnchor()
     {
         if (!_flatMap || !_flatZoomAnchorActive) return;

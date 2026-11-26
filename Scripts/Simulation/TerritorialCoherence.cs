@@ -112,32 +112,99 @@ public static class TerritorialCoherence
             ? next.Keys.OrderBy(id => id) : Enumerable.Empty<int>();
     }
 
+    private sealed class PenaltyScratch
+    {
+        public readonly HashSet<int> Gains = new();
+        public readonly HashSet<int> Yields = new();
+        public readonly HashSet<int> Before = new();
+        public readonly HashSet<int> After = new();
+        public readonly HashSet<int> Titled = new();
+        public readonly HashSet<int> Unseen = new();
+        public readonly Queue<int> Queue = new();
+    }
+
+    [ThreadStatic] private static PenaltyScratch _penaltyScratch;
+
     /// <summary>Loss of utility from the complete territorial package, not a region-at-a-time preview.</summary>
     public static float Penalty(Campaign c, Nation nation, IEnumerable<int> gain, IEnumerable<int> yield)
     {
-        var gains = (gain ?? Array.Empty<int>()).ToHashSet();
-        var yields = (yield ?? Array.Empty<int>()).ToHashSet();
-        if (c?.ProvinceMap is null || nation is null || gains.Count + yields.Count == 0) return 0;
-        var neighbours = Ensure(c).Neighbours;
-        var before = c.States.Where(s => s.NationMapIndex == nation.MapIndex && neighbours.ContainsKey(s.MapIndex))
-            .Select(s => s.MapIndex).ToHashSet();
-        var after = before.Except(yields).Concat(gains.Where(neighbours.ContainsKey)).ToHashSet();
-        var oldParts = Components(neighbours, before);
-        var newParts = Components(neighbours, after);
-        var newFragments = Math.Max(0, newParts.Count - oldParts.Count);
-        // A package restoring a genuine historical home may reconnect it in a later war.
-        // A remote office or diplomatic invitation is not a historical title.
-        var titled = gains.Where(id => c.States.Find(s => s.MapIndex == id) is { } s &&
-            TerritorialClaims.TitleOf(c, nation, s) == TerritorialTitle.Homeland).ToHashSet();
-        var legitimateRemoteParts = newParts.Count(part => !part.Overlaps(before) && part.Overlaps(titled));
-        newFragments = Math.Max(0, newFragments - legitimateRemoteParts);
-        var detached = newParts.Where(part => !part.Overlaps(before) && !part.Overlaps(titled)).Sum(part => part.Count);
+        if (c?.ProvinceMap is null || nation is null) return 0f;
+        var scratch = _penaltyScratch ??= new PenaltyScratch();
+        var gains = scratch.Gains;
+        var yields = scratch.Yields;
+        gains.Clear();
+        yields.Clear();
+        if (gain is int[] gainArr)
+        {
+            for (var i = 0; i < gainArr.Length; i++) gains.Add(gainArr[i]);
+        }
+        else if (gain is not null)
+        {
+            foreach (var id in gain) gains.Add(id);
+        }
+        if (yield is int[] yieldArr)
+        {
+            for (var i = 0; i < yieldArr.Length; i++) yields.Add(yieldArr[i]);
+        }
+        else if (yield is not null)
+        {
+            foreach (var id in yield) yields.Add(id);
+        }
+        if (gains.Count + yields.Count == 0) return 0f;
+
+        var board = Ensure(c);
+        var neighbours = board.Neighbours;
+        var before = scratch.Before;
+        before.Clear();
+        if (board.OwnedRegions.TryGetValue(nation.MapIndex, out var owned))
+        {
+            foreach (var r in owned)
+                if (neighbours.ContainsKey(r)) before.Add(r);
+        }
+        else
+        {
+            var states = c.StatesOf(nation);
+            for (var i = 0; i < states.Length; i++)
+            {
+                var r = states[i].MapIndex;
+                if (neighbours.ContainsKey(r)) before.Add(r);
+            }
+        }
+
+        var after = scratch.After;
+        after.Clear();
+        foreach (var r in before)
+            if (!yields.Contains(r)) after.Add(r);
+        foreach (var r in gains)
+            if (neighbours.ContainsKey(r)) after.Add(r);
+
+        var titled = scratch.Titled;
+        titled.Clear();
+        foreach (var id in gains)
+        {
+            var st = c.StateByMapIndex(id);
+            if (st is not null && TerritorialClaims.TitleOf(c, nation, st) == TerritorialTitle.Homeland)
+                titled.Add(id);
+        }
+
+        var unseen = scratch.Unseen;
+        var queue = scratch.Queue;
+        var oldParts = CountComponents(neighbours, before, unseen, queue, null, null, out _, out _);
+        var newParts = CountComponents(neighbours, after, unseen, queue, before, titled,
+            out var legitimateRemoteParts, out var detached);
+        var newFragments = Math.Max(0, newParts - oldParts - legitimateRemoteParts);
+
         var salient = 0f;
         foreach (var id in gains)
         {
             if (titled.Contains(id) || !neighbours.TryGetValue(id, out var next)) continue;
-            var total = next.Values.Sum();
-            var contact = next.Where(e => after.Contains(e.Key)).Sum(e => e.Value);
+            var total = 0;
+            var contact = 0;
+            foreach (var e in next)
+            {
+                total += e.Value;
+                if (after.Contains(e.Key)) contact += e.Value;
+            }
             // Filling a corner or a hole costs nothing; a thin spur has a real carrying cost.
             if (total > 0) salient += Math.Max(0, 1f - 2f * contact / total);
         }
@@ -148,23 +215,45 @@ public static class TerritorialCoherence
 
     private static float Weight(float value) => float.IsFinite(value) ? Math.Clamp(value, 0, 1000) : 0;
 
-    private static List<HashSet<int>> Components(Dictionary<int, Dictionary<int, int>> neighbours, HashSet<int> regions)
+    private static int CountComponents(Dictionary<int, Dictionary<int, int>> neighbours, HashSet<int> regions,
+        HashSet<int> unseen, Queue<int> queue, HashSet<int> before, HashSet<int> titled,
+        out int legitimateRemoteParts, out int detached)
     {
-        var unseen = new HashSet<int>(regions);
-        var result = new List<HashSet<int>>();
+        legitimateRemoteParts = 0;
+        detached = 0;
+        if (regions.Count == 0) return 0;
+        unseen.Clear();
+        foreach (var r in regions) unseen.Add(r);
+        var components = 0;
         while (unseen.Count > 0)
         {
-            var start = unseen.First(); unseen.Remove(start);
-            var part = new HashSet<int> { start };
-            var queue = new Queue<int>(); queue.Enqueue(start);
+            var start = 0;
+            foreach (var candidate in unseen) { start = candidate; break; }
+            unseen.Remove(start);
+            queue.Clear();
+            queue.Enqueue(start);
+            var size = 1;
+            var touchesBefore = before is not null && before.Contains(start);
+            var touchesTitled = titled is not null && titled.Contains(start);
             while (queue.Count > 0)
             {
                 if (!neighbours.TryGetValue(queue.Dequeue(), out var next)) continue;
                 foreach (var neighbour in next.Keys)
-                    if (unseen.Remove(neighbour)) { part.Add(neighbour); queue.Enqueue(neighbour); }
+                {
+                    if (!unseen.Remove(neighbour)) continue;
+                    size++;
+                    if (before is not null && !touchesBefore && before.Contains(neighbour)) touchesBefore = true;
+                    if (titled is not null && !touchesTitled && titled.Contains(neighbour)) touchesTitled = true;
+                    queue.Enqueue(neighbour);
+                }
             }
-            result.Add(part);
+            components++;
+            if (before is not null && !touchesBefore)
+            {
+                if (touchesTitled) legitimateRemoteParts++;
+                else detached += size;
+            }
         }
-        return result;
+        return components;
     }
 }

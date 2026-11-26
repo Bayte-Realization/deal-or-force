@@ -203,37 +203,33 @@ public static class FormableProclamationAi
     /// Every identity this AI may proclaim, in catalogue order - the same list for every country
     /// reviewed today, so it is built once instead of sorted once per country.
     /// </summary>
-    public static FormableNation[] ProclamationCatalogue(Campaign campaign) =>
-        FormableNations.AvailableIn(campaign).Where(d => d.AiFoundation)
-            .OrderBy(d => d.Id, StringComparer.Ordinal).ToArray();
+    [ThreadStatic] private static List<FormableNation> _catalogueScratch;
+
+    public static FormableNation[] ProclamationCatalogue(Campaign campaign)
+    {
+        var list = _catalogueScratch ??= new List<FormableNation>(128);
+        list.Clear();
+        var baseCatalogue = FormableNations.AllList;
+        for (var i = 0; i < baseCatalogue.Count; i++)
+        {
+            var d = baseCatalogue[i];
+            if (d.AiFoundation) list.Add(d);
+        }
+        var restorations = FormableRestorations.In(campaign);
+        for (var i = 0; i < restorations.Count; i++)
+        {
+            var d = restorations[i];
+            if (d.AiFoundation) list.Add(d);
+        }
+        list.Sort(static (a, b) => string.CompareOrdinal(a.Id, b.Id));
+        var result = list.ToArray();
+        list.Clear();
+        return result;
+    }
 
     public static FormableAiAssessment Choose(Campaign campaign, Nation nation, IReadOnlyList<FormableNation> catalogue)
     {
-        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || nation is null || HumanCountry(campaign, nation))
-            return null;
-        var settings = campaign.Defines;
-        if (!settings.AiFormableProclamations || !campaign.FeatureEnabled("formable_nations") ||
-            !MechanicFeatures.SystemEnabled(campaign, nameof(FormableProclamationAi))) return null;
-        if (campaign.NationById(nation.Id) != nation) return null;
-        if (nation.Population <= 0 || nation.MapIndex <= 0 || !EstablishedCountry(nation) || campaign.Fallen.Contains(nation.Id) ||
-            nation.IsSubject || !campaign.HasOwnedLand(nation)) return null;
-        if (!float.IsFinite(settings.AiFormableTreasuryReserveShare) || settings.AiFormableTreasuryReserveShare < 0 ||
-            !float.IsFinite(settings.AiFormableMinimumScore) || !float.IsFinite(nation.Stability) ||
-            !float.IsFinite(nation.UnionCohesion)) return null;
-        if (campaign.ElapsedDays < Math.Max(0, settings.AiFormableEarliestDay)) return null;
-        if (nation.FormedNationDay >= 0 && (long)campaign.ElapsedDays - nation.FormedNationDay < Math.Max(1, settings.AiFormableMinimumIntervalDays)) return null;
-        if ((long)campaign.ElapsedDays - nation.LastSecessionDay < Math.Max(0, settings.AiFormableCrisisRecoveryDays) ||
-            (long)campaign.ElapsedDays - nation.UnionLastSecessionDay < Math.Max(0, settings.AiFormableCrisisRecoveryDays) ||
-            (nation.Movement is { StatehoodDay: >= 0 } movement &&
-             (long)campaign.ElapsedDays - movement.StatehoodDay < Math.Max(0, settings.AiFormableCrisisRecoveryDays)) ||
-            (nation.DomesticCrisis is { } crisis && campaign.FeatureEnabled("domestic_crises") &&
-             (crisis.CoupPressure >= settings.CoupPressureThreshold ||
-              (crisis.LastOutcomeDay >= 0 && (long)campaign.ElapsedDays - crisis.LastOutcomeDay < Math.Max(0, settings.AiFormableCrisisRecoveryDays))))) return null;
-        if (!string.IsNullOrEmpty(nation.FormedNationId) && campaign.FeatureEnabled("union_cohesion") &&
-            nation.UnionCohesion < Math.Max(.6f, settings.UnionCohesionFloor)) return null;
-        if (!FormableNations.IsAtPeace(campaign, nation.Id)) return null;
-        var accounts = AiFiscalPolicy.Assess(campaign, nation, settings.AiFormableTreasuryReserveShare);
-        if (!accounts.CanSpend || accounts.DiscretionaryCash < .05f) return null;
+        if (!TryPrepareChoose(campaign, nation, out var accounts)) return null;
 
         FormableAiAssessment best = null;
         var context = new ReviewContext();
@@ -253,6 +249,36 @@ public static class FormableProclamationAi
             if (candidate.CanProclaim && (best is null || candidate.Score > best.Score)) best = candidate;
         }
         return best;
+    }
+
+    private static bool TryPrepareChoose(Campaign campaign, Nation nation, out AiFiscalAssessment accounts)
+    {
+        accounts = default;
+        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || nation is null || HumanCountry(campaign, nation))
+            return false;
+        var settings = campaign.Defines;
+        if (!settings.AiFormableProclamations || !campaign.FeatureEnabled("formable_nations") ||
+            !MechanicFeatures.SystemEnabled(campaign, nameof(FormableProclamationAi))) return false;
+        if (campaign.NationById(nation.Id) != nation) return false;
+        if (nation.Population <= 0 || nation.MapIndex <= 0 || !EstablishedCountry(nation) || campaign.Fallen.Contains(nation.Id) ||
+            nation.IsSubject || !campaign.HasOwnedLand(nation)) return false;
+        if (!float.IsFinite(settings.AiFormableTreasuryReserveShare) || settings.AiFormableTreasuryReserveShare < 0 ||
+            !float.IsFinite(settings.AiFormableMinimumScore) || !float.IsFinite(nation.Stability) ||
+            !float.IsFinite(nation.UnionCohesion)) return false;
+        if (campaign.ElapsedDays < Math.Max(0, settings.AiFormableEarliestDay)) return false;
+        if (nation.FormedNationDay >= 0 && (long)campaign.ElapsedDays - nation.FormedNationDay < Math.Max(1, settings.AiFormableMinimumIntervalDays)) return false;
+        if ((long)campaign.ElapsedDays - nation.LastSecessionDay < Math.Max(0, settings.AiFormableCrisisRecoveryDays) ||
+            (long)campaign.ElapsedDays - nation.UnionLastSecessionDay < Math.Max(0, settings.AiFormableCrisisRecoveryDays) ||
+            (nation.Movement is { StatehoodDay: >= 0 } movement &&
+             (long)campaign.ElapsedDays - movement.StatehoodDay < Math.Max(0, settings.AiFormableCrisisRecoveryDays)) ||
+            (nation.DomesticCrisis is { } crisis && campaign.FeatureEnabled("domestic_crises") &&
+             (crisis.CoupPressure >= settings.CoupPressureThreshold ||
+              (crisis.LastOutcomeDay >= 0 && (long)campaign.ElapsedDays - crisis.LastOutcomeDay < Math.Max(0, settings.AiFormableCrisisRecoveryDays))))) return false;
+        if (!string.IsNullOrEmpty(nation.FormedNationId) && campaign.FeatureEnabled("union_cohesion") &&
+            nation.UnionCohesion < Math.Max(.6f, settings.UnionCohesionFloor)) return false;
+        if (!FormableNations.IsAtPeace(campaign, nation.Id)) return false;
+        accounts = AiFiscalPolicy.Assess(campaign, nation, settings.AiFormableTreasuryReserveShare);
+        return accounts.CanSpend && accounts.DiscretionaryCash >= .05f;
     }
 
     public static void Tick(Campaign campaign)
@@ -296,6 +322,7 @@ public static class FormableProclamationAi
         due.Sort(static (a, b) => a.Id.CompareTo(b.Id));
         for (var di = 0; di < due.Count; di++)
         {
+            if (di > 0 && Campaign.StageOverdue()) yield return 0;
             var nation = due[di];
             nation.DecisionAvailableDay[ReviewKey] = (int)Math.Min(int.MaxValue, (long)campaign.ElapsedDays + interval);
             if (catalogue is null || catalogueRevision != campaign.MapRevision || catalogueNations != campaign.Nations.Count)
@@ -303,10 +330,31 @@ public static class FormableProclamationAi
                 catalogueRevision = campaign.MapRevision;
                 catalogueNations = campaign.Nations.Count;
                 catalogue = ProclamationCatalogue(campaign);
+                if (Campaign.StageOverdue()) yield return 0;
             }
-            var choice = Choose(campaign, nation, catalogue);
-            if (choice is not null)
-                new FormNationCommand { IssuerId = nation.Id, FormableId = choice.Definition.Id }.Apply(campaign);
+            if (!TryPrepareChoose(campaign, nation, out var accounts)) continue;
+            FormableAiAssessment best = null;
+            var context = new ReviewContext();
+            for (var i = 0; i < catalogue.Length; i++)
+            {
+                if (i > 0 && Campaign.StageOverdue()) yield return 0;
+                var definition = catalogue[i];
+                if (!definition.AiFoundation) continue;
+                if (!FormableNations.CompatibleProclamation(nation, definition)) continue;
+                if (nation.FormedNationHistory.Contains(definition.Id) || nation.Stability < definition.MinimumStability) continue;
+                var estimatedCost = Math.Max(.05f, nation.Gdp * definition.CostShare);
+                if (nation.Treasury < estimatedCost || accounts.DiscretionaryCash < estimatedCost) continue;
+                if (definition.RequiredIdeology.Length > 0 && !FormableNations.ContainsIgnoreCase(definition.RequiredIdeology, nation.Ideology)) continue;
+                if (definition.RequiredGovernment.Length > 0 && !FormableNations.ContainsIgnoreCase(definition.RequiredGovernment, nation.Government)) continue;
+                if (!FormableNations.Eligible(campaign, nation, definition)) continue;
+                var candidate = Evaluate(campaign, nation, definition, context, needRefusalText: false, precomputedAccounts: accounts);
+                if (candidate.CanProclaim && (best is null || candidate.Score > best.Score)) best = candidate;
+            }
+            if (best is not null)
+            {
+                if (Campaign.StageOverdue()) yield return 0;
+                new FormNationCommand { IssuerId = nation.Id, FormableId = best.Definition.Id }.Apply(campaign);
+            }
             yield return 0;
         }
     }

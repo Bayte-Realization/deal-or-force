@@ -266,7 +266,7 @@ internal sealed class ShellWorkPanelView
         _feedbackLabel.Visible = false;
         _lastBuildSig = "";
         _panel.Visible = true;
-        Refresh();
+        Refresh(priority: true);
     }
 
     public void OpenRegion(Nation owner, ScenarioState state, int provinceId)
@@ -282,7 +282,7 @@ internal sealed class ShellWorkPanelView
         _feedbackLabel.Visible = false;
         _lastBuildSig = "";
         _panel.Visible = true;
-        Refresh();
+        Refresh(priority: true);
     }
 
     public void Close()
@@ -329,10 +329,16 @@ internal sealed class ShellWorkPanelView
 
     private int _lastBuildHash;
 
-    public void Refresh()
+    public void Refresh(bool priority = false)
     {
         if (!IsVisible || _ctx.World is not { } world) return;
-        if (!world.TryEnterRead(50, true)) return;
+        // A dossier opened by the player (a map tap, a tab, a link) takes the interactive lane:
+        // the background worker yields at the next stage boundary. A periodic refresh never
+        // waits and never asks for a window; it simply tries again on the next pass.
+        var entered = priority
+            ? world.AccessGate.TryEnterPriorityRead(60)
+            : world.TryEnterRead(0, requestWindowOnMiss: false);
+        if (!entered) return;
         try
         {
             RefreshLocked(world);
@@ -416,16 +422,16 @@ internal sealed class ShellWorkPanelView
         ClearBodyAndFooter();
 
         if (_activeTab == 0)
-            ShellCountryDossierView.PopulateOverview(_ctx, _bodyRows, world, nation, isOwn, OpenCountry, () => { _activeTab = 2; _lastBuildSig = ""; Refresh(); });
+            ShellCountryDossierView.PopulateOverview(_ctx, _bodyRows, world, nation, isOwn, OpenCountry, () => { _activeTab = 2; _lastBuildSig = ""; Refresh(priority: true); });
         else if (_activeTab == 1)
             ShellCountryDossierView.PopulateSociety(_ctx, _bodyRows, world, nation);
         else if (_activeTab == 2)
         {
-            if (isOwn) ShellCountryDossierView.PopulateStaff(_ctx, _bodyRows, world, nation, () => { _lastBuildSig = ""; Refresh(); });
+            if (isOwn) ShellCountryDossierView.PopulateStaff(_ctx, _bodyRows, world, nation, () => { _lastBuildSig = ""; Refresh(priority: true); });
             else ShellCountryDossierView.PopulateDecisions(_ctx, _bodyRows, world, nation);
         }
         else
-            ShellCountryDossierView.PopulateDiplomacy(_ctx, _bodyRows, _feedbackLabel, world, nation, isOwn, OpenCountry, () => { _lastBuildSig = ""; Refresh(); _ctx.RefreshAll?.Invoke(); });
+            ShellCountryDossierView.PopulateDiplomacy(_ctx, _bodyRows, _feedbackLabel, world, nation, isOwn, OpenCountry, () => { _lastBuildSig = ""; Refresh(priority: true); _ctx.RefreshAll?.Invoke(); });
 
         if (isOwn)
         {
@@ -473,7 +479,7 @@ internal sealed class ShellWorkPanelView
 
         ShellRegionVisualsView.PopulateRegion(
             _ctx, _bodyRows, _feedbackLabel, world, owner, state, _targetProvinceId, provCount, _activeTab, isOwn,
-            () => { _lastBuildSig = ""; Refresh(); });
+            () => { _lastBuildSig = ""; Refresh(priority: true); });
 
         if (isOwn)
         {
@@ -606,7 +612,7 @@ internal sealed class ShellWorkPanelView
             b.AddThemeStyleboxOverride("normal", on ? onStyle : offStyle);
             b.AddThemeStyleboxOverride("hover", on ? onStyle : offHover);
             b.AddThemeColorOverride("font_color", Ui.Colour(on ? "shell.paper" : "shell.paper_faint"));
-            b.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); _activeTab = idx; _lastBuildSig = ""; Refresh(); };
+            b.Pressed += () => { _ctx.PlayCue?.Invoke("ui_select"); _activeTab = idx; _lastBuildSig = ""; Refresh(priority: true); };
             _tabsRow.AddChild(b);
             _tabButtons.Add(b);
         }

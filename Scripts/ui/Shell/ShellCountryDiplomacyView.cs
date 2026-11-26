@@ -519,6 +519,8 @@ internal static class ShellCountryDiplomacyView
         Campaign world, Nation player, Nation nation, DiplomaticRelation rel)
     {
         var list = new List<(string Name, float Value)>();
+        if (rel.OpinionDrivers is not { HasEntries: true })
+            OpinionSystem.Explain(world, rel);
         if (rel.OpinionDrivers is { HasEntries: true })
         {
             for (var i = 0; i < rel.OpinionDrivers.Entries.Count; i++)
@@ -526,21 +528,6 @@ internal static class ShellCountryDiplomacyView
                 var e = rel.OpinionDrivers.Entries[i];
                 if (MathF.Abs(e.Value) >= 0.05f) list.Add((Loc.Get(e.Source), e.Value));
             }
-        }
-        else
-        {
-            for (var i = 0; i < rel.Reasons.Count; i++)
-            {
-                var r = rel.Reasons[i];
-                var def = OpinionCatalog.Find(r.Id);
-                if (def is null) continue;
-                var w = OpinionSystem.Weight(world, r);
-                if (MathF.Abs(w) < 0.05f) continue;
-                var nm = Loc.Get(def.Value.Name ?? r.Id);
-                list.Add((r.Stacks > 1 ? $"{nm} (×{r.Stacks})" : nm, w));
-            }
-            var aff = PoliticsCore.Affinity(world, player, nation);
-            if (MathF.Abs(aff) >= 0.05f) list.Add((Loc.Get("Political affinity"), aff));
         }
         list.Sort((a, b) => MathF.Abs(b.Value).CompareTo(MathF.Abs(a.Value)));
         return list;

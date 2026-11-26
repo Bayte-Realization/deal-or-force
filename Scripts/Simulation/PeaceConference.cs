@@ -882,11 +882,10 @@ public static class PeaceConference
 
     public static List<int> ProvincesOfState(ProvinceTopology topology, int stateMapIndex)
     {
-        var result = new List<int>();
-        if (topology is null) return result;
-        for (var province = 1; province <= topology.ProvinceCount; province++)
-            if (topology.ProvinceToState[province] == (ushort)stateMapIndex)
-                result.Add(province);
+        if (topology is null) return new List<int>();
+        var provinces = topology.ProvincesOfState((ushort)stateMapIndex);
+        var result = new List<int>(provinces.Length);
+        foreach (var province in provinces) result.Add(province);
         return result;
     }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace DealOrForce.Simulation;
 
@@ -245,18 +246,36 @@ public static partial class Ultimatum
             -float.MaxValue / 2d, float.MaxValue / 2d);
         var land = 0f;
         // Land is priced the way the peace conference prices it: by the people on it.
-        foreach (var id in RegionIds(new Demand { Regions = receive.Regions }))
+        var receiveCount = NormalizeSideRegions(receive.Regions, out var receiveBuf, out var receiveSingle);
+        if (receiveCount > 0)
         {
-            var state = c.States.FirstOrDefault(s => s.MapIndex == id);
-            if (state is null || state.NationMapIndex != counterparty.MapIndex) continue;
-            // Independence gives the recipient diplomatic room, not ownership or taxes.
-            land += RegionWorth(c, recipient, state, receiving: true) * (receive.ReleaseRegions ? .25f : 1f);
+            try
+            {
+                var ids = receiveBuf ?? MemoryMarshal.CreateReadOnlySpan(ref receiveSingle, 1);
+                for (var i = 0; i < receiveCount; i++)
+                {
+                    var state = c.StateByMapIndex(ids[i]);
+                    if (state is null || state.NationMapIndex != counterparty.MapIndex) continue;
+                    // Independence gives the recipient diplomatic room, not ownership or taxes.
+                    land += RegionWorth(c, recipient, state, receiving: true) * (receive.ReleaseRegions ? .25f : 1f);
+                }
+            }
+            finally { if (receiveBuf is not null) System.Buffers.ArrayPool<int>.Shared.Return(receiveBuf); }
         }
-        foreach (var id in RegionIds(new Demand { Regions = give.Regions }))
+        var giveCount = NormalizeSideRegions(give.Regions, out var giveBuf, out var giveSingle);
+        if (giveCount > 0)
         {
-            var state = c.States.FirstOrDefault(s => s.MapIndex == id);
-            if (state is null || state.NationMapIndex != recipient.MapIndex) continue;
-            land -= RegionWorth(c, recipient, state, receiving: false);
+            try
+            {
+                var ids = giveBuf ?? MemoryMarshal.CreateReadOnlySpan(ref giveSingle, 1);
+                for (var i = 0; i < giveCount; i++)
+                {
+                    var state = c.StateByMapIndex(ids[i]);
+                    if (state is null || state.NationMapIndex != recipient.MapIndex) continue;
+                    land -= RegionWorth(c, recipient, state, receiving: false);
+                }
+            }
+            finally { if (giveBuf is not null) System.Buffers.ArrayPool<int>.Shared.Return(giveBuf); }
         }
         // Independence changes the donor's shape but gives its counterparty no land.
         // Evaluate the complete swap so a border adjustment is not mistaken for two enclaves.
@@ -314,7 +333,13 @@ public static partial class Ultimatum
         }
         if (receive.BaseAccessLease)
         {
-            var hasForces = c.Fleets.Any(f => f.NationId == recipient.Id) || recipient.AirExperience > 0f;
+            var hasForces = recipient.AirExperience > 0f;
+            if (!hasForces)
+            {
+                var fleets = c.Fleets;
+                for (var fi = 0; fi < fleets.Count; fi++)
+                    if (fleets[fi].NationId == recipient.Id) { hasForces = true; break; }
+            }
             var v = (hasForces ? 14f : 10f) * trust;
             treaties += v;
             breakdown?.Add((Loc.Get("deal.clause.base_access"), v));
@@ -387,8 +412,7 @@ public static partial class Ultimatum
     {
         var worth = 6f + 12f * M.Clamp(state.Population / 2_000_000f, 0f, 3f);
         var largest = EconomySystem.DominantCulture(state).Culture;
-        if (largest is not null && DemographyCatalog.PrimaryCultures(nation.Tag)
-                .Contains(largest, StringComparer.OrdinalIgnoreCase))
+        if (largest is not null && DemographyCatalog.IsPrimary(nation.Tag, largest))
             worth *= c.Defines.DealKinRegionWeight;
         if (!receiving) return worth;
         worth *= TerritorialClaims.TitleOf(c, nation, state) switch
@@ -533,67 +557,100 @@ public static partial class Ultimatum
         return true;
     }
 
+    private static int NormalizeSideRegions(int[] raw, out int[] rented, out int single)
+    {
+        rented = null;
+        single = 0;
+        if (raw is null || raw.Length == 0) return 0;
+        if (raw.Length == 1)
+        {
+            single = raw[0];
+            return 1;
+        }
+        var buf = System.Buffers.ArrayPool<int>.Shared.Rent(raw.Length);
+        Array.Copy(raw, buf, raw.Length);
+        Array.Sort(buf, 0, raw.Length);
+        var unique = 0;
+        for (var i = 0; i < raw.Length; i++)
+        {
+            var v = buf[i];
+            if (unique == 0 || buf[unique - 1] != v) buf[unique++] = v;
+        }
+        rented = buf;
+        return unique;
+    }
+
+    private static bool ContainsNormalizedRegion(ReadOnlySpan<int> ids, int id) =>
+        ids.Length == 1 ? ids[0] == id : ids.BinarySearch(id) >= 0;
+
     private static bool ValidateSide(Campaign c, Nation owner, Side side, out string reason)
     {
         reason = "";
-        var ids = RegionIds(new Demand { Regions = side.Regions });
+        var count = NormalizeSideRegions(side.Regions, out var rented, out var single);
         // Cash and treaty checks are handled by ValidateDeal. No territorial terms,
         // no reason to scan every province in the world for this side.
-        if (ids.Length == 0 && !side.ReleaseRegions) return true;
-        if (side.ReleaseRegions)
+        if (count == 0 && !side.ReleaseRegions) return true;
+        try
         {
-            reason = Dismantlement.Refusal(c, owner, side.Regions);
-            if (reason.Length > 0) return false;
-        }
-        if (ids.Length > Math.Clamp(c.Defines.DealMaxRegions, 1, 100))
-        { reason = Loc.Get("Too many regions in this demand."); return false; }
-        foreach (var id in ids)
-        {
-            if (c.StateByMapIndex(id) is not { } candidate || candidate.NationMapIndex != owner.MapIndex)
-            { reason = Loc.Get("They cannot yield what they do not hold."); return false; }
-            // A capital is not for sale; it can only be lost. (Releasing it is Dismantlement's
-            // question, which moves the government first.)
-            if (id == owner.CapitalStateMapIndex && !side.ReleaseRegions)
-            { reason = Loc.Get("A capital is not for sale."); return false; }
-        }
-        if (ids.Length == 0) return true;
-        var map = c.ProvinceMap;
-        var controllers = c.ProvinceController ?? map.ProvinceToNation;
-        var selected = ids.Length <= 8 ? null : ids.ToHashSet();
-        bool Selected(int id) => selected is not null ? selected.Contains(id) : Array.IndexOf(ids, id) >= 0;
-
-        foreach (var id in ids)
-        {
-            var provinces = map.ProvincesOfState(id);
-            if (provinces.IsEmpty)
-            { reason = Loc.Get("A demand must leave them territory and cannot include occupied land."); return false; }
-            foreach (var p in provinces)
+            if (side.ReleaseRegions)
             {
-                if (map.ProvinceToNation[p] != owner.MapIndex || controllers[p] != owner.MapIndex)
+                reason = Dismantlement.Refusal(c, owner, side.Regions);
+                if (reason.Length > 0) return false;
+            }
+            if (count > Math.Clamp(c.Defines.DealMaxRegions, 1, 100))
+            { reason = Loc.Get("Too many regions in this demand."); return false; }
+            var ids = rented is not null ? rented.AsSpan(0, count) : MemoryMarshal.CreateReadOnlySpan(ref single, 1);
+            for (var ii = 0; ii < ids.Length; ii++)
+            {
+                var id = ids[ii];
+                if (c.StateByMapIndex(id) is not { } candidate || candidate.NationMapIndex != owner.MapIndex)
+                { reason = Loc.Get("They cannot yield what they do not hold."); return false; }
+                // A capital is not for sale; it can only be lost. (Releasing it is Dismantlement's
+                // question, which moves the government first.)
+                if (id == owner.CapitalStateMapIndex && !side.ReleaseRegions)
+                { reason = Loc.Get("A capital is not for sale."); return false; }
+            }
+            if (count == 0) return true;
+            var map = c.ProvinceMap;
+            var controllers = c.ProvinceController ?? map.ProvinceToNation;
+
+            for (var ii = 0; ii < ids.Length; ii++)
+            {
+                var provinces = map.ProvincesOfState(ids[ii]);
+                if (provinces.IsEmpty)
                 { reason = Loc.Get("A demand must leave them territory and cannot include occupied land."); return false; }
+                foreach (var p in provinces)
+                {
+                    if (map.ProvinceToNation[p] != owner.MapIndex || controllers[p] != owner.MapIndex)
+                    { reason = Loc.Get("A demand must leave them territory and cannot include occupied land."); return false; }
+                }
             }
-        }
 
-        var retained = false;
-        foreach (var st in c.StatesOf(owner))
-        {
-            if (Selected(st.MapIndex)) continue;
-            foreach (var p in map.ProvincesOfState(st.MapIndex))
-                if (map.ProvinceToNation[p] == owner.MapIndex) { retained = true; break; }
-            if (retained) break;
-        }
-        // Check actual ground if state records are out of sync with province ownership.
-        if (!retained)
-        {
-            for (var p = 1; p <= map.ProvinceCount; p++)
+            var retained = false;
+            foreach (var st in c.StatesOf(owner))
             {
-                if (!Selected(map.ProvinceToState[p]) && map.ProvinceToNation[p] == owner.MapIndex)
-                { retained = true; break; }
+                if (ContainsNormalizedRegion(ids, st.MapIndex)) continue;
+                foreach (var p in map.ProvincesOfState(st.MapIndex))
+                    if (map.ProvinceToNation[p] == owner.MapIndex) { retained = true; break; }
+                if (retained) break;
             }
+            // Check actual ground if state records are out of sync with province ownership.
+            if (!retained)
+            {
+                for (var p = 1; p <= map.ProvinceCount; p++)
+                {
+                    if (!ContainsNormalizedRegion(ids, map.ProvinceToState[p]) && map.ProvinceToNation[p] == owner.MapIndex)
+                    { retained = true; break; }
+                }
+            }
+            if (!retained)
+            { reason = Loc.Get("A demand must leave them territory and cannot include occupied land."); return false; }
+            return true;
         }
-        if (!retained)
-        { reason = Loc.Get("A demand must leave them territory and cannot include occupied land."); return false; }
-        return true;
+        finally
+        {
+            if (rented is not null) System.Buffers.ArrayPool<int>.Shared.Return(rented);
+        }
     }
 
     /// <summary>
@@ -622,8 +679,18 @@ public static partial class Ultimatum
         // A bigger cheque cannot substitute for consent to sell a national heartland.
         // Genuine territorial swaps retain the existing valuation; human recipients
         // still choose explicitly. Culture shared by BOTH Koreas is not spare land.
-        var protectedLand = !to.IsHuman && (deal.From.Regions?.Length ?? 0) == 0 &&
-            (deal.To.Regions ?? Array.Empty<int>()).Any(id => ProtectsHomelandSale(c, to, c.States.FirstOrDefault(s => s.MapIndex == id)));
+        var protectedLand = false;
+        if (!to.IsHuman && (deal.From.Regions?.Length ?? 0) == 0 && deal.To.Regions is { Length: > 0 } toRegions)
+        {
+            for (var ri = 0; ri < toRegions.Length; ri++)
+            {
+                if (ProtectsHomelandSale(c, to, c.StateByMapIndex(toRegions[ri])))
+                {
+                    protectedLand = true;
+                    break;
+                }
+            }
+        }
         var acceptable = !protectedLand && theirs.Total - penalty >= 0;
         var fromCredit = deal.From.SovereignCredit ? SovereignCreditAmount(from, to) : 0f;
         var toCredit = deal.To.SovereignCredit ? SovereignCreditAmount(to, from) : 0f;
@@ -833,12 +900,18 @@ public static partial class Ultimatum
         var parts = new List<string>();
         void Half(Nation giver, Nation receiver, Side side)
         {
-            var names = RegionIds(new Demand { Regions = side.Regions })
-                .Select(id => Loc.Get(c.States.FirstOrDefault(s => s.MapIndex == id)?.Name ?? "")).Where(n => n.Length > 0)
-                .ToList();
-            if (names.Count > 0) parts.Add(side.ReleaseRegions
-                ? Loc.Format("{0}: establish an independent country in {1}", giver.DisplayName, string.Join(", ", names))
-                : Loc.Format("{0}: {1}", giver.DisplayName, string.Join(", ", names)));
+            if (side.Regions is { Length: > 0 })
+            {
+                var names = new List<string>(side.Regions.Length);
+                foreach (var id in RegionIds(new Demand { Regions = side.Regions }))
+                {
+                    var label = Loc.Get(c.StateByMapIndex(id)?.Name ?? "");
+                    if (label.Length > 0) names.Add(label);
+                }
+                if (names.Count > 0) parts.Add(side.ReleaseRegions
+                    ? Loc.Format("{0}: establish an independent country in {1}", giver.DisplayName, string.Join(", ", names))
+                    : Loc.Format("{0}: {1}", giver.DisplayName, string.Join(", ", names)));
+            }
             if (side.Cash > 0) parts.Add(Loc.Format("{0}: {1}", giver.DisplayName,
                 Loc.Format("One-time payment: {0}", Fmt.Money(side.Cash))));
             if (side.NonAggression) parts.Add(Loc.Get("Non-aggression pact"));

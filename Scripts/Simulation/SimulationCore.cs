@@ -348,6 +348,9 @@ public sealed partial class Nation
     /// </summary>
     public string FoundedInRevolt = "";
 
+    /// <summary>Catalog id of a named movement that won ground and graduated to statehood; empty otherwise.</summary>
+    public string GraduatedMovementId = "";
+
     /// <summary>
     /// Who this country is for, when the scenario never said - which is every country the
     /// campaign founds rather than loads.

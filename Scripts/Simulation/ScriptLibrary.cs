@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -63,6 +64,28 @@ public static class ScriptLibrary
     /// </summary>
     private static readonly Dictionary<(string Name, int Index), ScriptedTrigger> ScoreTriggers = new();
 
+    private sealed class CompiledScoreRow
+    {
+        public ScriptedTrigger Trigger;
+        public bool HasAdd;
+        public float Add;
+        public bool HasMultiply;
+        public float Multiply;
+        public string RowFormula;
+    }
+
+    private sealed class CompiledScore
+    {
+        public bool IsFlat;
+        public bool IsFallback;
+        public float Base;
+        public CompiledScoreRow[] Rows;
+        public string FinalFormula;
+    }
+
+    private static readonly ConcurrentDictionary<string, CompiledScore> CompiledScores =
+        new(StringComparer.OrdinalIgnoreCase);
+
     private static readonly Dictionary<string, JsonDocument> ScoreBlocks =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -120,6 +143,7 @@ public static class ScriptLibrary
         Clear(EffectBlocks);
         Clear(ScoreBlocks);
         ScoreTriggers.Clear();
+        CompiledScores.Clear();
         FeatureTriggers.Clear();
         foreach (var document in GameDataLoader.DataDocuments("common", "scripted_triggers"))
             using (document) Absorb(TriggerBlocks, document.RootElement);
@@ -133,6 +157,8 @@ public static class ScriptLibrary
     public static void LoadDirectories(string packageRoot, List<string> errors)
     {
         FeatureTriggers.Clear();
+        ScoreTriggers.Clear();
+        CompiledScores.Clear();
         Read(Path.Combine(packageRoot, "common", "scripted_triggers"), "scripted_triggers",
             TriggerBlocks, errors);
         Read(Path.Combine(packageRoot, "common", "scripted_effects"), "scripted_effects",
@@ -145,6 +171,8 @@ public static class ScriptLibrary
     {
         EnsureLoaded();
         FeatureTriggers.Clear();
+        ScoreTriggers.Clear();
+        CompiledScores.Clear();
         Absorb(TriggerBlocks, root);
     }
 
@@ -157,41 +185,81 @@ public static class ScriptLibrary
     /// </summary>
     public static float Score(Campaign campaign, Nation nation, string name, float fallback = 0f)
     {
-        if (nation is null || string.IsNullOrEmpty(name) ||
-            !ScoreBlocks.TryGetValue(name, out var document)) return fallback;
+        if (nation is null || string.IsNullOrEmpty(name)) return fallback;
+        if (!CompiledScores.TryGetValue(name, out var compiled))
+        {
+            if (!ScoreBlocks.TryGetValue(name, out var document)) return fallback;
+            compiled = CompiledScores.GetOrAdd(name, static (key, doc) => CompileScore(key, doc), document);
+        }
 
+        if (compiled.IsFallback) return fallback;
+        if (compiled.IsFlat) return compiled.Base;
+
+        var score = compiled.Base;
+        var rows = compiled.Rows;
+        if (rows is null) return score;
+
+        for (var i = 0; i < rows.Length; i++)
+        {
+            var row = rows[i];
+            if (row.Trigger is not null && !row.Trigger.Matches(campaign, nation)) continue;
+            if (row.HasAdd) score += row.Add;
+            if (row.HasMultiply) score *= row.Multiply;
+            if (row.RowFormula is not null)
+                score = LuauFormulaEvaluator.Evaluate(row.RowFormula, NationFormulaSnapshot.From(campaign, nation, score), score);
+        }
+        if (compiled.FinalFormula is not null)
+            score = LuauFormulaEvaluator.Evaluate(compiled.FinalFormula, NationFormulaSnapshot.From(campaign, nation, score), score);
+        return score;
+    }
+
+    private static CompiledScore CompileScore(string name, JsonDocument document)
+    {
         var root = document.RootElement;
-        if (root.ValueKind == JsonValueKind.Number && root.TryGetSingle(out var flat)) return flat;
-        if (root.ValueKind != JsonValueKind.Object) return fallback;
+        if (root.ValueKind == JsonValueKind.Number && root.TryGetSingle(out var flat))
+            return new CompiledScore { IsFlat = true, Base = flat };
+        if (root.ValueKind != JsonValueKind.Object)
+            return new CompiledScore { IsFallback = true };
 
-        var score = root.TryGetProperty("base", out var start) && start.TryGetSingle(out var opening)
-            ? opening
-            : 0f;
-        if (!root.TryGetProperty("modifiers", out var modifiers) ||
-            modifiers.ValueKind != JsonValueKind.Array) return score;
+        var opening = root.TryGetProperty("base", out var start) && start.TryGetSingle(out var b) ? b : 0f;
+        if (!root.TryGetProperty("modifiers", out var modifiers) || modifiers.ValueKind != JsonValueKind.Array)
+            return new CompiledScore { Base = opening };
 
-        var index = -1;
+        var len = modifiers.GetArrayLength();
+        var list = len > 0 ? new List<CompiledScoreRow>(len) : null;
         foreach (var entry in modifiers.EnumerateArray())
         {
-            index++;
             if (entry.ValueKind != JsonValueKind.Object) continue;
-            if (entry.TryGetProperty("trigger", out var condition))
+            var trigger = entry.TryGetProperty("trigger", out var condition)
+                ? ScriptedTrigger.Parse(condition, "scripted_modifiers/" + name, null)
+                : null;
+            var addition = 0f;
+            var hasAdd = entry.TryGetProperty("add", out var add) && add.TryGetSingle(out addition);
+            var multiplier = 0f;
+            var hasMultiply = (entry.TryGetProperty("factor", out var factor) || entry.TryGetProperty("multiply", out factor)) &&
+                factor.TryGetSingle(out multiplier);
+            var rowFormula = entry.TryGetProperty("luau_formula", out var rf) && rf.ValueKind == JsonValueKind.String
+                ? rf.GetString()
+                : null;
+            list!.Add(new CompiledScoreRow
             {
-                var key = (name, index);
-                if (!ScoreTriggers.TryGetValue(key, out var trigger))
-                    ScoreTriggers[key] = trigger = ScriptedTrigger.Parse(condition, "scripted_modifiers/" + name, null);
-                if (!trigger.Matches(campaign, nation)) continue;
-            }
-            if (entry.TryGetProperty("add", out var add) && add.TryGetSingle(out var addition))
-                score += addition;
-            if ((entry.TryGetProperty("factor", out var factor) || entry.TryGetProperty("multiply", out factor)) && factor.TryGetSingle(out var multiplier))
-                score *= multiplier;
-            if (entry.TryGetProperty("luau_formula", out var rowFormula) && rowFormula.ValueKind == JsonValueKind.String)
-                score = LuauFormulaEvaluator.Evaluate(rowFormula.GetString(), NationFormulaSnapshot.From(campaign, nation, score), score);
+                Trigger = trigger,
+                HasAdd = hasAdd,
+                Add = addition,
+                HasMultiply = hasMultiply,
+                Multiply = multiplier,
+                RowFormula = rowFormula
+            });
         }
-        if (root.TryGetProperty("luau_formula", out var finalFormula) && finalFormula.ValueKind == JsonValueKind.String)
-            score = LuauFormulaEvaluator.Evaluate(finalFormula.GetString(), NationFormulaSnapshot.From(campaign, nation, score), score);
-        return score;
+        var finalFormula = root.TryGetProperty("luau_formula", out var ff) && ff.ValueKind == JsonValueKind.String
+            ? ff.GetString()
+            : null;
+        return new CompiledScore
+        {
+            Base = opening,
+            Rows = list is { Count: > 0 } ? list.ToArray() : Array.Empty<CompiledScoreRow>(),
+            FinalFormula = finalFormula
+        };
     }
 
     private static void Clear(Dictionary<string, JsonDocument> blocks)

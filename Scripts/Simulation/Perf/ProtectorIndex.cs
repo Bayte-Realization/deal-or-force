@@ -36,6 +36,7 @@ internal sealed class ProtectorIndex
 
     private sealed class Snapshot
     {
+        public readonly Dictionary<long, DiplomaticRelation> RelationsRef;
         public readonly int AllianceRevision;
         public readonly int RelationsCount;
         public readonly int MutationVersion;
@@ -45,6 +46,7 @@ internal sealed class ProtectorIndex
         public readonly Dictionary<int, int[]> OverflowAllies;
 
         public Snapshot(
+            Dictionary<long, DiplomaticRelation> relationsRef,
             int allianceRevision,
             int relationsCount,
             int mutationVersion,
@@ -53,6 +55,7 @@ internal sealed class ProtectorIndex
             Dictionary<int, ProtectorEdge[]> overflowProtectors,
             Dictionary<int, int[]> overflowAllies)
         {
+            RelationsRef = relationsRef;
             AllianceRevision = allianceRevision;
             RelationsCount = relationsCount;
             MutationVersion = mutationVersion;
@@ -65,14 +68,23 @@ internal sealed class ProtectorIndex
 
     private readonly object _gate = new();
     private volatile Snapshot _snapshot;
+    private List<ProtectorEdge>[] _scratchProtLists = Array.Empty<List<ProtectorEdge>>();
+    private List<int>[] _scratchAllyLists = Array.Empty<List<int>>();
+    private readonly Stack<List<ProtectorEdge>> _protPool = new();
+    private readonly Stack<List<int>> _allyPool = new();
+    private readonly List<int> _touchedProt = new();
+    private readonly List<int> _touchedAlly = new();
+    private readonly Dictionary<int, List<ProtectorEdge>> _overProt = new();
+    private readonly Dictionary<int, List<int>> _overAlly = new();
 
     private Snapshot TryCurrent(Campaign c)
     {
         var current = _snapshot;
         if (current is not null &&
+            ReferenceEquals(current.RelationsRef, c.Relations) &&
             current.AllianceRevision == c.AllianceRevision &&
-            current.RelationsCount == c.Relations.Count &&
-            current.MutationVersion == DiplomaticRelation.ProtectorMutationVersion)
+            current.MutationVersion == DiplomaticRelation.ProtectorMutationVersion &&
+            c.Relations.Count >= current.RelationsCount)
             return current;
         return null;
     }
@@ -87,65 +99,161 @@ internal sealed class ProtectorIndex
             current = TryCurrent(c);
             if (current is not null) return current;
 
+            var relDict = c.Relations;
             var rev = c.AllianceRevision;
-            var relCount = c.Relations.Count;
+            var relCount = relDict.Count;
             var mutVer = DiplomaticRelation.ProtectorMutationVersion;
 
             var maxDense = c.Nations.Count;
-            foreach (var rel in c.Relations.Values)
+            var nations = c.Nations;
+            for (var i = 0; i < nations.Count; i++)
             {
-                if (rel.Stance != DiplomaticStance.Allied && !rel.GuaranteeByA && !rel.GuaranteeByB) continue;
-                if (rel.A >= maxDense && rel.A < DenseLimit) maxDense = rel.A + 1;
-                if (rel.B >= maxDense && rel.B < DenseLimit) maxDense = rel.B + 1;
+                var id = nations[i].Id;
+                if ((uint)id < DenseLimit && id >= maxDense) maxDense = id + 1;
             }
 
-            var protLists = new List<ProtectorEdge>[maxDense];
-            var allyLists = new List<int>[maxDense];
-            Dictionary<int, List<ProtectorEdge>> overProt = null;
-            Dictionary<int, List<int>> overAlly = null;
+            if (_scratchProtLists.Length < maxDense)
+            {
+                Array.Resize(ref _scratchProtLists, maxDense);
+                Array.Resize(ref _scratchAllyLists, maxDense);
+            }
+            var protLists = _scratchProtLists;
+            var allyLists = _scratchAllyLists;
+            _touchedProt.Clear();
+            _touchedAlly.Clear();
+            _overProt.Clear();
+            _overAlly.Clear();
 
-            foreach (var rel in c.Relations.Values)
+            foreach (var rel in relDict.Values)
             {
                 var allied = rel.Stance == DiplomaticStance.Allied;
                 var aProtectsB = allied || rel.GuaranteeByA;
                 var bProtectsA = allied || rel.GuaranteeByB;
                 if (!aProtectsB && !bProtectsA) continue;
 
-                if (aProtectsB) AddProtector(rel.B, new ProtectorEdge(rel.A, rel), protLists, ref overProt);
-                if (bProtectsA) AddProtector(rel.A, new ProtectorEdge(rel.B, rel), protLists, ref overProt);
+                if (aProtectsB)
+                {
+                    if ((uint)rel.B < (uint)maxDense)
+                    {
+                        var list = protLists[rel.B];
+                        if (list is null)
+                        {
+                            list = _protPool.Count > 0 ? _protPool.Pop() : new List<ProtectorEdge>(4);
+                            protLists[rel.B] = list;
+                            _touchedProt.Add(rel.B);
+                        }
+                        list.Add(new ProtectorEdge(rel.A, rel));
+                    }
+                    else AddOverflowProt(rel.B, new ProtectorEdge(rel.A, rel));
+                }
+                if (bProtectsA)
+                {
+                    if ((uint)rel.A < (uint)maxDense)
+                    {
+                        var list = protLists[rel.A];
+                        if (list is null)
+                        {
+                            list = _protPool.Count > 0 ? _protPool.Pop() : new List<ProtectorEdge>(4);
+                            protLists[rel.A] = list;
+                            _touchedProt.Add(rel.A);
+                        }
+                        list.Add(new ProtectorEdge(rel.B, rel));
+                    }
+                    else AddOverflowProt(rel.A, new ProtectorEdge(rel.B, rel));
+                }
                 if (allied)
                 {
-                    AddAlly(rel.A, rel.B, allyLists, ref overAlly);
-                    AddAlly(rel.B, rel.A, allyLists, ref overAlly);
+                    AddDenseOrOverAlly(rel.A, rel.B, maxDense, allyLists);
+                    AddDenseOrOverAlly(rel.B, rel.A, maxDense, allyLists);
                 }
             }
 
             var protectors = new ProtectorEdge[maxDense][];
-            for (var i = 0; i < maxDense; i++)
-                protectors[i] = protLists[i] is { Count: > 0 } list ? list.ToArray() : Array.Empty<ProtectorEdge>();
+            Array.Fill(protectors, Array.Empty<ProtectorEdge>());
+            for (var i = 0; i < _touchedProt.Count; i++)
+            {
+                var id = _touchedProt[i];
+                var list = protLists[id];
+                protectors[id] = list.ToArray();
+                list.Clear();
+                if (_protPool.Count < 512) _protPool.Push(list);
+                protLists[id] = null;
+            }
 
             var allies = new int[maxDense][];
-            for (var i = 0; i < maxDense; i++)
-                allies[i] = allyLists[i] is { Count: > 0 } list ? list.ToArray() : Array.Empty<int>();
+            Array.Fill(allies, Array.Empty<int>());
+            for (var i = 0; i < _touchedAlly.Count; i++)
+            {
+                var id = _touchedAlly[i];
+                var list = allyLists[id];
+                allies[id] = list.ToArray();
+                list.Clear();
+                if (_allyPool.Count < 512) _allyPool.Push(list);
+                allyLists[id] = null;
+            }
 
             Dictionary<int, ProtectorEdge[]> frozenOverProt = null;
-            if (overProt is not null)
+            if (_overProt.Count > 0)
             {
-                frozenOverProt = new Dictionary<int, ProtectorEdge[]>(overProt.Count);
-                foreach (var kv in overProt) frozenOverProt[kv.Key] = kv.Value.ToArray();
+                frozenOverProt = new Dictionary<int, ProtectorEdge[]>(_overProt.Count);
+                foreach (var kv in _overProt)
+                {
+                    frozenOverProt[kv.Key] = kv.Value.ToArray();
+                    kv.Value.Clear();
+                    if (_protPool.Count < 512) _protPool.Push(kv.Value);
+                }
+                _overProt.Clear();
             }
 
             Dictionary<int, int[]> frozenOverAlly = null;
-            if (overAlly is not null)
+            if (_overAlly.Count > 0)
             {
-                frozenOverAlly = new Dictionary<int, int[]>(overAlly.Count);
-                foreach (var kv in overAlly) frozenOverAlly[kv.Key] = kv.Value.ToArray();
+                frozenOverAlly = new Dictionary<int, int[]>(_overAlly.Count);
+                foreach (var kv in _overAlly)
+                {
+                    frozenOverAlly[kv.Key] = kv.Value.ToArray();
+                    kv.Value.Clear();
+                    if (_allyPool.Count < 512) _allyPool.Push(kv.Value);
+                }
+                _overAlly.Clear();
             }
 
-            var built = new Snapshot(rev, relCount, mutVer, protectors, allies, frozenOverProt, frozenOverAlly);
+            var built = new Snapshot(relDict, rev, relCount, mutVer, protectors, allies, frozenOverProt, frozenOverAlly);
             _snapshot = built;
             return built;
         }
+    }
+
+    private void AddOverflowProt(int targetId, ProtectorEdge edge)
+    {
+        if (!_overProt.TryGetValue(targetId, out var list))
+        {
+            list = _protPool.Count > 0 ? _protPool.Pop() : new List<ProtectorEdge>(4);
+            _overProt[targetId] = list;
+        }
+        list.Add(edge);
+    }
+
+    private void AddDenseOrOverAlly(int nationId, int allyId, int maxDense, List<int>[] allyLists)
+    {
+        if ((uint)nationId < (uint)maxDense)
+        {
+            var list = allyLists[nationId];
+            if (list is null)
+            {
+                list = _allyPool.Count > 0 ? _allyPool.Pop() : new List<int>(4);
+                allyLists[nationId] = list;
+                _touchedAlly.Add(nationId);
+            }
+            list.Add(allyId);
+            return;
+        }
+        if (!_overAlly.TryGetValue(nationId, out var over))
+        {
+            over = _allyPool.Count > 0 ? _allyPool.Pop() : new List<int>(4);
+            _overAlly[nationId] = over;
+        }
+        over.Add(allyId);
     }
 
     /// <summary>
@@ -174,32 +282,6 @@ internal sealed class ProtectorIndex
             else if (r.B == targetId && (r.Stance == DiplomaticStance.Allied || r.GuaranteeByA))
                 into.Add(r.A);
         }
-    }
-
-    private static void AddProtector(int targetId, ProtectorEdge edge, List<ProtectorEdge>[] dense,
-        ref Dictionary<int, List<ProtectorEdge>> overflow)
-    {
-        if ((uint)targetId < (uint)dense.Length)
-        {
-            (dense[targetId] ??= new List<ProtectorEdge>(4)).Add(edge);
-            return;
-        }
-        overflow ??= new Dictionary<int, List<ProtectorEdge>>();
-        if (!overflow.TryGetValue(targetId, out var list)) overflow[targetId] = list = new List<ProtectorEdge>(4);
-        list.Add(edge);
-    }
-
-    private static void AddAlly(int nationId, int allyId, List<int>[] dense,
-        ref Dictionary<int, List<int>> overflow)
-    {
-        if ((uint)nationId < (uint)dense.Length)
-        {
-            (dense[nationId] ??= new List<int>(4)).Add(allyId);
-            return;
-        }
-        overflow ??= new Dictionary<int, List<int>>();
-        if (!overflow.TryGetValue(nationId, out var list)) overflow[nationId] = list = new List<int>(4);
-        list.Add(allyId);
     }
 
     /// <summary>Every ally or guarantor standing behind <paramref name="targetId"/>.</summary>

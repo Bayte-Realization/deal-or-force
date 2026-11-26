@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using DealOrForce.Simulation;
 
 /// <summary>
@@ -76,10 +77,25 @@ static class RelationTableTests
         Check(ReferenceEquals(CampaignDiplomacy.Peek(campaign, asker.Id, rival.Id, out awake), feud) && !awake,
             "a sleeping relation is read without being woken");
 
+        feud.Reasons.Add(new OpinionReason { Id = "fear_of_strength", Scale = 0.75f });
+        var all = SaveSystem.CampaignSave.Capture(campaign, "", includeRelations: true);
+        var deferred = SaveSystem.CampaignSave.Capture(campaign, "", includeRelations: false);
+        all.Isolate(campaign);
+        deferred.Isolate(campaign);
+        var order = campaign.Relations.Keys.Concat(campaign.DormantRelations.Keys).ToArray();
+        Check(ReferenceEquals(all.Relations.Comparer, PairKeyComparer.Instance) &&
+              ReferenceEquals(deferred.Relations.Comparer, PairKeyComparer.Instance) &&
+              all.Relations.Keys.SequenceEqual(order) && deferred.Relations.Keys.SequenceEqual(order),
+            "both save capture paths use the pair hash and keep the active and dormant insertion order");
+
         Check(ReferenceEquals(CampaignDiplomacy.Get(campaign, asker.Id, rival.Id), feud) && !feud.Dormant &&
               ReferenceEquals(CampaignDiplomacy.Peek(campaign, asker.Id, rival.Id, out awake), feud) && awake &&
               campaign.DormantRelations.Count == 0 && campaign.Relations.Count == 2,
             "the first writer wakes it: the same relation, back in the daily table, neither lost nor doubled");
+        feud.Reasons[0].Scale = 0.5f;
+        Check(all.Relations[key01].Dormant && all.Relations[key01].Reasons[0].Scale == 0.75f &&
+              deferred.Relations[key01].Dormant && deferred.Relations[key01].Reasons[0].Scale == 0.75f,
+            "waking and editing an old relation leaves both detached saves unchanged");
     }
 
     static Campaign World(out Nation asker, out Nation patron, out Nation rival, out Nation stranger)

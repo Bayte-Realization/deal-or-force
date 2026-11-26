@@ -127,7 +127,9 @@ public static partial class DomesticCrises
         }
         var memory = nation.DomesticCrisis ?? new();
         var anger = people > 0 ? (float)(radicalism / people) : 0f;
-        var capital = regions.FirstOrDefault(r => r.MapIndex == nation.CapitalStateMapIndex);
+        ScenarioState capital = null;
+        for (var i = 0; i < regions.Length; i++)
+            if (regions[i].MapIndex == nation.CapitalStateMapIndex) { capital = regions[i]; break; }
         var drivers = new List<string>();
         var target = Target(c, nation, anger, M.Clamp01(capital?.Radicalism ?? 0f), drivers);
         return new DomesticCrisisSnapshot { Awareness = people > 0 ? (float)(awareness / people) : 0f,
@@ -152,6 +154,7 @@ public static partial class DomesticCrises
         if (c is null) yield break;
         var awarenessEnabled = c.FeatureEnabled("resident_awareness");
         var crisesEnabled = c.FeatureEnabled("domestic_crises") && c.FeatureEnabled("politics");
+        var cohortsEnabled = c.FeatureEnabled("political_cohorts");
         // Every region's alienation for the day, read side by side before the countries are
         // taken one at a time (PoliticalCohorts.AlienationTable).
         var alienation = PoliticalCohorts.ReadAlienation(c);
@@ -203,13 +206,18 @@ public static partial class DomesticCrises
 
         var tick = 0;
         var awarenessChangePerDay = MathF.Max(0f, c.Defines.ResidentAwarenessChangePerDay);
+        var awarenessLitWeight = c.Defines.ResidentAwarenessLiteracyWeight;
+        var awarenessUrbWeight = c.Defines.ResidentAwarenessUrbanWeight;
         try
         {
             var activeNations = c.ActiveNations;
             for (var ni = 0; ni < activeNations.Count; ni++)
             {
                 var nation = activeNations[ni];
-                if (++tick % 32 == 0 && Campaign.StageOverdue()) yield return 0;
+                // The budget is asked every four countries rather than every thirty-two: one
+                // country's review (cohorts, a coup, a payment, the street) can run a millisecond,
+                // and a priority read must not wait behind thirty of them. A yield is not the world.
+                if ((++tick & 3) == 0 && Campaign.StageOverdue()) yield return 0;
                 if (c.IsRetired(nation)) continue;
                 var memory = nation.DomesticCrisis ??= new();
                 if (memory.LastReviewDay == c.ElapsedDays) continue;
@@ -232,7 +240,9 @@ public static partial class DomesticCrises
                     for (var ri = 0; ri < regions.Length; ri++)
                     {
                         var region = regions[ri];
-                        var target = ResidentAwareness.Target(c, region);
+                        var target = M.Clamp01(.10f +
+                            M.Clamp01(region.Literacy) * awarenessLitWeight +
+                            M.Clamp01(region.Urbanization) * awarenessUrbWeight);
                         region.ResidentAwareness = region.ResidentAwareness < 0f
                             ? target
                             : Move(region.ResidentAwareness, target, awarenessStep);
@@ -253,15 +263,46 @@ public static partial class DomesticCrises
                     alienation?.ClearSummary();
                     if (!nation.IsHuman && nation.Movement is null && regions.Length > 0)
                     {
-                        ConsiderConciliation(c, nation);
+                        if (cohortsEnabled && !(memory.ConciliationUntilDay >= 0 && memory.ConciliationUntilDay > c.ElapsedDays))
+                        {
+                            ScenarioState loudState = null;
+                            var loudScore = -1f;
+                            for (var ri = 0; ri < regions.Length; ri++)
+                            {
+                                var state = regions[ri];
+                                if (state is null || state.Population <= 0 ||
+                                    state.PoliticalDivergence < 0f || state.GovernmentApproval < 0f)
+                                    continue;
+                                var score = M.Clamp01(state.PoliticalDivergence) * (1f - M.Clamp01(state.GovernmentApproval));
+                                if (score < loudScore || (score == loudScore && loudState is not null && state.MapIndex > loudState.MapIndex))
+                                    continue;
+                                loudState = state;
+                                loudScore = score;
+                            }
+                            if (loudState is not null)
+                            {
+                                var heat = PoliticalCohorts.UnrestHeat(loudState);
+                                if (heat >= c.Defines.CrisisConciliationAiHeat &&
+                                    (heat >= c.Defines.CrisisConciliationHeat || loudState.SecessionPressure >= .12f) &&
+                                    float.IsFinite(nation.Treasury))
+                                {
+                                    var cost = ConciliationCost(c, nation, loudState);
+                                    var reserve = cost * MathF.Max(1f, c.Defines.CrisisConciliationAiReserve);
+                                    if (float.IsFinite(cost) && nation.Treasury >= cost && nation.Treasury >= reserve)
+                                        ConsiderConciliation(c, nation);
+                                }
+                            }
+                        }
                         // The longer lever beside the season's payment: a region that runs itself.
-                        RegionalAutonomy.ConsiderGrant(c, nation);
+                        if ((c.ElapsedDays + nation.Id) % 7 == 0 &&
+                            (nation.ImperialOverstretch > 0f || nation.Stability < 0.50f))
+                            RegionalAutonomy.ConsiderGrant(c, nation);
                     }
                     // The street is read weekly: a wave takes days to build, and Read walks every region.
                     if (c.Defines.ProtestsEnabled && nation.Movement is null && nation.Population > 0 && regions.Length > 0 &&
                         (c.ElapsedDays + nation.Id) % 7 == 0)
                     {
-                        AwarenessAndRadicalism(c, nation, out var awareness, out var radicalism);
+                        AwarenessAndRadicalism(c, regions, out var awareness, out var radicalism);
                         MassProtests.Review(c, nation, awareness, radicalism, 7);
                     }
                 }
@@ -277,9 +318,8 @@ public static partial class DomesticCrises
         }
     }
 
-    private static void AwarenessAndRadicalism(Campaign c, Nation nation, out float awareness, out float radicalism)
+    private static void AwarenessAndRadicalism(Campaign c, ScenarioState[] regions, out float awareness, out float radicalism)
     {
-        var regions = c.StatesOf(nation);
         double people = 0, awarenessSum = 0, radicalismSum = 0;
         for (var i = 0; i < regions.Length; i++)
         {

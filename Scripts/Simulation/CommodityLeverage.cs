@@ -109,8 +109,10 @@ public static class CommodityLeverage
         var satisfactionSum = 0f;
         var count = 0;
 
-        foreach (var commodity in CommodityCatalog.All)
+        var allGoods = CommodityCatalog.Snapshot.AllGoods;
+        for (var ci = 0; ci < allGoods.Length; ci++)
         {
+            var commodity = allGoods[ci];
             if (!IsStrategic(commodity)) continue;
             if (buyer.Market.TryGetValue(commodity, out var quote))
             {

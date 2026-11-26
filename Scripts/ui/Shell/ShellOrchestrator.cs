@@ -321,8 +321,11 @@ internal sealed class ShellOrchestrator
         else
             Alerts.TickNewsCardOnly(delta);
         MapBar.TickMinimap(allowTextureRebuild: !didHeavyInTick && Engine.GetProcessFrames() != _heavyFrameStamp);
-        if (_isMobileRuntime || _cachedProfile?.TouchMode == true || TouchModeBar.IsVisible || (Context.IsTouchMode?.Invoke() ?? false))
+        if (_isMobileRuntime || _cachedProfile?.TouchMode == true || TouchModeBar.IsVisible || TouchModeBar.HasActiveToast || (Context.IsTouchMode?.Invoke() ?? false))
+        {
             TouchModeBar.Refresh();
+            TouchModeBar.Tick(delta);
+        }
         Strip.TickDivisionVisibility(delta, allowLiveReads);
     }
 

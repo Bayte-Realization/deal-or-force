@@ -248,9 +248,14 @@ public partial class DealOrForceGame : Control
             var flushDue = _interfaceSinceRefresh + delta >= RunningInterfaceInterval || (hudSnap?.IsPaused ?? _campaign!.IsPaused);
             var needLive = !isNewShell || _bgHudRefreshDue || flushDue || AnyLegacyModalOrScreenVisible() ||
                            (_shell is not null && _shell.NeedsLiveCampaignRead(hudSnap));
+            // At Speed 5 the render snapshot and the clock plate are lock-free and keep full rate,
+            // so the routine locked HUD read can wait longer before it asks the worker for a window.
+            var liveReadIntervalMs = _speed >= 5 && !(hudSnap?.IsPaused ?? false)
+                ? (ulong)(_isMobileRuntime ? 320 : 180)
+                : (ulong)(_isMobileRuntime ? 180 : 110);
             var urgentLive = AnyLegacyModalOrScreenVisible() || (hudSnap?.PendingEventCount ?? 0) > 0 ||
                              (hudSnap?.IsPaused ?? false) ||
-                             (Time.GetTicksMsec() - _lastBgLiveReadMsec >= (ulong)(_isMobileRuntime ? 180 : 110));
+                             (Time.GetTicksMsec() - _lastBgLiveReadMsec >= liveReadIntervalMs);
             var gotRead = needLive && _campaign!.TryEnterRead(0, requestWindowOnMiss: urgentLive);
             if (gotRead)
             {
@@ -393,7 +398,12 @@ public partial class DealOrForceGame : Control
                 _simRunner.Stop();
             return;
         }
-        Campaign.StageSliceMilliseconds = _isMobileRuntime ? 4.5 : 3.5;
+        // Coarser stage slices at the higher speeds: the worker yields at once to a tap or a
+        // command anyway (StageOverdue watches the gate), so a slice only bounds routine work.
+        Campaign.StageSliceMilliseconds = _speed >= 5 ? (_isMobileRuntime ? 14.0 : 10.0)
+            : _speed == 4 ? (_isMobileRuntime ? 8.0 : 6.0)
+            : (_isMobileRuntime ? 4.5 : 3.5);
+        _simRunner.AdaptiveStepPacing = true;
         _simRunner.MobilePacing = _isMobileRuntime;
         _simRunner.MinSpeed5DayIntervalMs = 0.0;
         if (!ReferenceEquals(_simRunner.Campaign, _campaign) || !_simRunner.IsActive)
@@ -507,7 +517,10 @@ public partial class DealOrForceGame : Control
 
     public override void _Input(InputEvent inputEvent)
     {
-
+        if (inputEvent is InputEventScreenTouch { Pressed: true } or
+            InputEventMouseButton { Pressed: true, Device: not -1 } or
+            InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+            _globe?.CancelPendingMapSelection();
         ButtonFocusPresentation.Observe(GetViewport(), inputEvent);
         // Loading can yield before any covered panel exists. Gate BEFORE dispatching
         // to helpers or authoring dialogs, not half way through the input chain.
@@ -1187,7 +1200,9 @@ public partial class DealOrForceGame : Control
         Built("globe", () =>
         {
             _globe = new GlobePresentation();
-
+            _globe.HasMapPlacementTool = () => _placingBuilding is not null || _placingRecruitmentTemplate is not null;
+            _globe.IsMapCovered = () => _isLoading || IsInstanceValid(_campaignFaultCanvas) ||
+                EvaluateAnyShellModalOpen() && _pickerLayer is not { Visible: true };
             _modLoader.SetCrossoverPresentation = enabled => _globe.SetCrossoverPresentation(enabled);
             _globe.CountryPicked += OnCountryPicked;
             _globe.UnclaimedPicked += OnUnclaimedPicked;
@@ -1793,7 +1808,7 @@ public partial class DealOrForceGame : Control
         // only for a country that is not ours. It closes on a click outside or on Escape.
         if (_mapLeftClickInteractionEnabled &&
             pick.Nation is not null && pick.Nation != _campaign.Player && _hudLayer.Visible)
-            ShowMapDiplomacyMenu(pick.Nation, GetViewport().GetMousePosition());
+            ShowMapDiplomacyMenu(pick.Nation, pick.PointerPosition ?? GetViewport().GetMousePosition());
     }
 
     private void TogglePause()

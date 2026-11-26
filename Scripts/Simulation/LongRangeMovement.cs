@@ -879,7 +879,7 @@ public static partial class LongRangeMovement
     /// template, empty when there is a way.
     /// </summary>
     internal static string Plan(Ground g, SupportTypeDefinition type, int from, int to, List<int> route, List<int> modes, out object[] args,
-        bool corridor = false)
+        bool corridor = false, bool wantArgs = true)
     {
         args = Array.Empty<object>();
         if (from == to) return "";
@@ -890,7 +890,7 @@ public static partial class LongRangeMovement
             var ferry = FerryKm(c, type);
             if (km > ferry)
             {
-                args = new object[] { MathF.Round(km), MathF.Round(ferry) };
+                args = wantArgs ? new object[] { MathF.Round(km), MathF.Round(ferry) } : Array.Empty<object>();
                 return RefuseFerry;
             }
             route.Add(to); modes.Add((int)SupportMoveMode.Air);
@@ -1096,8 +1096,8 @@ public static partial class LongRangeMovement
     {
         public string Refusal = "";
         public object[] Args = Array.Empty<object>();
-        public int[] Route = Array.Empty<int>();
-        public int[] Modes = Array.Empty<int>();
+        public readonly List<int> Route = new();
+        public readonly List<int> Modes = new();
     }
 
     internal static RelocatePreview PreviewOne(Campaign c, int issuer, int formationId, int province, bool append,
@@ -1109,7 +1109,8 @@ public static partial class LongRangeMovement
     internal static RelocatePreview PreviewOneInto(Campaign c, RelocatePreview preview, int issuer, int formationId, int province, bool append,
         Dictionary<int, Ground> grounds = null, BattleSet battles = null,
         Dictionary<int, SupportFormation> byId = null, bool includeBasing = true,
-        Dictionary<(int, int), CachedGroundPlan> planMemo = null)
+        Dictionary<(int, int), CachedGroundPlan> planMemo = null,
+        Stack<CachedGroundPlan> planPool = null, bool wantArgs = true)
     {
         preview.FormationId = formationId;
         preview.Destination = province;
@@ -1179,22 +1180,34 @@ public static partial class LongRangeMovement
             }
             else
             {
-                var planned = Plan(g, type, origin, province, preview.Route, preview.Modes, out var args);
+                var planned = Plan(g, type, origin, province, preview.Route, preview.Modes, out var args, wantArgs: wantArgs);
                 if (planned.Length > 0)
                 {
-                    planMemo[key] = new CachedGroundPlan { Refusal = planned, Args = args };
+                    var cachedPlan = planPool is { Count: > 0 } ? planPool.Pop() : new CachedGroundPlan();
+                    cachedPlan.Refusal = planned;
+                    cachedPlan.Args = args;
+                    cachedPlan.Route.Clear();
+                    cachedPlan.Modes.Clear();
+                    planMemo[key] = cachedPlan;
                     preview.Refusal = planned;
                     preview.RefusalArgs = args;
                     preview.Route.Clear();
                     preview.Modes.Clear();
                     return preview;
                 }
-                planMemo[key] = new CachedGroundPlan { Route = preview.Route.ToArray(), Modes = preview.Modes.ToArray() };
+                var okPlan = planPool is { Count: > 0 } ? planPool.Pop() : new CachedGroundPlan();
+                okPlan.Refusal = "";
+                okPlan.Args = Array.Empty<object>();
+                okPlan.Route.Clear();
+                okPlan.Route.AddRange(preview.Route);
+                okPlan.Modes.Clear();
+                okPlan.Modes.AddRange(preview.Modes);
+                planMemo[key] = okPlan;
             }
         }
         else
         {
-            var planned = Plan(g, type, origin, province, preview.Route, preview.Modes, out var args);
+            var planned = Plan(g, type, origin, province, preview.Route, preview.Modes, out var args, wantArgs: wantArgs);
             if (planned.Length > 0) { preview.Refusal = planned; preview.RefusalArgs = args; preview.Route.Clear(); preview.Modes.Clear(); return preview; }
         }
 
@@ -1270,8 +1283,9 @@ public static partial class LongRangeMovement
         formation.BaseProvinceId = -1;
         formation.DeployDaysLeft = 0;
         formation.CutOff = false;
-        DiagnosticLogs.Write("orders", $"SUPPORT_RELOCATE formation={formation.Id} nation={formation.NationId} " +
-            $"from={At(formation)} to={plan.Destination} steps={plan.Route.Count} days={plan.Days}");
+        if (DiagnosticLogs.Enabled)
+            DiagnosticLogs.Write("orders", $"SUPPORT_RELOCATE formation={formation.Id} nation={formation.NationId} " +
+                $"from={At(formation)} to={plan.Destination} steps={plan.Route.Count} days={plan.Days}");
         return true;
     }
 
@@ -2088,7 +2102,7 @@ public static partial class LongRangeMovement
         public readonly PriorityQueue<int, (float, int)> Queue = new();
         public readonly Dictionary<(int Origin, float Standoff, bool MayTouch, float Speed), int> RoadMemo = new();
         public readonly Dictionary<(int Origin, float Standoff, bool MayTouch), int> SeaMemo = new();
-        public readonly Dictionary<(int Origin, float Standoff, bool MayTouch, float Ferry), int[]> AirMemo = new();
+        public readonly Dictionary<(int Origin, float Standoff, bool MayTouch, float Ferry), List<int>> AirMemo = new();
         public readonly Dictionary<(int, int), CachedGroundPlan> PlanMemo = new();
         public ulong[] TargetBits = Array.Empty<ulong>();
         public readonly List<int> Targets = new();
@@ -2105,10 +2119,48 @@ public static partial class LongRangeMovement
         public readonly List<ScenarioState> CoverRegions = new();
         public readonly List<(int Province, float Reach, float Lat)> CoverGuarded = new();
         public readonly Dictionary<int, int> CoverAnchors = new();
+        public readonly Dictionary<int, (int Anchor, float Lat, bool Eligible)> CoverRegionAnchors = new();
         public readonly RelocatePreview PreviewScratch = new();
         public readonly Dictionary<(int Comp, float Standoff, bool MayTouch), bool> CompSuitMemo = new();
         public readonly Dictionary<(float Standoff, bool MayTouch), (int Count, int FirstProv)> SuitSummaryMemo = new();
         public readonly List<int> AirHopsScratch = new();
+        public readonly Stack<List<int>> AirPool = new();
+        public readonly Stack<CachedGroundPlan> PlanPool = new();
+        public bool HasStrikeSides;
+        public bool HasAllStrikers;
+        public bool HasStatesByOwnerMap;
+
+        public void ResetPlanMemo()
+        {
+            if (PlanMemo.Count == 0) return;
+            foreach (var entry in PlanMemo.Values)
+            {
+                entry.Route.Clear();
+                entry.Modes.Clear();
+                entry.Args = Array.Empty<object>();
+                entry.Refusal = "";
+                if (PlanPool.Count < 256) PlanPool.Push(entry);
+            }
+            PlanMemo.Clear();
+        }
+
+        public void ResetAirMemo()
+        {
+            if (AirMemo.Count == 0) return;
+            foreach (var list in AirMemo.Values)
+            {
+                list.Clear();
+                if (AirPool.Count < 256) AirPool.Push(list);
+            }
+            AirMemo.Clear();
+        }
+
+        public List<int> RentAirHops()
+        {
+            var list = AirPool.Count > 0 ? AirPool.Pop() : new List<int>(4);
+            list.Clear();
+            return list;
+        }
     }
 
 

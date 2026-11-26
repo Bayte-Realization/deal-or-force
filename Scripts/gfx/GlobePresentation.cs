@@ -17,7 +17,10 @@ public readonly record struct GlobePick(
     int ProvinceId,
     float Latitude,
     float Longitude
-);
+)
+{
+    internal Vector2? PointerPosition { get; init; }
+}
 
 /// <summary>
 /// Godot rendering vertical slice of the original globe.  It uses the exact bundled
@@ -286,6 +289,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private Camera3D _camera = null!;
     private Node3D _orbit = null!;
     private ShaderMaterial _globeMaterial = null!;
+    private ShaderMaterial _cachedOwnersMovedMaterial;
+    private bool? _cachedOwnersMoved;
     private Node3D _capitalRoot = null!;
     private Texture2D _capitalTexture = null!;
     private Node3D _armyRoot = null!;
@@ -331,8 +336,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         campaign = _campaign;
         if (campaign is null) return true;
+        var isMobileOrTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
+                              Platform.PlatformProfile.Current?.IsMobile == true;
         var wantWindow = !_mapApplied || _controlRevision < 0 || _routeFingerprint == int.MinValue ||
-                         _sinceLastFencedSync >= (fastSim ? 0.11 : 0.045);
+                         _sinceLastFencedSync >= (fastSim ? (isMobileOrTouch ? 0.16 : 0.11) : 0.045);
         return campaign.TryEnterRead(0, wantWindow);
     }
 
@@ -340,6 +347,29 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         campaign = _campaign;
         return campaign is not null && campaign.TryEnterRead(timeoutMs, true);
+    }
+
+    /// <summary>
+    /// A read for an interactive action (a tap, a long press): the background worker preempts at
+    /// the next stage boundary and stays off the gate while this waits.
+    /// </summary>
+    private bool TryBeginPriorityActionRead(out Simulation.Campaign campaign, int timeoutMs = 45)
+    {
+        campaign = _campaign;
+        return campaign is not null && campaign.AccessGate.TryEnterPriorityRead(timeoutMs);
+    }
+
+    public override void _Notification(int what)
+    {
+        base._Notification(what);
+        if (what == NotificationExitTree)
+        {
+            // A queued tap holds a priority request on the gate; never leave one behind.
+            CancelPendingMapSelection();
+            _lastSelectedRegionLive = int.MinValue;
+            _lastSelectedRegionCampaign = null;
+            _lastSelectedRegionMap = null;
+        }
     }
 
     private Simulation.CampaignRenderSnapshot CurrentRenderSnapshot() =>
@@ -385,6 +415,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // Picking, density and city layout must see the same projected positions that
         // will be rendered this frame, including wrapping at the date line.
         if (_flatMap) UpdateFlatWorldPositions();
+        RetryMapSelection(inputBlocked);
 
         UpdateShaderZoomAndSurfaceState(delta);
 
@@ -532,7 +563,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // Stagger heavy visual passes across 4 rotating sub-phases so capitals/fleets,
         // army density, cities/settlements, and country/region labels never spike one frame.
         var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
-        var phaseInterval = isTouchPrimary ? 0.045 : 0.030;
+        var isMobileOrTouch = isTouchPrimary || Platform.PlatformProfile.Current?.IsMobile == true;
+        var speed5Running = snap is { Version: > 0 }
+            ? snap is { IsPaused: false, Speed: >= 5 }
+            : fencedCampaign is { IsPaused: false, Speed: >= 5 };
+        var isPausedNow = snap is { Version: > 0 } ? snap.IsPaused : fencedCampaign?.IsPaused == true;
+        var phaseInterval = isMobileOrTouch && speed5Running ? 0.085 : (isTouchPrimary ? 0.045 : 0.030);
         if (_visualClock >= phaseInterval)
         {
             _visualClock = 0;
@@ -543,9 +579,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
             StepStaggeredVisualPhase(phase, visualStep);
         }
 
-        var armySyncInterval = snap is { Version: > 0 }
-            ? (!snap.IsPaused && snap.Speed >= 5 ? 0.15 : fastSim ? 0.12 : 0.10)
-            : (fencedCampaign is { IsPaused: false, Speed: >= 5 } ? 0.15 : fastSim ? 0.12 : 0.10);
+        var armySyncInterval = isPausedNow
+            ? 0.0
+            : (isMobileOrTouch && speed5Running ? 0.25 : speed5Running ? 0.15 : fastSim ? 0.12 : 0.10);
         if (MilitaryMarkersEnabled && _mapApplied && fencedCampaign is not null && _militaryVisualAccumulator >= armySyncInterval)
         {
             _militaryVisualAccumulator = 0;
@@ -555,7 +591,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (IsInstanceValid(_battleRoot) && _battleRoot.Visible != MilitaryMarkersEnabled)
             _battleRoot.Visible = MilitaryMarkersEnabled;
         var routeSelectionDirty = _routeFingerprint == int.MinValue;
-        var routeInterval = isTouchPrimary ? 0.22 : 0.125;
+        var routeInterval = isPausedNow ? 0.0 : (isMobileOrTouch && speed5Running ? 0.30 : isTouchPrimary ? 0.22 : 0.125);
         var routeDue = routeSelectionDirty || _routeVisualAccumulator >= routeInterval;
         if (routeDue)
         {
@@ -566,7 +602,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:strait crossings")) UpdateStraitCrossings();
         }
         var controllerUploadedThisFrame = false;
-        var uploadInterval = isTouchPrimary ? 0.20 : (fastSim ? 0.14 : 0.0);
+        // Mobile/touch at uncapped Speed 5: the owner/controller plate is the heaviest routine upload,
+        // so it repaints at most every 220 ms. Paused, speed < 5, map-mode invalidations and
+        // peace previews flush on the very next frame instead of waiting on the timer.
+        var uploadInterval = isMobileOrTouch
+            ? (speed5Running && _peacePreview.Count == 0 && _lastMapModeDay > -100 ? 0.22 : 0.0)
+            : (fastSim ? 0.14 : 0.0);
         var uploadDue = _controlRevision < 0 || (!heavyGpuUploadedThisFrame && (uploadInterval <= 0.0 || _controllerUploadTimer >= uploadInterval));
         if (_mapApplied && fencedCampaign is not null && _controlRevision != fencedCampaign.MapRevision && uploadDue)
         {
@@ -735,8 +776,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 result.HydrologyPixels = null;
                 if (result.RiverCentrePixels is { } centre)
                 {
-                    using var lines = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rgba8, centre);
+                    using var lines = Image.CreateFromData(result.RiverTextureWidth, result.RiverTextureHeight,
+                        false, Image.Format.Rgba8, centre);
                     _globeMaterial.SetShaderParameter("river_centre_map", ImageTexture.CreateFromImage(lines));
+                    _globeMaterial.SetShaderParameter("river_atlas_header_rows", result.RiverAtlasHeaderRows);
+                    _globeMaterial.SetShaderParameter("river_source_size", new Vector2(MapWidth, MapHeight));
                     result.RiverCentrePixels = null;
                 }
                 break;
@@ -833,6 +877,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 GD.Print($"[dof] map applied; managed heap {GC.GetTotalMemory(false) / (1024 * 1024):N0} MB");
                 GD.Print($"[dof] tactical province topology ready: {_provinceTopology.ProvinceCount:N0} land provinces, " +
                          $"{_provinceTopology.RiverCrossingCount:N0} river crossings, {_riverAnchors.Count:N0} river labels");
+                _lastSelectedRegionLive = int.MinValue;
+                _lastSelectedRegionCampaign = null;
+                _lastSelectedRegionMap = null;
                 _mapApplied = true;
                 break;
         }
@@ -867,6 +914,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 shader.Code = PackedMapShader.Build(shader.Code);
         }
         _globeMaterial = new ShaderMaterial { Shader = shader };
+        _cachedOwnersMovedMaterial = null;
+        _cachedOwnersMoved = null;
         InitializePackedTextures();
         ApplyMapVisualStyle();
         ApplyShaderQualityTier(force: true);
@@ -887,6 +936,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         var dryWater = Image.CreateEmpty(2, 2, false, Image.Format.R8);
         dryWater.Fill(Colors.White);
         _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(dryWater));
+        if (!ReducedMap) _globeMaterial.SetShaderParameter("river_centre_map", placeholder);
         if (_packedLookups is null)
         {
             _ownerIdTexture = ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8));
@@ -987,7 +1037,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (_ownerIdImage is null) _ownerIdImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerIds);
         else _ownerIdImage.SetData(256, 256, false, Image.Format.Rgba8, ownerIds);
         UpdateMapImage("province_owner_ids", _ownerIdImage, ref _ownerIdTexture);
-        _globeMaterial.SetShaderParameter("owners_moved", ownersMoved ? 1.0f : 0.0f);
+        var movedVal = ownersMoved ? 1.0f : 0.0f;
+        if (!ReferenceEquals(_cachedOwnersMovedMaterial, _globeMaterial) || _cachedOwnersMoved != ownersMoved)
+        {
+            _cachedOwnersMovedMaterial = _globeMaterial;
+            _cachedOwnersMoved = ownersMoved;
+            _globeMaterial.SetShaderParameter("owners_moved", movedVal);
+        }
         // Asked every time, not only when something differs from the authored world: owners
         // that have come BACK to it leave the picture on screen just as wrong. The request
         // itself is free when the plate already shows today's owners.
@@ -1007,6 +1063,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         bool buildFrontier,
         bool reducedMap,
         bool lowMemoryMobile,
+        bool compactRivers,
         string cacheDirectory,
         string shippedCachePath,
         string shippedHydrologyCachePath,
@@ -1453,6 +1510,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
                  $"cache_io_ms={cacheIoMs:F0} topology_ms={topoMs:F0} hydrology_ms={hydroMs:F0} anchors_ms={anchorMs:F0} " +
                  $"pixel_loop_ms={pixelMs:F0} plate_ms={plateMs:F0} reduced={reducedMap} mobile={lowMemoryMobile} ({cacheReason})");
 
+        var riverAtlas = compactRivers ? HydrologySurfaceData.PackRiverCentreline(riverCentrePixels, MapWidth, MapHeight) : null;
+        GD.Print($"[dof-boot] river_texture_bytes={riverAtlas?.Pixels.Length ?? riverCentrePixels?.Length ?? 0} compact={riverAtlas.HasValue}");
+
         return new MapBuildResult
         {
             PoliticalPixels = political,
@@ -1464,7 +1524,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
             ProvinceIds = provinceIds,
             NationIds = nationIds,
             HydrologyPixels = hydrologyPixels,
-            RiverCentrePixels = riverCentrePixels,
+            RiverCentrePixels = riverAtlas?.Pixels ?? riverCentrePixels,
+            RiverTextureWidth = riverAtlas?.Width ?? MapWidth,
+            RiverTextureHeight = riverAtlas?.Height ?? MapHeight,
+            RiverAtlasHeaderRows = riverAtlas?.HeaderRows ?? 0,
             Provinces = provinces,
             LabelAnchors = labelAnchors,
             RegionAnchors = regionAnchors,
@@ -1590,6 +1653,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         public byte[] NationIds;
         public byte[] HydrologyPixels;
         public byte[] RiverCentrePixels;
+        public int RiverTextureWidth, RiverTextureHeight, RiverAtlasHeaderRows;
         public Simulation.ProvinceTopology Provinces;
         public Dictionary<int, TerritoryLabelAnchor> LabelAnchors;
         public Dictionary<int, TerritoryLabelAnchor> RegionAnchors;

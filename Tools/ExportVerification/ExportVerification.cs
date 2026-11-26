@@ -171,6 +171,13 @@ public partial class ExportVerification : Node
                     Check(game.FindChild("NetworkMultiplayer", true, false) is Control { Visible: true },
                         "real cold main-menu multiplayer intent reaches the lobby without a picker null reference");
                 using var _uiShellScope = EnterClassicUiShellAndBeginSession(game);
+                if (args.Contains("--verify-map-selection-contention-only"))
+                {
+                    await VerifyMapSelectionContention(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (args.Contains("--verify-placement-resources-only"))
                 {
                     await VerifyPlacementResources(game);

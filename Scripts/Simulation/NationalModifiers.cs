@@ -250,6 +250,45 @@ public static class NationalModifiers
         Fill(totals, scratchSlots, nation);
     }
 
+    private static void DrainScratch(Dictionary<string, float> scratch, Dictionary<string, float> totals,
+        float[] slots, ref ulong slotMask)
+    {
+        if (scratch.Count == 0) return;
+        foreach (var (key, value) in scratch)
+        {
+            if (SlotById.TryGetValue(key, out var slot))
+            {
+                slots[slot] += value;
+                if ((uint)slot < 64u) slotMask |= 1UL << slot;
+            }
+            else
+            {
+                CollectionsMarshal.GetValueRefOrAddDefault(totals, key, out _) += value;
+            }
+        }
+        scratch.Clear();
+    }
+
+    private static void AddCompiled(IReadOnlyDictionary<string, float> modifiers, Dictionary<string, float> totals,
+        float[] slots, ref ulong slotMask)
+    {
+        if (modifiers is null || modifiers.Count == 0) return;
+        var compiled = CompiledCache.GetValue(modifiers, static m => CompileDictionary(m));
+        var slotted = compiled.Slotted;
+        for (var i = 0; i < slotted.Length; i++)
+        {
+            var entry = slotted[i];
+            slots[entry.Slot] += entry.Value;
+            if ((uint)entry.Slot < 64u) slotMask |= 1UL << entry.Slot;
+        }
+        var custom = compiled.Custom;
+        for (var i = 0; i < custom.Length; i++)
+        {
+            var entry = custom[i];
+            CollectionsMarshal.GetValueRefOrAddDefault(totals, entry.Key, out _) += entry.Value;
+        }
+    }
+
     private static void Fill(Dictionary<string, float> totals, float[] slots, Nation nation)
     {
         totals.Clear();
@@ -258,67 +297,30 @@ public static class NationalModifiers
         var scratch = _dynamicScratch ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         scratch.Clear();
 
-        void DrainScratch()
-        {
-            if (scratch.Count == 0) return;
-            foreach (var (key, value) in scratch)
-            {
-                if (SlotById.TryGetValue(key, out var slot))
-                {
-                    slots[slot] += value;
-                    if ((uint)slot < 64u) slotMask |= 1UL << slot;
-                }
-                else
-                {
-                    CollectionsMarshal.GetValueRefOrAddDefault(totals, key, out _) += value;
-                }
-            }
-            scratch.Clear();
-        }
-
-        void AddCompiled(IReadOnlyDictionary<string, float> modifiers)
-        {
-            if (modifiers is null || modifiers.Count == 0) return;
-            var compiled = CompiledCache.GetValue(modifiers, static m => CompileDictionary(m));
-            var slotted = compiled.Slotted;
-            for (var i = 0; i < slotted.Length; i++)
-            {
-                var entry = slotted[i];
-                slots[entry.Slot] += entry.Value;
-                if ((uint)entry.Slot < 64u) slotMask |= 1UL << entry.Slot;
-            }
-            var custom = compiled.Custom;
-            for (var i = 0; i < custom.Length; i++)
-            {
-                var entry = custom[i];
-                CollectionsMarshal.GetValueRefOrAddDefault(totals, entry.Key, out _) += entry.Value;
-            }
-        }
-
         NationalCourses.AddTo(scratch, nation);
         UnionCohesion.AddTo(scratch, nation);
         DemographicCycle.AddTo(scratch, nation);
         // Same-shelf books share a ceiling here, on this sum. Sources still names each book whole.
         TacticalDoctrines.AddTo(scratch, nation);
-        DrainScratch();
-        if (StrategicDoctrines.Of(nation) is { } stratDoc) AddCompiled(stratDoc.Modifiers);
+        DrainScratch(scratch, totals, slots, ref slotMask);
+        if (StrategicDoctrines.Of(nation) is { } stratDoc) AddCompiled(stratDoc.Modifiers, totals, slots, ref slotMask);
         ParliamentaryPolitics.AddTo(scratch, nation);
-        DrainScratch();
+        DrainScratch(scratch, totals, slots, ref slotMask);
         if (nation.LawsActive)
             foreach (var category in PoliticalPolicyCatalog.NationalCategories)
-                if (PoliticalPolicies.Effective(nation, category) is { } law) AddCompiled(law.Modifiers);
+                if (PoliticalPolicies.Effective(nation, category) is { } law) AddCompiled(law.Modifiers, totals, slots, ref slotMask);
         if (nation.AgendasActive && nation.Agenda is { Completed: false } agenda &&
-            PoliticalPolicyCatalog.Find(agenda.Id, true) is { } definition) AddCompiled(definition.Modifiers);
+            PoliticalPolicyCatalog.Find(agenda.Id, true) is { } definition) AddCompiled(definition.Modifiers, totals, slots, ref slotMask);
         Rulers.AddTo(scratch, nation);
         GrandProjects.AddTo(scratch, nation);
-        DrainScratch();
+        DrainScratch(scratch, totals, slots, ref slotMask);
         foreach (var id in nation.Technologies)
-            if (TechnologyCatalog.Of(id) is { } technology) AddCompiled(technology.Effects);
+            if (TechnologyCatalog.Of(id) is { } technology) AddCompiled(technology.Effects, totals, slots, ref slotMask);
         foreach (var active in nation.Modifiers)
-            if (ModifierCatalog.Get(active.Id) is { } spirit) AddCompiled(spirit.Modifiers);
-        if (GovernmentCatalog.Of(nation.Government) is { } government) AddCompiled(government.Modifiers);
-        if (IdeologyCatalog.Of(nation.Ideology) is { } ideology) AddCompiled(ideology.Modifiers);
-        if (GovernmentFocusCatalog.Of(nation.GovernmentFocus) is { } focus) AddCompiled(focus.Modifiers);
+            if (ModifierCatalog.Get(active.Id) is { } spirit) AddCompiled(spirit.Modifiers, totals, slots, ref slotMask);
+        if (GovernmentCatalog.Of(nation.Government) is { } government) AddCompiled(government.Modifiers, totals, slots, ref slotMask);
+        if (IdeologyCatalog.Of(nation.Ideology) is { } ideology) AddCompiled(ideology.Modifiers, totals, slots, ref slotMask);
+        if (GovernmentFocusCatalog.Of(nation.GovernmentFocus) is { } focus) AddCompiled(focus.Modifiers, totals, slots, ref slotMask);
 
         var remaining = slotMask;
         while (remaining != 0UL)

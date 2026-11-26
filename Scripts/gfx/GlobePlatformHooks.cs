@@ -67,33 +67,34 @@ public sealed partial class GlobePresentation
         var logicalH = Size.Y > 1f ? Size.Y : 1080f;
         var profile = GodotPlatformBridge.EnsureInitialized(logicalH);
         _touchAdapter = new TouchCameraAdapter(profile);
+        _touchAdapter.ModeChanged += _ => CancelPendingMapSelection();
+        _touchAdapter.PinchStarted += () =>
+        {
+            _flatGlide = Vector2.Zero;
+            _orbitGlide = Vector2.Zero;
+            _globeZoomAnchorActive = false;
+            _flatZoomAnchorActive = false;
+            CancelPendingMapSelection();
+        };
         _touchAdapter.PanRequested += delta =>
         {
             _globeZoomAnchorActive = false;
             _flatZoomAnchorActive = false;
-            DragCamera(delta);
+            DragCamera(delta, recordGlide: false);
         };
-        _touchAdapter.ZoomRequested += (anchor, direction, _) =>
+        _touchAdapter.ZoomRequested += (anchor, _, rawScale) =>
         {
             _flatGlide = Vector2.Zero;
             _orbitGlide = Vector2.Zero;
-            if (_flatMap) ZoomFlatMapAt(anchor, direction, fine: false);
-            else ZoomGlobeAt(anchor, direction, fine: false);
+            if (_flatMap) PinchZoomFlatMapAt(anchor, rawScale);
+            else PinchZoomGlobeAt(anchor, rawScale);
         };
-        _touchAdapter.TiltRotateRequested += (tiltPx, rotRad) =>
-        {
-            if (_flatMap || !IsInstanceValid(_camera)) return;
-            _globeZoomAnchorActive = false;
-            var radians = MapPanScale.OrbitRadiansPerPixel(_distance, GlobeRadius, _camera.Fov, ViewportSize().Y);
-            _targetPitch = Mathf.Clamp(_targetPitch - tiltPx * radians, -MaxPitch, MaxPitch);
-            _targetYaw += rotRad;
-            _pitch = _targetPitch;
-            _yaw = _targetYaw;
-        };
+        // Two-finger pinch must never orbit-drag lat/lon sideways on this 2-axis orbit rig
+        // (there is no camera roll axis, so feeding twist/tilt into _yaw/_pitch drifts the globe).
         _touchAdapter.TapRequested += DispatchPrimaryClick;
         _touchAdapter.LongPressContextRequested += pos =>
         {
-            if (PlanEraseMode || CountrySelectionOnly || !TryBeginActionRead(out var campaign, 150)) return;
+            if (PlanEraseMode || CountrySelectionOnly || !TryBeginPriorityActionRead(out var campaign, 120)) return;
             GlobePick commanded = default;
             var picked = false;
             try { picked = TryPick(pos, out commanded, updateSelection: false); }
@@ -138,11 +139,22 @@ public sealed partial class GlobePresentation
         else _touchAdapter.Tick(delta);
     }
 
-    private void DispatchPrimaryClick(Vector2 position)
+    private bool TryDispatchPrimaryClick(Vector2 position, int timeoutMs, bool priority = false)
     {
-        if (!TryBeginActionRead(out var campaign, 150)) return;
+        Simulation.Campaign campaign;
+        if (priority ? !TryBeginPriorityActionRead(out campaign, timeoutMs) : !TryBeginActionRead(out campaign, timeoutMs))
+            return false;
         // Materialize pick under read lock and invoke UI signals AFTER releasing the read fence
         // so UI click handlers that acquire write locks for ICampaignCommand never self-deadlock!
+        // On a Frame-0 direct tap (!priority), keep RequestPriorityRead held from before ExitRead
+        // across CountryPicked / signal dispatch so the background worker cannot grab the gate
+        // before OpenNewShellMapSelection / ShowMapSelection refreshes its panel.
+        var heldPriority = false;
+        if (!priority)
+        {
+            campaign.AccessGate.RequestPriorityRead();
+            heldPriority = true;
+        }
         Simulation.Nation movement = null;
         GlobePick? pickedCountry = null;
         Simulation.LandBattle pickedBattle = null;
@@ -154,41 +166,49 @@ public sealed partial class GlobePresentation
         bool clickedEmpty = false;
         try
         {
-            if (!CountrySelectionOnly && _movementLayer is not null && _movementLayer.TryPickAt(position, out movement))
-            { }
-            else if (CountrySelectionOnly)
+            try
             {
-                if (TryPick(position, out var country)) pickedCountry = country;
+                if (!CountrySelectionOnly && _movementLayer is not null && _movementLayer.TryPickAt(position, out movement))
+                { }
+                else if (CountrySelectionOnly)
+                {
+                    if (TryPick(position, out var country)) pickedCountry = country;
+                }
+                else if (SupportRebaseArmed)
+                {
+                    // A strike target is being named in the long-range panel: the click is its.
+                    if (TryPick(position, out var destination)) pickedCountry = destination;
+                }
+                else if (TryPickBattle(position, out pickedBattle)) { }
+                else if (TryPickArmyStack(position, out pickedStack)) { }
+                else if (TryPickFleet(position, out pickedFleet)) { }
+                else if (TryPickSupport(position, out pickedSupport)) { }
+                else if (TryPick(position, out var pick)) pickedCountry = pick;
+                else if (TryPickUnclaimed(position, out pickedUnclaimed, out pickedUnclaimedProvince)) { }
+                else clickedEmpty = true;
             }
-            else if (SupportRebaseArmed)
+            finally
             {
-                // A strike target is being named in the long-range panel: the click is its.
-                if (TryPick(position, out var destination)) pickedCountry = destination;
+                campaign.ExitRead();
             }
-            else if (TryPickBattle(position, out pickedBattle)) { }
-            else if (TryPickArmyStack(position, out pickedStack)) { }
-            else if (TryPickFleet(position, out pickedFleet)) { }
-            else if (TryPickSupport(position, out pickedSupport)) { }
-            else if (TryPick(position, out var pick)) pickedCountry = pick;
-            else if (TryPickUnclaimed(position, out pickedUnclaimed, out pickedUnclaimedProvince)) { }
-            else clickedEmpty = true;
+
+            if (movement is not null) MovementPicked?.Invoke(movement);
+            else if (pickedCountry is { } country) CountryPicked?.Invoke(country with { PointerPosition = position });
+            else if (pickedBattle is not null) BattlePicked?.Invoke(pickedBattle);
+            else if (pickedStack is not null)
+            {
+                if (pickedStack.Count == 1) ArmyPicked?.Invoke(pickedStack[0]);
+                else if (pickedStack.Count > 1) ArmiesBoxPicked?.Invoke(pickedStack);
+            }
+            else if (pickedFleet is not null) FleetPicked?.Invoke(pickedFleet);
+            else if (pickedSupport is not null) SupportPicked?.Invoke(pickedSupport);
+            else if (pickedUnclaimed is not null) UnclaimedPicked?.Invoke(pickedUnclaimed, pickedUnclaimedProvince);
+            else if (clickedEmpty) EmptyMapClicked?.Invoke();
+            return true;
         }
         finally
         {
-            campaign.ExitRead();
+            if (heldPriority) campaign.AccessGate.ClearPriorityRead();
         }
-
-        if (movement is not null) MovementPicked?.Invoke(movement);
-        else if (pickedCountry is { } country) CountryPicked?.Invoke(country);
-        else if (pickedBattle is not null) BattlePicked?.Invoke(pickedBattle);
-        else if (pickedStack is not null)
-        {
-            if (pickedStack.Count == 1) ArmyPicked?.Invoke(pickedStack[0]);
-            else if (pickedStack.Count > 1) ArmiesBoxPicked?.Invoke(pickedStack);
-        }
-        else if (pickedFleet is not null) FleetPicked?.Invoke(pickedFleet);
-        else if (pickedSupport is not null) SupportPicked?.Invoke(pickedSupport);
-        else if (pickedUnclaimed is not null) UnclaimedPicked?.Invoke(pickedUnclaimed, pickedUnclaimedProvince);
-        else if (clickedEmpty) EmptyMapClicked?.Invoke();
     }
 }

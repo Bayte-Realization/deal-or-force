@@ -10,10 +10,10 @@ For specialized visual, runtime, operational, or client-specific work, use `addo
 
 # Development tooling
 
-Publication target (user instruction, 30 October 2026): publish game changes to
-`EntertAlpha`. Preserve the historical `ReimAlpha` branch; do not reset it or
-force-push without a specific user-approved historical target. An active shared
-worktree can contain newer, unverified edits beyond a published build checkpoint.
+Publication target (active from release 0.8.7.3): publish game changes to
+`PortAlpha`. Preserve the historical `ReimAlpha` and `EntertAlpha` branches; do not
+reset them or force-push without a specific user-approved historical target. An active
+shared worktree can contain newer, unverified edits beyond a published build checkpoint.
 
 Two tools exist so the daily loop is one command instead of four remembered ones. Use them
 instead of re-deriving the commands.

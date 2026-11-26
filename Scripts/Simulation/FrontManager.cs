@@ -112,7 +112,24 @@ public static class FrontManager
         public readonly Dictionary<int, List<Army>> ArmiesByNation = new();
         public readonly List<StrategicWar> Wars = new();
         public readonly HashSet<int> WarNations = new();
+        /// <summary>
+        /// This look's possible reserves, in the nation roster's order: every formation of the
+        /// country on this war ordered to stand in reserve or advance, not a militia. Nothing
+        /// in one look turns another formation into one of these (a re-posting keeps or
+        /// restores its duty; a battle detachment is ordered to defend), so filtering the
+        /// rest once is exact. NearestReserve still asks the full question of each.
+        /// </summary>
+        public readonly List<Army> Reserves = new();
+        public readonly HashSet<int> OwnOccupied = new();
+        public bool ReservesReady;
         public bool NationIndexActive;
+
+        // Reusable synchronous BFS scratch for Repost (never spans a yield return).
+        public int[] RoutePrevious = Array.Empty<int>();
+        public int[] RouteStamp = Array.Empty<int>();
+        public int RouteGeneration;
+        public readonly Queue<int> RouteFrontier = new();
+        public readonly List<int> RouteScratch = new();
     }
 
     private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
@@ -251,7 +268,6 @@ public static class FrontManager
                 if (!campaign.FrontLines.Contains(line)) continue;
                 if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence or FrontLineKind.Offensive) BalanceLine(campaign, line);
                 else if (line.Kind == FrontLineKind.Fallback) DefensivePlanning.Maintain(campaign, line);
-                if (li + 1 < Lines.Count && Campaign.StageOverdue()) yield return 0;
                 yield return 0;
             }
         }
@@ -283,8 +299,10 @@ public static class FrontManager
     {
         if (!campaign.Defines.FrontStaffCallsUpIdle) return;
         Idle.Clear();
-        foreach (var army in campaign.Armies)
+        var allArmies = campaign.Armies;
+        for (var i = 0; i < allArmies.Count; i++)
         {
+            var army = allArmies[i];
             // Manual, including a division already named to a war but given no defend or advance.
             // A direct player order is left alone.
             if (army.OrderKind != ArmyOrder.Manual || army.DirectOrder) continue;
@@ -305,8 +323,9 @@ public static class FrontManager
             foreach (var ally in war.AttackerAllies) warNations.Add(ally);
             foreach (var ally in war.DefenderAllies) warNations.Add(ally);
         }
-        foreach (var army in Idle)
+        for (var i = 0; i < Idle.Count; i++)
         {
+            var army = Idle[i];
             var nation = campaign.NationById(army.NationId);
             // A player's divisions stay where they were put, unless the general staff in the
             // field was handed over. Then the same call-up every other country gets applies.
@@ -355,7 +374,9 @@ public static class FrontManager
         // Its own sector: a coalition's front runs past every member, and a division
         // cannot march through an ally's country to stand on its border.
         Posts.Clear();
-        foreach (var province in war.FriendlyFront(nationId))
+        // The set itself, not the read-only view: the same members in the same order,
+        // without boxing an enumerator for every country on every side every day.
+        foreach (var province in war.FriendlyFrontSet(nationId))
             if (campaign.ProvinceController[province] == (ushort)nation.MapIndex) Posts.Add(province);
         Posts.Sort();
         Arrange(campaign, nation, war, null);
@@ -386,8 +407,10 @@ public static class FrontManager
         if (line.AllEnemies) BorderFronts.Refresh(campaign, line);
         if (line.IsEmpty || line.Cohesion == PlanCohesion.Immobile) return;
         StrategicWar war = null;
-        foreach (var candidate in Warfare.OpenWars(campaign))
+        var openWars = Warfare.OpenWars(campaign);
+        for (var wi = 0; wi < openWars.Count; wi++)
         {
+            var candidate = openWars[wi];
             if (!candidate.Ended && candidate.Involves(nation.Id) &&
                 (line.BorderNationId < 0 || candidate.Opposes(nation.Id, line.BorderNationId)))
             {
@@ -441,10 +464,22 @@ public static class FrontManager
             }
         }
         Posts.Clear();
-        IEnumerable<int> sources = line.Kind == FrontLineKind.Offensive ? line.SourceProvinces : BattlePlanning.Sequence(campaign, line);
-        foreach (var province in sources)
-            if (province > 0 && province < campaign.ProvinceController.Length &&
-                campaign.ProvinceController[province] == (ushort)nation.MapIndex) Posts.Add(province);
+        var controllers = campaign.ProvinceController;
+        var ownController = (ushort)nation.MapIndex;
+        if (line.Kind == FrontLineKind.Offensive)
+        {
+            foreach (var province in line.SourceProvinces)
+                if (province > 0 && province < controllers.Length && controllers[province] == ownController) Posts.Add(province);
+        }
+        else
+        {
+            var sequence = BattlePlanning.Sequence(campaign, line);
+            for (var i = 0; i < sequence.Count; i++)
+            {
+                var province = sequence[i];
+                if (province > 0 && province < controllers.Length && controllers[province] == ownController) Posts.Add(province);
+            }
+        }
         Posts.Sort();
         Arrange(campaign, nation, war, line);
     }
@@ -472,6 +507,8 @@ public static class FrontManager
     private static void Arrange(Campaign campaign, Nation nation, StrategicWar war, DrawnFrontLine line)
     {
         using var measured = SimProfiler.Measure("    staff:arrange");
+        Active.Reserves.Clear();
+        Active.ReservesReady = false;
         if (Posts.Count == 0) return;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
@@ -500,10 +537,34 @@ public static class FrontManager
         var ownArmies = NationArmies(campaign, nation.Id);
         var holders = 0;
         var power = 0f;
+        var reserves = Active.Reserves;
+        reserves.Clear();
+        var ownOccupied = Active.OwnOccupied;
+        ownOccupied.Clear();
+        Army pocket = null;
+        var multiStackPosts = 0;
         for (var i = 0; i < ownArmies.Count; i++)
         {
             var army = ownArmies[i];
-            if (FrontDisengagement.Eligible(campaign, nation, war, line, army)) BattleCandidates.Add(army);
+            if (army.NationId == nation.Id && army.Divisions >= 0.1f)
+                ownOccupied.Add(army.ProvinceId);
+            if (war is not null)
+            {
+                if (army.InBattle && FrontDisengagement.Eligible(campaign, nation, war, line, army))
+                    BattleCandidates.Add(army);
+                if (army.NationId == nation.Id && army.AssignedWarId == war.Id)
+                {
+                    if (army.OrderKind is (ArmyOrder.ReserveFront or ArmyOrder.AdvanceFront) &&
+                        army.TemplateId != MilitiaCore.TemplateId)
+                        reserves.Add(army);
+                    if (army.Divisions > 0f && army.EmbarkedFleetId < 0 && army.ProvinceId > 0 &&
+                        (army.DaysCutOff > 0 || army.SupplyDistance < 0) &&
+                        (pocket is null || army.DaysCutOff > pocket.DaysCutOff ||
+                         (army.DaysCutOff == pocket.DaysCutOff && army.SupplyDistance < pocket.SupplyDistance) ||
+                         (army.DaysCutOff == pocket.DaysCutOff && army.SupplyDistance == pocket.SupplyDistance && army.Id < pocket.Id)))
+                        pocket = army;
+                }
+            }
             if (!Holds(campaign, army, nation, war, line, defines.FrontStaffMovesAdvances)) continue;
             holders++;
             power += army.Power;
@@ -516,7 +577,9 @@ public static class FrontManager
             if (post < 0) { if (!army.InBattle) Loose.Add(army); continue; }
             if (!Allocated.TryGetValue(post, out var there)) Allocated[post] = there = Take();
             there.Add(army);
+            if (there.Count == 2) multiStackPosts++;
         }
+        Active.ReservesReady = war is not null;
         var today = campaign.ElapsedDays;
         var mayBorrow = war is not null && line is null &&
             (!campaign.IsHumanControlled(nation) || Delegation.Holds(nation, Delegation.Command));
@@ -563,7 +626,7 @@ public static class FrontManager
         // One re-posting, before the threatened holes: a free reserve onto the empty post that
         // reconnects a cut-off formation. The pocket itself is left where it is.
         ReliefNoAdvance.Clear();
-        RelieveCutOff(campaign, nation, war, today, mayBorrow, ref budget, ref holders);
+        RelieveCutOff(campaign, nation, war, today, mayBorrow, pocket, ref budget, ref holders, ref multiStackPosts);
         quota = (int)MathF.Ceiling(holders / (float)Math.Max(1, Posts.Count));
 
         // First the holes, the most threatened first.
@@ -583,8 +646,9 @@ public static class FrontManager
         FrontDisengagement.SelectionContext disengagement = null;
         try
         {
-        foreach (var hole in Posts)
+        for (var hi = 0; hi < Posts.Count; hi++)
         {
+            var hole = Posts[hi];
             if (budget <= 0) break;
             if (Count(hole) > 0) continue;
             // The nearest donor may be in a pocket. After one route failure, refuse the
@@ -595,9 +659,9 @@ public static class FrontManager
             var filled = false;
             for (var attempt = 0; attempt < 4; attempt++)
             {
-                var mover = Donor(campaign, hole, quota, today, allowThinning: holders < Posts.Count);
+                var mover = Donor(campaign, hole, quota, today, allowThinning: holders < Posts.Count, multiStackPosts > 0);
                 if (mover is null) break;
-                if (Repost(campaign, nation, mover, hole)) { budget--; filled = true; break; }
+                if (Repost(campaign, nation, mover, hole, ref multiStackPosts)) { budget--; filled = true; break; }
                 Refused.Add(mover.Id);
                 if (!connectivityChecked)
                 {
@@ -631,7 +695,7 @@ public static class FrontManager
                     if (reserve is null) break;
                     var duty = reserve.OrderKind;
                     reserve.OrderKind = ArmyOrder.DefendFront;
-                    if (Repost(campaign, nation, reserve, hole))
+                    if (Repost(campaign, nation, reserve, hole, ref multiStackPosts))
                     {
                         reserve.StaffNote = borrowedAdvance
                             ? StaffNote.ThreatenedHole
@@ -646,20 +710,22 @@ public static class FrontManager
                         connectivityChecked = true;
                     }
                 }
-            if (!filled && war is not null && BattleCandidates.Count > 0)
+            if (!filled && war is not null && BattleCandidates.Count > 0 && !ownOccupied.Contains(hole))
             {
                 if (FrontDisengagement.TryCoverHole(campaign, nation, war, line, hole, out var detached, ref disengagement, BattleCandidates))
                 {
+                    ownOccupied.Add(detached.ProvinceId);
                     var alreadyCounted =
-                        (Allocated.TryGetValue(detached.OrderProvinceId, out var atOrder) && atOrder.Remove(detached)) ||
-                        (detached.ProvinceId != detached.OrderProvinceId && Allocated.TryGetValue(detached.ProvinceId, out var atHere) && atHere.Remove(detached));
+                        (Allocated.TryGetValue(detached.OrderProvinceId, out var atOrder) && RemoveFromAllocated(atOrder, detached, ref multiStackPosts)) ||
+                        (detached.ProvinceId != detached.OrderProvinceId && Allocated.TryGetValue(detached.ProvinceId, out var atHere) && RemoveFromAllocated(atHere, detached, ref multiStackPosts));
                     if (!alreadyCounted)
                     {
                         foreach (var units in Allocated.Values)
-                            if (units.Remove(detached)) { alreadyCounted = true; break; }
+                            if (RemoveFromAllocated(units, detached, ref multiStackPosts)) { alreadyCounted = true; break; }
                     }
                     if (!Allocated.TryGetValue(hole, out var there)) Allocated[hole] = there = Take();
                     there.Add(detached);
+                    if (there.Count == 2) multiStackPosts++;
                     budget--; Reposts++; if (!alreadyCounted) holders++; filled = true;
                 }
             }
@@ -679,8 +745,9 @@ public static class FrontManager
             var richestSurplus = 0f;
             var poorest = -1;
             var poorestShortfall = 0f;
-            foreach (var post in Posts)
+            for (var pi = 0; pi < Posts.Count; pi++)
             {
+                var post = Posts[pi];
                 var wanted = MathF.Max(minimum, holders * Need[post] / totalNeed);
                 var have = Count(post);
                 var surplus = have - wanted;
@@ -701,7 +768,7 @@ public static class FrontManager
             Refused.Clear();
             var mover = Nearest(Allocated[richest], poorest, campaign, today, defines,
                 allowSettled: richestSurplus >= 2f);
-            if (mover is null || !Repost(campaign, nation, mover, poorest)) break;
+            if (mover is null || !Repost(campaign, nation, mover, poorest, ref multiStackPosts)) break;
             budget--;
         }
     }
@@ -714,10 +781,9 @@ public static class FrontManager
     /// the ordinary donor pass. A human who has not handed over command is not given the move.
     /// </summary>
     private static void RelieveCutOff(Campaign campaign, Nation nation, StrategicWar war, int today,
-        bool mayBorrow, ref int budget, ref int holders)
+        bool mayBorrow, Army pocket, ref int budget, ref int holders, ref int multiStackPosts)
     {
         if (!mayBorrow || budget <= 0 || war is null || !campaign.Defines.FrontStaffRelievesPockets) return;
-        var pocket = CutOffFormation(campaign, nation, war);
         if (pocket is null) return;
         var post = ReconnectingPost(campaign, nation, war, pocket.ProvinceId);
         if (post < 0 || Count(post) > 0) return;
@@ -733,7 +799,7 @@ public static class FrontManager
             }
             var duty = reserve.OrderKind;
             reserve.OrderKind = ArmyOrder.DefendFront;
-            if (Repost(campaign, nation, reserve, post))
+            if (Repost(campaign, nation, reserve, post, ref multiStackPosts))
             {
                 reserve.StaffNote = StaffNote.ReopenRoad;
                 budget--;
@@ -744,27 +810,6 @@ public static class FrontManager
             Refused.Add(reserve.Id);
         }
         ReliefNoAdvance.Add(post);
-    }
-
-    /// <summary>
-    /// A formation on this war with <see cref="Army.DaysCutOff"/> already counting, or with no
-    /// supply distance. The most isolated is the one the staff tries to reopen first.
-    /// </summary>
-    private static Army CutOffFormation(Campaign campaign, Nation nation, StrategicWar war)
-    {
-        Army best = null;
-        foreach (var army in NationArmies(campaign, nation.Id))
-        {
-            if (army.NationId != nation.Id || army.Divisions <= 0f || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0)
-                continue;
-            if (army.AssignedWarId != war.Id) continue;
-            if (army.DaysCutOff <= 0 && army.SupplyDistance >= 0) continue;
-            if (best is null || army.DaysCutOff > best.DaysCutOff ||
-                (army.DaysCutOff == best.DaysCutOff && army.SupplyDistance < best.SupplyDistance) ||
-                (army.DaysCutOff == best.DaysCutOff && army.SupplyDistance == best.SupplyDistance && army.Id < best.Id))
-                best = army;
-        }
-        return best;
     }
 
     /// <summary>
@@ -834,10 +879,14 @@ public static class FrontManager
                 DonorFrontier.Enqueue(next);
             }
         }
-        foreach (var army in NationArmies(campaign, nation.Id))
+        var own = NationArmies(campaign, nation.Id);
+        for (var i = 0; i < own.Count; i++)
+        {
+            var army = own[i];
             if (army.NationId == nation.Id &&
                 (!DonorComponents.TryGetValue(army.ProvinceId, out var source) || source != component))
                 Refused.Add(army.Id);
+        }
     }
 
     private static bool ReadyReserve(Campaign campaign, Army army, Nation nation, StrategicWar war, int today,
@@ -859,8 +908,10 @@ public static class FrontManager
         var target = campaign.ProvinceMap.CenterOf(hole);
         Army best = null;
         var bestDistance = float.MaxValue;
-        foreach (var army in NationArmies(campaign, nation.Id))
+        var reserves = ReserveCandidates(campaign, nation, war);
+        for (var i = 0; i < reserves.Count; i++)
         {
+            var army = reserves[i];
             if (!ReadyReserve(campaign, army, nation, war, today, advancesToo) || Refused.Contains(army.Id)) continue;
             // A reserve before an advance at the same distance.
             var distance = NavalOperations.Distance(army.Latitude, army.Longitude, target.Latitude, target.Longitude) *
@@ -870,6 +921,24 @@ public static class FrontManager
             best = army;
         }
         return best;
+    }
+
+    private static List<Army> ReserveCandidates(Campaign campaign, Nation nation, StrategicWar war)
+    {
+        var reserves = Active.Reserves;
+        if (Active.ReservesReady) return reserves;
+        reserves.Clear();
+        var own = NationArmies(campaign, nation.Id);
+        for (var i = 0; i < own.Count; i++)
+        {
+            var army = own[i];
+            if (army.NationId != nation.Id || army.AssignedWarId != war.Id ||
+                army.OrderKind is not (ArmyOrder.ReserveFront or ArmyOrder.AdvanceFront) ||
+                army.TemplateId == MilitiaCore.TemplateId) continue;
+            reserves.Add(army);
+        }
+        Active.ReservesReady = true;
+        return reserves;
     }
 
     private static List<Army> Take() => Spare.Count > 0 ? Spare.Pop() : new List<Army>();
@@ -888,30 +957,33 @@ public static class FrontManager
     /// post holding more than its share, and - when there are fewer divisions than posts -
     /// the one on the quietest post, if the hole is facing a great deal more.
     /// </summary>
-    private static Army Donor(Campaign campaign, int hole, int quota, int today, bool allowThinning)
+    private static Army Donor(Campaign campaign, int hole, int quota, int today, bool allowThinning, bool hasMultiStack)
     {
         var defines = campaign.Defines;
         var best = Nearest(Loose, hole, campaign, today, defines, allowSettled: true);
         if (best is not null) return best;
 
-        var bestDistance = float.MaxValue;
-        var target = campaign.ProvinceMap.CenterOf(hole);
-        foreach (var (post, there) in Allocated)
+        if (hasMultiStack)
         {
-            if (there.Count < 2) continue;
-            // A post more than its share may give up even a division it has just been given.
-            var crowded = there.Count > quota;
-            var span = CollectionsMarshal.AsSpan(there);
-            for (var i = 0; i < span.Length; i++)
+            var bestDistance = float.MaxValue;
+            var target = campaign.ProvinceMap.CenterOf(hole);
+            foreach (var (post, there) in Allocated)
             {
-                var army = span[i];
-                if (army.InBattle || Refused.Contains(army.Id) || !MayRepost(campaign, army, hole)) continue;
-                if (!crowded && today - army.OrderIssuedDay < defines.FrontSettleDays) continue;
-                var distance = NavalOperations.Distance(army.Latitude, army.Longitude, target.Latitude, target.Longitude) *
-                               (army.OrderKind == ArmyOrder.AdvanceFront ? 1.5f : 1f);
-                if (distance >= bestDistance) continue;
-                bestDistance = distance;
-                best = army;
+                if (there.Count < 2) continue;
+                // A post more than its share may give up even a division it has just been given.
+                var crowded = there.Count > quota;
+                var span = CollectionsMarshal.AsSpan(there);
+                for (var i = 0; i < span.Length; i++)
+                {
+                    var army = span[i];
+                    if (army.InBattle || Refused.Contains(army.Id) || !MayRepost(campaign, army, hole)) continue;
+                    if (!crowded && today - army.OrderIssuedDay < defines.FrontSettleDays) continue;
+                    var distance = NavalOperations.Distance(army.Latitude, army.Longitude, target.Latitude, target.Longitude) *
+                                   (army.OrderKind == ArmyOrder.AdvanceFront ? 1.5f : 1f);
+                    if (distance >= bestDistance) continue;
+                    bestDistance = distance;
+                    best = army;
+                }
             }
         }
         if (best is not null || !allowThinning) return best;
@@ -973,35 +1045,102 @@ public static class FrontManager
                0.6f * NavalOperations.Distance(army.Latitude, army.Longitude, going.Latitude, going.Longitude);
     }
 
+    private static bool RemoveFromAllocated(List<Army> list, Army army, ref int multiStackPosts)
+    {
+        var hadTwo = list.Count == 2;
+        if (!list.Remove(army)) return false;
+        if (hadTwo) multiStackPosts--;
+        return true;
+    }
+
+    private static bool TryFindRoute(ProvinceTopology topology, int startProvince, int targetProvince,
+        ushort nationMapIndex, ushort[] controllers, List<int> destination)
+    {
+        destination.Clear();
+        var neighbors = topology.Neighbors;
+        if (startProvince <= 0 || targetProvince <= 0 ||
+            startProvince >= neighbors.Length || targetProvince >= neighbors.Length ||
+            controllers is null || controllers.Length < neighbors.Length ||
+            controllers[startProvince] != nationMapIndex ||
+            controllers[targetProvince] != nationMapIndex)
+            return false;
+        if (startProvince == targetProvince) return true;
+        if (topology.IsWater(startProvince) || topology.IsWater(targetProvince)) return false;
+
+        var board = Active;
+        if (board.RoutePrevious.Length < neighbors.Length)
+        {
+            board.RoutePrevious = new int[neighbors.Length];
+            board.RouteStamp = new int[neighbors.Length];
+            board.RouteGeneration = 0;
+        }
+        else if (board.RouteGeneration == int.MaxValue)
+        {
+            Array.Clear(board.RouteStamp, 0, board.RouteStamp.Length);
+            board.RouteGeneration = 0;
+        }
+        var generation = ++board.RouteGeneration;
+        var previous = board.RoutePrevious;
+        var stamp = board.RouteStamp;
+        var queue = board.RouteFrontier;
+        queue.Clear();
+        stamp[startProvince] = generation;
+        previous[startProvince] = startProvince;
+        queue.Enqueue(startProvince);
+
+        while (queue.Count > 0 && stamp[targetProvince] != generation)
+        {
+            var current = queue.Dequeue();
+            var adj = neighbors[current];
+            for (var i = 0; i < adj.Length; i++)
+            {
+                var next = adj[i];
+                if (stamp[next] == generation || controllers[next] != nationMapIndex || topology.IsWater(next)) continue;
+                stamp[next] = generation;
+                previous[next] = current;
+                queue.Enqueue(next);
+            }
+        }
+
+        if (stamp[targetProvince] != generation) return false;
+        for (var cursor = targetProvince; cursor != startProvince; cursor = previous[cursor])
+            destination.Add(cursor);
+        destination.Reverse();
+        return true;
+    }
+
     /// <summary>
     /// Send one division to one post, keeping everything else about it: its duty, its war, its
     /// line, its plan. A march already under way in the same direction keeps its progress.
     /// </summary>
-    private static bool Repost(Campaign campaign, Nation nation, Army army, int post)
+    private static bool Repost(Campaign campaign, Nation nation, Army army, int post, ref int multiStackPosts)
     {
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        int[] route = Array.Empty<int>();
+        var route = Active.RouteScratch;
+        route.Clear();
         // Battle withdrawals require a preflight and covering force; they use
         // FrontDisengagement, not this ordinary marching path.
         if (army.InBattle) return false;
         if (army.ProvinceId != post)
         {
-            route = topology.FindRoute(army.ProvinceId, post, (ushort)nation.MapIndex, controllers);
+            if (!TryFindRoute(topology, army.ProvinceId, post, (ushort)nation.MapIndex, controllers, route))
+                return false;
             // Ground no road of ours reaches - an exclave, an island - is not a post this
             // division can take.
-            if (route.Length == 0) return false;
+            if (route.Count == 0) return false;
             if (army.TemplateId == MilitiaCore.TemplateId && army.AssignedWarId < 0)
-                foreach (var step in route)
-                    if (topology.ProvinceToState[step] != topology.ProvinceToState[army.ProvinceId]) return false;
+                for (var i = 0; i < route.Count; i++)
+                    if (topology.ProvinceToState[route[i]] != topology.ProvinceToState[army.ProvinceId]) return false;
         }
 
-        var sameWay = army.Route.Count > 0 && route.Length > 0 && army.Route[0] == route[0];
-        if (Allocated.TryGetValue(army.OrderProvinceId, out var old) && old.Remove(army)) { }
-        else if (Allocated.TryGetValue(army.ProvinceId, out var standing)) standing.Remove(army);
+        var sameWay = army.Route.Count > 0 && route.Count > 0 && army.Route[0] == route[0];
+        if (Allocated.TryGetValue(army.OrderProvinceId, out var old) && RemoveFromAllocated(old, army, ref multiStackPosts)) { }
+        else if (Allocated.TryGetValue(army.ProvinceId, out var standing)) RemoveFromAllocated(standing, army, ref multiStackPosts);
         Loose.Remove(army);
         if (!Allocated.TryGetValue(post, out var there)) Allocated[post] = there = Take();
         there.Add(army);
+        if (there.Count == 2) multiStackPosts++;
 
         army.Route.Clear();
         army.Route.AddRange(route);
@@ -1011,7 +1150,7 @@ public static class FrontManager
         army.OrderProvinceId = post;
         army.OrderStateMapIndex = topology.ProvinceToState[post];
         army.OrderIssuedDay = campaign.ElapsedDays;
-        army.OrderRouteSteps = route.Length;
+        army.OrderRouteSteps = route.Count;
         army.OrderStepsCompleted = 0;
         Reposts++;
         return true;

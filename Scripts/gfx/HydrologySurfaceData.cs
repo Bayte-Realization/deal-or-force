@@ -8,6 +8,64 @@ namespace DealOrForce;
 /// <summary>Renderer-only shoreline distances. Never fed back into movement or ownership.</summary>
 public static class HydrologySurfaceData
 {
+    internal const int RiverTileSide = 32;
+
+    internal readonly record struct RiverCentreAtlas(byte[] Pixels, int Width, int Height, int HeaderRows);
+
+    /// <summary>Pack only tiles that contain river samples. The first rows map source tiles
+    /// to atlas tiles using a little-endian, one-based index in RG. Zero means dry land.</summary>
+    internal static RiverCentreAtlas? PackRiverCentreline(byte[] source, int width, int height)
+    {
+        if (source is null || width <= 0 || height <= 0 || source.Length != (long)width * height * 4)
+            return null;
+
+        const int atlasWidth = 2048;
+        const int atlasColumns = atlasWidth / RiverTileSide;
+        var columns = (width - 1) / RiverTileSide + 1;
+        var rows = (height - 1) / RiverTileSide + 1;
+        var tileCount = columns * rows;
+        if (tileCount > ushort.MaxValue) return null;
+        var headerRows = (tileCount + atlasWidth - 1) / atlasWidth;
+
+        var wetTiles = new List<int>();
+        for (var tile = 0; tile < tileCount; tile++)
+        {
+            var left = tile % columns * RiverTileSide;
+            var top = tile / columns * RiverTileSide;
+            var right = Math.Min(left + RiverTileSide, width);
+            var bottom = Math.Min(top + RiverTileSide, height);
+            var wet = false;
+            for (var y = top; y < bottom && !wet; y++)
+                for (var at = (y * width + left) * 4 + 2; at < (y * width + right) * 4; at += 4)
+                    if (source[at] != 0) { wet = true; break; }
+            if (wet) wetTiles.Add(tile);
+        }
+
+        var atlasHeight = headerRows + (wetTiles.Count + atlasColumns - 1) / atlasColumns * RiverTileSide;
+        var size = (long)atlasWidth * atlasHeight * 4;
+        if (size >= source.Length || Math.Max(atlasWidth, atlasHeight) > Math.Max(width, height)) return null;
+        var pixels = new byte[(int)size];
+        for (var index = 0; index < wetTiles.Count; index++)
+        {
+            var tile = wetTiles[index];
+            var ordinal = index + 1;
+            pixels[tile * 4] = (byte)ordinal;
+            pixels[tile * 4 + 1] = (byte)(ordinal >> 8);
+
+            var sourceX = tile % columns * RiverTileSide;
+            var sourceY = tile / columns * RiverTileSide;
+            var targetX = index % atlasColumns * RiverTileSide;
+            var targetY = headerRows + index / atlasColumns * RiverTileSide;
+            var rowBytes = Math.Min(width - sourceX, RiverTileSide) * 4;
+            var tileHeight = Math.Min(height - sourceY, RiverTileSide);
+            for (var y = 0; y < tileHeight; y++)
+                Buffer.BlockCopy(source, ((sourceY + y) * width + sourceX) * 4, pixels,
+                    ((targetY + y) * atlasWidth + targetX) * 4, rowBytes);
+        }
+
+        return new RiverCentreAtlas(pixels, atlasWidth, atlasHeight, headerRows);
+    }
+
     /// <summary>
     /// Compact 1-channel R8 lake signed-distance field (128 = shore, 16 steps/texel) saving 47.5 MiB VRAM
     /// vs RGB8 at 5760x2880 (rivers render from <see cref="BuildCentreline"/>).

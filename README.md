@@ -5,9 +5,9 @@
 **A grand strategy game about the whole world, from the morning of 1 January 2024.**
 Every country on the map is yours to play, and the computer runs the others with the same
 commands for most actions; the [differences that remain](docs/PLAYER_AI_PARITY_2026_11_18_RU.md)
-are being closed one at a time, peace first. Version **0.8.5.3** (EntertAlpha).
+are being closed one at a time, peace first. Version **PortAlpha 0.8.7.3**.
 
-[![Release](https://img.shields.io/badge/release-EntertAlpha%200.8.5.3-2f6fb3)](docs/CHANGELOG_0.8.5.3_EN.md)
+[![PortAlpha 0.8.7.3](https://img.shields.io/badge/PortAlpha-0.8.7.3-2f6fb3)](docs/CHANGELOG_0.8.7.3_EN.md)
 [![Engine](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED.md)
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-3a7f3a)](LICENSE)
@@ -30,35 +30,52 @@ are being closed one at a time, peace first. Version **0.8.5.3** (EntertAlpha).
   [itch.io](https://bayte-realization.itch.io/deal-or-force).
   Extract the whole archive and run `Deal or Force Launcher.exe`.
 - **From source** — see [Building and running](#building-and-running) below.
-- The [cumulative 0.8 changelog](docs/CHANGELOG_0.8.5.3_EN.md) covers the new interface, game
-  rules and performance work, along with the latest fixes.
+- The [PortAlpha 0.8.7.3 changelog](docs/CHANGELOG_0.8.7.3_EN.md) covers adaptive Speed 1–5
+  step pacing, Android zero-drift pinch-zoom, instant Speed-5 map taps, localized Touch-Mode
+  controls, GLES3/HUD optimizations, and simulation caching fixes; the
+  [cumulative 0.8.5.3 changelog](docs/CHANGELOG_0.8.5.3_EN.md) covers the earlier 0.8
+  interface, rules, and scaling history.
 - It is built by one person, openly with the help of AI.
 
 Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [devlog](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## New in EntertAlpha 0.8.5.3
+## New in PortAlpha 0.8.7.3
 
-Built on **Godot 4.8 Beta 3 .NET** and **.NET 10**. The full history of the 0.8 series is in
+Built on **Godot 4.8 Beta 3 .NET** and **.NET 10** (active publication branch **PortAlpha**, preserving
+historical `EntertAlpha` and `ReimAlpha`). Full release notes are in
+[PortAlpha 0.8.7.3 changelog](docs/CHANGELOG_0.8.7.3_EN.md) and the earlier 0.8 series in
 [CHANGELOG 0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md).
 
-- **The day is calculated on its own thread, Release Server GC & `.dofsave`.** Without runtime-code mods and
-  without multiplayer, the map and panels keep drawing from a lock-free `CampaignHudSnapshot` while
-  the next day is worked out, draining heavy HUD views within a `1.5 ms` frame budget (`1.25 ms` on
-  mobile). Exported PC builds enable `System.GC.Server`, `System.GC.Concurrent`, `Optimize`, and
-  `TieredPGO` in Release too, saves prepare and commit off the main thread (`RequestYield`) using the
-  canonical **`.dofsave`** extension (with seamless loading of legacy `.dfsave`, `.bdfsave`, and
-  `.bdfsave.json` saves), and pure-data mods no longer disable background simulation.
-- **Zero-stutter map, Country Highlight & Capital jump.** Moving the camera keeps full shader
-  resolution and 3D terrain relief without dropping detail mid-motion. Dynamic map overlays
-  moved from per-frame `ImmediateMesh` rebuilds to dirty-versioned indexed `ArrayMesh` surfaces,
-  `RBush` R-tree spatial culling handles 7,000+ cities, rivers and labels, `CloudShader` cuts
-  fragment octaves from 16 to 9 per pixel, and **Spin** (`F6`) returns to the map bar. Inspecting
-  any country in the Country Panel (yours or foreign) highlights its full territory with a crisp
-  parchment lift and zoom-invariant outline across both Forward+ and GLES3 shaders; clicking any
-  row in **Country Rankings** flies the camera directly to its capital; and general territory
-  badges/tooltips use **"Controlled"** wording across war occupation and land leases.
+- **Adaptive Speed 1–5 pacing, `ProvinceTopology` / `MovementFall` fixes & GC cuts (Waves 1–3).**
+  `BackgroundSimRunner.AdaptiveStepPacing` brings AoH3-style `1h / 2h / 4h / 8h / 24h` adaptive
+  steps with clean `00:00` midnight alignment to both PC and Android without changing save schemas
+  or `CampaignFingerprint`. `ProvinceTopology._provincesByState` invalidates dynamically across
+  territorial changes alongside `OwnershipRevision`-keyed `ParticipantWarObjective`, `MovementFall`
+  handles fallen state-movements cleanly, `CampaignIntel.Cache.SyncGate` fixes concurrent reads,
+  `DeterministicParallel.MobileBigLittleCap` keeps Android threads on big/performance cores, and
+  pooled buffers / AI-to-AI opinion skipping cut `SimBench 120d` runtime (`17,625 -> 16,393 ms`)
+  and allocations (`2,060 -> 1,699 kB/day`) across Waves 1–2 with Wave 3 targeting the remaining
+  hotspots and indivisible spikes.
+- **Instant Speed-5 map taps (`RequestPriorityRead` + `StageOverdue`).** Interactive map taps and
+  dossier clicks acquire a dedicated priority reader lane on `CampaignAccessGate`, preempt bounded
+  simulation stages immediately at `Campaign.StageOverdue()`, survive micro-glide via
+  `GlobeMapSelectionInput` (`1500 ms` retry + `CameraMovedMaterially`), and keep dossier panels
+  responsive (`ShellWorkPanelView.Refresh(priority: true)`).
+- **Zero-drift 2-finger pinch-zoom & localized Android Touch-Mode bar.** `TouchGestureMath` tracks
+  cumulative pinch span (`_pinchRefSpanPx`) to block sideways globe drift on smooth 60–120 Hz
+  pinches, `PinchZoomGlobeAt` / `PinchZoomFlatMapAt` apply direct 1:1 midpoint-anchored scaling
+  without double inertia or `Lerp` slide, `ShellTouchModeBarView` localizes all mode buttons in
+  English and Russian (`Select`/`Выбор`, `Order 1×`/`Приказ 1×`, `Order Lock`/`Приказ фикс.`,
+  `Box`/`Рамка`, `Map`/`Карта`) with auto-fading mode hint feedback, and GLES3 river atlas packing
+  (`HydrologySurfaceData.PackRiverCentreline`) plus Speed-5 shader/HUD pacing trim frame work.
+- **Background simulation, Release Server GC & `.dofsave` (0.8.5.3).** Lock-free
+  `CampaignHudSnapshot` keeps the map and panels responsive while the next day runs off the main
+  thread (`1.5 ms` desktop / `1.25 ms` mobile HUD drain budget), Release builds enable
+  `System.GC.Server` and `TieredPGO`, saves prepare/commit off-thread in **`.dofsave`** (with
+  `.dfsave` / `.bdfsave` compatibility), and `RBush` culling + dirty-versioned `ArrayMesh` layers
+  smooth panning across Forward+ and GLES3 (`gl_compatibility` on Android).
 - **100-year cyclical history, interstate dynamism & diplomatic readouts.** Multi-decade campaigns
   stay alive across century horizons: blocs dissolve or fracture under intra-bloc rivalry and
   claims, active diplomacy confronts rivals and transitions expired truces cleanly to `Rival` or
@@ -273,7 +290,7 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 
 | | |
 |---|---|
-| [Changelog 0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md) · [0.8.3.5](docs/CHANGELOG_0.8.3.5_EN.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) | **cumulative 0.8 release notes and previous changelogs** |
+| [Changelog PortAlpha 0.8.7.3](docs/CHANGELOG_0.8.7.3_EN.md) · [0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md) · [0.8.3.5](docs/CHANGELOG_0.8.3.5_EN.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) | **PortAlpha 0.8.7.3 notes and previous changelogs** |
 | [Overhaul programme](docs/OVERHAUL_PROGRAMME_2026_11_14_RU.md) | the fifteen fronts of the rework and what "done" means for each (Russian) |
 | [Deal rework](docs/DEALS_REWORK_2026_11_14_RU.md) | what is wrong with deals today and the plan for them, step by step (Russian) |
 | [TUTORIAL](docs/TUTORIAL.md) | **your first campaign, hand held** |

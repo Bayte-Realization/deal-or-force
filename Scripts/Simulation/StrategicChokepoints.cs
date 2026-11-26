@@ -234,21 +234,58 @@ public static class StrategicChokepoints
         return results;
     }
 
+    /// <summary>Zero-allocation count of significant single-supplier strategic exposures for scripted triggers.</summary>
+    internal static int CountExposures(Campaign c, Nation nation, ChokepointStatus? statusFilter = null)
+    {
+        if (c is null || nation is null || c.TradeRoutes.Count == 0 || (uint)nation.Id >= (uint)c.Nations.Count)
+            return 0;
+
+        var cache = EnsureCache(c);
+        var stride = TrackedGoods.Length;
+        var baseIdx = nation.Id * stride;
+        var count = 0;
+
+        for (var slot = 0; slot < stride; slot++)
+        {
+            var total = cache.TotalImportValue[baseIdx + slot];
+            if (total <= 0.0001f) continue;
+            var supplierId = cache.TopSupplierId[baseIdx + slot];
+            if (supplierId < 0) continue;
+            var share = M.Clamp01(cache.TopSupplierValue[baseIdx + slot] / total);
+            if (share < ConcentrationThreshold) continue;
+            if (statusFilter.HasValue)
+            {
+                var commodity = TrackedGoods[slot];
+                var sat = nation.Market.TryGetValue(commodity, out var q) ? M.Clamp01(q.Satisfaction) : 1f;
+                if (ClassifyStatus(c, nation.Id, supplierId, sat) != statusFilter.Value) continue;
+            }
+            count++;
+        }
+        return count;
+    }
+
     /// <summary>
     /// Weekly diplomatic &amp; chronicle pass (called from <see cref="GrandProjects.Tick"/>).
     /// Runs O(N * 11) flat lookups once per week with zero TradeRoutes rescanning.
     /// </summary>
     public static void TickWeekly(Campaign c)
     {
-        if (c is null || !GrandProjects.IsEnabled(c) || c.TradeRoutes.Count == 0) return;
-        if (c.ElapsedDays <= 0 || c.ElapsedDays % 7 != 0) return;
+        foreach (var _ in TickWeeklyStages(c)) { }
+    }
+
+    internal static IEnumerable<int> TickWeeklyStages(Campaign c)
+    {
+        if (c is null || !GrandProjects.IsEnabled(c) || c.TradeRoutes.Count == 0) yield break;
+        if (c.ElapsedDays <= 0 || c.ElapsedDays % 7 != 0) yield break;
 
         var cache = EnsureCache(c);
+        if (Campaign.StageOverdue()) yield return 0;
         var stride = TrackedGoods.Length;
         var living = c.ActiveNations;
 
         for (var i = 0; i < living.Count; i++)
         {
+            if (i > 0 && (i & 3) == 0 && Campaign.StageOverdue()) yield return 0;
             var buyer = living[i];
             if (buyer.Movement is not null || (uint)buyer.Id >= (uint)cache.NationCount) continue;
 

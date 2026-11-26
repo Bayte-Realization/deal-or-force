@@ -12,6 +12,13 @@ public sealed partial class GlobePresentation
     private MeshInstance3D _interiorLayer;
     private double _cloudWind;
     private float _skyAngle;
+    private bool? _cachedInteriorVisible;
+    private Vector3 _cachedDaySunRotation = new(float.NaN, float.NaN, float.NaN);
+    private Color _cachedDaySunColor = new(float.NaN, float.NaN, float.NaN, float.NaN);
+    private float _cachedAmbientEnergy = float.NaN;
+    private bool? _cachedSkyCloudVisible;
+    private ShaderMaterial _cachedSkyCloudMaterial;
+    private Vector3 _cachedSkyCloudSunDir = new(float.NaN, float.NaN, float.NaN);
     // Base-game lighting stays fixed. The loaded crossover mod opts into these effects.
     public bool DayNightEnabled { get; set; }
     public bool CloudsEnabled { get; set; }
@@ -29,6 +36,13 @@ public sealed partial class GlobePresentation
         if (IsInstanceValid(_cloudLayer)) { _cloudLayer.Visible = false; _cloudLayer.QueueFree(); }
         if (IsInstanceValid(_interiorLayer)) { _interiorLayer.Visible = false; _interiorLayer.QueueFree(); }
         _cloudLayer = _interiorLayer = null;
+        _cachedInteriorVisible = null;
+        _cachedDaySunRotation = new Vector3(float.NaN, float.NaN, float.NaN);
+        _cachedDaySunColor = new Color(float.NaN, float.NaN, float.NaN, float.NaN);
+        _cachedAmbientEnergy = float.NaN;
+        _cachedSkyCloudVisible = null;
+        _cachedSkyCloudMaterial = null;
+        _cachedSkyCloudSunDir = new Vector3(float.NaN, float.NaN, float.NaN);
         if (IsInstanceValid(_daySun)) _daySun.RotationDegrees = new Vector3(-32f, -38f, 0f);
         if (IsInstanceValid(_skyEnvironment)) _skyEnvironment.Environment.AmbientLightEnergy = .72f;
     }
@@ -98,42 +112,78 @@ void fragment() {
     private void UpdateSky(double delta)
     {
         UpdateAtmosphereRim();
-        SyncAtlasSun();
         UpdateUrbanGlowClusters();
-        if (!IsInstanceValid(_daySun) || (!DayNightEnabled && _cloudLayer is null)) return;
+        if (!IsInstanceValid(_daySun) || (!DayNightEnabled && _cloudLayer is null))
+        {
+            SyncAtlasSun();
+            return;
+        }
         var snap = _campaign?.RenderSnapshot;
         var hasSnap = snap is { Version: > 0 };
         var target = ((hasSnap ? snap.ElapsedHours : _campaign?.ElapsedHours ?? 6) % 24) / 24f * Mathf.Tau;
         _skyAngle = Mathf.LerpAngle(_skyAngle, target, 1f - MathF.Exp(-(float)delta * 3f));
-        if (IsInstanceValid(_interiorLayer)) _interiorLayer.Visible = !_flatMap;
+        var wantInterior = !_flatMap;
+        if (IsInstanceValid(_interiorLayer) && _cachedInteriorVisible != wantInterior)
+        {
+            _cachedInteriorVisible = wantInterior;
+            _interiorLayer.Visible = wantInterior;
+        }
         var dayNightActive = DayNightEnabled && !_flatMap;
-        _daySun.Rotation = dayNightActive
+        var desiredRot = dayNightActive
             ? new Vector3(-.41f, _skyAngle, 0)
             : new Vector3(Mathf.DegToRad(-32f), Mathf.DegToRad(-38f), 0);
+        if (!desiredRot.IsEqualApprox(_cachedDaySunRotation))
+        {
+            _cachedDaySunRotation = desiredRot;
+            _daySun.Rotation = desiredRot;
+        }
         // Subtle warm golden-hour tint when day/night sweeps across the globe, keeping night readable for orders.
+        Color desiredColor;
         if (dayNightActive)
         {
             var sunElev = Math.Clamp(MathF.Abs(MathF.Cos(_skyAngle)), 0f, 1f);
             var duskWarmth = 1f - sunElev;
-            _daySun.LightColor = new Color(
+            desiredColor = new Color(
                 Mathf.Lerp(0.99f, 1.00f, duskWarmth),
                 Mathf.Lerp(0.97f, 0.90f, duskWarmth),
                 Mathf.Lerp(0.94f, 0.80f, duskWarmth));
         }
         else
         {
-            _daySun.LightColor = new Color(1.0f, 0.985f, 0.955f);
+            desiredColor = new Color(1.0f, 0.985f, 0.955f);
+        }
+        if (desiredColor != _cachedDaySunColor)
+        {
+            _cachedDaySunColor = desiredColor;
+            _daySun.LightColor = desiredColor;
         }
         SyncAtlasSun();
         // Night remains readable enough to issue strategic orders.
-        _skyEnvironment.Environment.AmbientLightEnergy = dayNightActive ? .30f : .72f;
+        var desiredAmbient = dayNightActive ? .30f : .72f;
+        if (desiredAmbient != _cachedAmbientEnergy)
+        {
+            _cachedAmbientEnergy = desiredAmbient;
+            _skyEnvironment.Environment.AmbientLightEnergy = desiredAmbient;
+        }
         if (_cloudLayer is null) return;
         var isPaused = hasSnap ? snap.IsPaused : _campaign?.IsPaused ?? false;
         if (_campaign is null || !isPaused) _cloudWind += delta * .007;
         _cloudLayer.Rotation = new Vector3(0, (float)_cloudWind, .12f);
-        _cloudLayer.Visible = CloudsEnabled && !_flatMap && CurrentShaderQualityTier() < 1.5f && Simulation.WorldLayers.On("sky_clouds");
+        var cloudsVis = CloudsEnabled && !_flatMap && CurrentShaderQualityTier() < 1.5f && Simulation.WorldLayers.On("sky_clouds");
+        if (_cachedSkyCloudVisible != cloudsVis)
+        {
+            _cachedSkyCloudVisible = cloudsVis;
+            _cloudLayer.Visible = cloudsVis;
+        }
+        if (!cloudsVis) return;
         var lightDirection = _daySun.GlobalBasis.Z;
-        ((ShaderMaterial)_cloudLayer.MaterialOverride).SetShaderParameter("sun_direction", lightDirection);
+        if (_cloudLayer.MaterialOverride is ShaderMaterial cloudMat &&
+            (!ReferenceEquals(_cachedSkyCloudMaterial, cloudMat) || !lightDirection.IsEqualApprox(_cachedSkyCloudSunDir)))
+        {
+            _cachedSkyCloudMaterial = cloudMat;
+            _cachedSkyCloudSunDir = lightDirection;
+            cloudMat.SetShaderParameter("sun_direction", lightDirection);
+        }
     }
 
     private bool TerrainGone(float latitude, float longitude)

@@ -147,6 +147,40 @@ public sealed partial class GlobePresentation
         _targetDistance = nextDistance;
     }
 
+    /// <summary>
+    /// Direct 1:1 globe pinch zoom anchored at the 2-finger midpoint when well inside the
+    /// sphere limb (<c>hitLocal.Z &gt;= 0.25</c>). Skips anchor re-aiming near the grazing horizon
+    /// and updates distance directly so continuous touch frames never drift sideways.
+    /// </summary>
+    private void PinchZoomGlobeAt(Vector2 pixel, float scaleFactor)
+    {
+        var vp = ViewportSize();
+        var fov = IsInstanceValid(_camera) ? _camera.Fov : RigFieldOfView;
+        var oldAlt = Mathf.Max(0.05f, _distance - GlobeRadius);
+        var newDist = Mathf.Clamp(GlobeRadius + oldAlt / Math.Max(0.1f, scaleFactor), MinimumDistance, MaximumDistance);
+
+        if (vp.X >= 2 && vp.Y >= 2 &&
+            Simulation.Controls.ControlSchemeRules.TryGlobeRayHitLocal(
+                pixel.X, pixel.Y, vp.X, vp.Y, fov, GlobeRadius, _distance, out var hitLocal) &&
+            hitLocal.Z >= 0.25)
+        {
+            var anchorWorld = Simulation.Controls.ControlSchemeRules.OrbitLocalToWorld(hitLocal, _pitch, _yaw);
+            if (Simulation.Controls.ControlSchemeRules.SolveGlobeZoomAnchor(
+                    pixel.X, pixel.Y, vp.X, vp.Y, fov, GlobeRadius, MaxPitch,
+                    anchorWorld.X, anchorWorld.Y, anchorWorld.Z,
+                    _pitch, _yaw, newDist, out var nextPitch, out var nextYaw) &&
+                float.IsFinite(nextPitch) && float.IsFinite(nextYaw) &&
+                MathF.Abs(nextPitch - _pitch) < 0.35f &&
+                MathF.Abs(Mathf.AngleDifference(_yaw, nextYaw)) < 0.35f)
+            {
+                _pitch = _targetPitch = nextPitch;
+                _yaw = _targetYaw = nextYaw;
+            }
+        }
+        _distance = _targetDistance = newDist;
+        _globeZoomAnchorActive = false;
+    }
+
     private void UpdateGlobeZoomAnchor()
     {
         if (_flatMap || !_globeZoomAnchorActive) return;

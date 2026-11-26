@@ -156,7 +156,8 @@ public static partial class AiStatecraft
 
     /// <summary>Use the same bilateral rules as a player, spending at most one diplomatic move.</summary>
     internal static bool TryFriendlyMove(Campaign campaign, Nation nation, Nation friend,
-        DiplomaticOutreach.OfferScan missionScan = null, AllianceSystem.OfferScan allianceScan = null)
+        DiplomaticOutreach.OfferScan missionScan = null, AllianceSystem.OfferScan allianceScan = null,
+        bool nationInWar = true)
     {
         if (campaign is null || nation is null || friend is null || nation.Id == friend.Id) return false;
         // The weekly list already kept only countries we have a tie with. Reading it must not
@@ -168,7 +169,7 @@ public static partial class AiStatecraft
         // Ask only for a useful bridge to a live opponent, never collect transit treaties
         // around the world. Human neighbours still decide through their inbox.
         using (SimProfiler.Measure("      dip:transit"))
-            if (opinion >= 0f && MilitaryAccess.TryWarTransit(campaign, nation, friend)) return true;
+            if (nationInWar && opinion >= 0f && MilitaryAccess.TryWarTransit(campaign, nation, friend)) return true;
         // How readily this country reaches out at all. A sociable state offers trade, a pact
         // and an alliance at a lower opinion than a hermit does, and the profile says which it
         // is; the thresholds stay the world's, this only bends them per country.
@@ -235,9 +236,9 @@ public static partial class AiStatecraft
         using (SimProfiler.Measure("      dip:agreements"))
         {
             if (opinion >= tradeThreshold &&
-                TryAgreement(campaign, nation, friend, AgreementKind.TradeAgreement)) return true;
+                TryAgreement(campaign, nation, friend, AgreementKind.TradeAgreement, relation)) return true;
             if (opinion >= pactThreshold &&
-                TryAgreement(campaign, nation, friend, AgreementKind.NonAggressionPact)) return true;
+                TryAgreement(campaign, nation, friend, AgreementKind.NonAggressionPact, relation)) return true;
         }
 
         using (SimProfiler.Measure("      dip:alliances"))
@@ -283,9 +284,17 @@ public static partial class AiStatecraft
         return false;
     }
 
-    private static bool TryAgreement(Campaign campaign, Nation asking, Nation asked, AgreementKind kind)
+    private static bool TryAgreement(Campaign campaign, Nation asking, Nation asked, AgreementKind kind,
+        DiplomaticRelation relation = null)
     {
-        if (!AgreementSystem.CanProposeQuiet(campaign, asking, asked, kind)) return false;
+        if (relation is not null)
+        {
+            if (!AgreementSystem.CanProposeQuietWith(campaign, relation, kind) ||
+                AgreementSystem.LapseWait(campaign, relation, asking.Id) > 0)
+                return false;
+        }
+        else if (!AgreementSystem.CanProposeQuiet(campaign, asking, asked, kind))
+            return false;
         if (kind == AgreementKind.TradeAgreement)
         {
             // Terms, not a flag: the composer writes the presets that fit the pair and asks for the
@@ -325,7 +334,9 @@ public static partial class AiStatecraft
             Count("agreement_offered");
             return true;
         }
-        var willing = AgreementSystem.Willingness(campaign, asked, asking, kind);
+        var willing = relation is not null
+            ? AgreementSystem.WillingnessWith(campaign, asked, asking, kind, relation)
+            : AgreementSystem.Willingness(campaign, asked, asking, kind);
         var eraWilling = AiTemper.EraWilling(campaign, asked, asking, willing);
         var effectiveWilling = M.Lerp(willing, eraWilling, 0.65f);
         if (effectiveWilling < AgreementSystem.Needed(campaign, kind))
@@ -354,20 +365,26 @@ public static partial class AiStatecraft
                 AiFiscalReason.Ready => "aid_fiscal_Ready",
                 AiFiscalReason.InvalidAccounts => "aid_fiscal_InvalidAccounts",
                 AiFiscalReason.OverdueBills => "aid_fiscal_OverdueBills",
-                AiFiscalReason.DebtWorkout => "aid_fiscal_DebtWorkout",
-                AiFiscalReason.ShortRunway => "aid_fiscal_ShortRunway",
-                _ => "aid_fiscal_" + fiscal.Reason
-            });
+            AiFiscalReason.DebtWorkout => "aid_fiscal_DebtWorkout",
+            AiFiscalReason.ShortRunway => "aid_fiscal_ShortRunway",
+            _ => "aid_fiscal_" + fiscal.Reason
+        });
             return false;
         }
         var crisis = recipient.Treasury < recipient.Gdp * defines.AiAidCrisisTreasuryOfGdp;
         if (!crisis)
-            foreach (var war in Warfare.LiveWars(campaign))
+        {
+            var liveWars = Warfare.LiveWars(campaign);
+            for (var wi = 0; wi < liveWars.Count; wi++)
+            {
+                var war = liveWars[wi];
                 if (!war.Ended && war.Involves(recipient.Id) && !war.Involves(giver.Id))
                 {
                     crisis = true;
                     break;
                 }
+            }
+        }
         if (!crisis) return false;
         var package = AgreementSystem.AidAmount(campaign, giver, recipient, out _);
         // The ordinary aid command sends a full package. Do not invent a different
@@ -386,8 +403,12 @@ public static partial class AiStatecraft
     /// deal table, not an ultimatum: a player who owns it gets the paper and decides.
     /// The region has to touch us, so the purchase does not plant a new exclave.
     /// </summary>
-    internal static bool TryBuyKindredLand(Campaign campaign, Nation buyer)
+    internal static bool TryBuyKindredLand(Campaign campaign, Nation buyer) =>
+        TryBuyKindredLand(campaign, buyer, out _);
+
+    internal static bool TryBuyKindredLand(Campaign campaign, Nation buyer, out int sellerId)
     {
+        sellerId = -1;
         if (campaign?.ProvinceMap is null || buyer is null || buyer.Population <= 0) return false;
         if (!campaign.FeatureEnabled("deals")) return false;
         if (buyer.Treasury * M.Clamp01(campaign.Defines.AiKindredTreasuryShare) < 0.01f) return false;
@@ -424,6 +445,8 @@ public static partial class AiStatecraft
         Nation seller = null;
         var bestScore = float.NegativeInfinity;
         var hasCooldowns = buyer.DecisionAvailableDay.Count > 0;
+        var recoveryEnabled = campaign.Defines.AiPrioritisesLostHomeland;
+        var kindredShareFloor = campaign.Defines.AiKindredShare;
         foreach (var region in TouchingRegions)
         {
             if (geoTables.StateByMapIndex is null || !geoTables.StateByMapIndex.TryGetValue(region, out var state)) continue;
@@ -438,15 +461,24 @@ public static partial class AiStatecraft
             if (CampaignDiplomacy.AtWar(campaign, buyer.Id, owner.Id)) continue;
             if (!owner.IsHuman && Ultimatum.ProtectsHomelandSale(campaign, owner, state)) continue;
             long ourPeople = 0;
-            for (var gi = 0; gi < state.PopulationGroups.Count; gi++)
+            var groups = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(state.PopulationGroups);
+            string lastCulture = null;
+            var lastPrimary = false;
+            for (var gi = 0; gi < groups.Length; gi++)
             {
-                var group = state.PopulationGroups[gi];
-                if (DemographyCatalog.IsPrimary(buyer.Tag, group.Culture)) ourPeople += group.Size;
+                var group = groups[gi];
+                if (group.Size <= 0 || group.Culture is null) continue;
+                if (!ReferenceEquals(group.Culture, lastCulture))
+                {
+                    lastCulture = group.Culture;
+                    lastPrimary = DemographyCatalog.IsPrimary(buyer.Tag, lastCulture);
+                }
+                if (lastPrimary) ourPeople += group.Size;
             }
             var share = ourPeople / (float)state.Population;
-            var recovery = campaign.Defines.AiPrioritisesLostHomeland &&
+            var recovery = recoveryEnabled &&
                 TerritorialClaims.TitleOf(campaign, buyer, state) == TerritorialTitle.Homeland;
-            if (!recovery && share < campaign.Defines.AiKindredShare) continue;
+            if (!recovery && share < kindredShareFloor) continue;
             var score = share + (recovery ? 2f : 0f);
             if (score < bestScore || score == bestScore && best is not null && state.MapIndex > best.MapIndex) continue;
             bestScore = score;
@@ -478,6 +510,7 @@ public static partial class AiStatecraft
             }
             if (!pendingOffer) return false;
         }
+        sellerId = seller.Id;
         Count("kindred_land");
         return true;
     }
@@ -529,8 +562,12 @@ public static partial class AiStatecraft
     /// An AI partner answers by the same willingness bar as any other trade agreement.
     /// A player gets the paper and nothing is signed until they do. No land is on it.
     /// </summary>
-    internal static bool TryHedgeSupply(Campaign campaign, Nation nation)
+    internal static bool TryHedgeSupply(Campaign campaign, Nation nation) =>
+        TryHedgeSupply(campaign, nation, out _);
+
+    internal static bool TryHedgeSupply(Campaign campaign, Nation nation, out int hedgedPartnerId)
     {
+        hedgedPartnerId = -1;
         var defines = campaign?.Defines;
         if (defines is null || nation is null || nation.IsHuman || nation.Movement is not null) return false;
         if (!defines.AiSupplyHedges) return false;
@@ -548,9 +585,10 @@ public static partial class AiStatecraft
         var blockedOffers = CollectPendingDealPartners(campaign, nation.Id);
         var dominant = chosen.TopSupplierId;
         Nation alternate = chosen.SecondSupplierId >= 0 ? campaign.NationById(chosen.SecondSupplierId) : null;
-        if (!CanHedgeWith(campaign, nation, alternate, dominant, blockedOffers))
+        if (!CanHedgeWith(campaign, nation, alternate, dominant, blockedOffers, out var alternateRelation))
         {
             alternate = null;
+            alternateRelation = null;
             var tables = TablesOf(campaign);
             var sorted = tables.LiveNationsSorted;
             if (tables.LiveNationsDay != campaign.ElapsedDays || tables.LiveNationsCount != campaign.ActiveNations.Count)
@@ -608,8 +646,9 @@ public static partial class AiStatecraft
                     for (var i = 0; i < byGood.Count; i++)
                     {
                         var other = byGood[i].Nation;
-                        if (!CanHedgeWith(campaign, nation, other, dominant, blockedOffers)) continue;
+                        if (!CanHedgeWith(campaign, nation, other, dominant, blockedOffers, out var candRel)) continue;
                         alternate = other;
+                        alternateRelation = candRel;
                         break;
                     }
                 }
@@ -627,8 +666,9 @@ public static partial class AiStatecraft
                     var spare = quote.Production - quote.Demand;
                     if (spare <= 0.0001f) continue;
                     if (alternate is not null && (spare < bestSpare || spare == bestSpare && other.Id >= alternate.Id)) continue;
-                    if (!CanHedgeWith(campaign, nation, other, dominant, blockedOffers)) continue;
+                    if (!CanHedgeWith(campaign, nation, other, dominant, blockedOffers, out var candRel)) continue;
                     alternate = other;
+                    alternateRelation = candRel;
                     bestSpare = spare;
                 }
             }
@@ -637,8 +677,18 @@ public static partial class AiStatecraft
 
         var key = SupplyHedgeKey(chosen.Good);
         // Check the quiet proposal gate BEFORE constructing candidate TradeTerms presets for AI targets.
-        if (!alternate.IsHuman && !AgreementSystem.CanProposeQuiet(campaign, nation, alternate, AgreementKind.TradeAgreement))
-            return false;
+        if (!alternate.IsHuman)
+        {
+            if (alternateRelation is not null)
+            {
+                if (AgreementSystem.LapseWait(campaign, alternateRelation, nation.Id) > 0)
+                    return false;
+            }
+            else if (!AgreementSystem.CanProposeQuiet(campaign, nation, alternate, AgreementKind.TradeAgreement))
+            {
+                return false;
+            }
+        }
         // The terms are about the scarce good: that good for one of theirs, a guarantee of it with
         // our market opened on it, or a guarantee for half our tariff on everything - with the
         // largest guarantee they would give. A player's country gets the same paper under the same bar.
@@ -668,6 +718,7 @@ public static partial class AiStatecraft
             }
         }
 
+        hedgedPartnerId = alternate.Id;
         nation.DecisionAvailableDay[key] = campaign.ElapsedDays + Math.Max(30, defines.AiSupplyHedgeRetryDays);
         Count("supply_hedge");
         DealTally.Count("trade_agreement.source.supply_hedge");
@@ -702,12 +753,13 @@ public static partial class AiStatecraft
     }
 
     private static bool CanHedgeWith(Campaign campaign, Nation buyer, Nation other, int dominantId,
-        HashSet<int> blockedOffers)
+        HashSet<int> blockedOffers, out DiplomaticRelation relation)
     {
+        relation = null;
         if (other is null || other.Id == buyer.Id || other.Id == dominantId) return false;
         if (other.Population <= 0 || other.Movement is not null) return false;
         if (blockedOffers is not null && blockedOffers.Contains(other.Id)) return false;
-        var relation = CampaignDiplomacy.Peek(campaign, buyer.Id, other.Id);
+        relation = CampaignDiplomacy.Peek(campaign, buyer.Id, other.Id);
         if (relation is { Stance: DiplomaticStance.AtWar }) return false;
         if (relation is { EmbargoByA: true } or { EmbargoByB: true }) return false;
         if (relation?.TradeAgreement == true) return false;

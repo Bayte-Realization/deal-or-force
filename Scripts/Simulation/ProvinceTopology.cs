@@ -98,42 +98,74 @@ public sealed class ProvinceTopology
     public int EdgeCount { get; }
     public int ProvinceCount => ProvinceToState.Length - 1;
 
-    // ─── The state→provinces index ─────────────────────────────────────────────
-    // Built lazily the first time anybody asks for a state's provinces, and kept for
-    // the life of the topology. The map does not change states under a running campaign
-    // (only ownership and control do), so the index never goes stale.
-    //
-    // Before this index, DeploymentProvince (Recruitment) scanned every province in the
-    // world to find the ones belonging to one state — 35 000 comparisons per call, per
-    // recruitment order, per day. With the index it reads the handful of provinces that
-    // state actually has, typically five to twenty.
-    private int[][] _provincesByState;
-    /// <summary>
-    /// The provinces of one state, or an empty span for a state the map does not hold.
-    /// The array is the topology's own; do not write to it.
-    /// </summary>
+    private readonly object _provinceMembershipGate = new();
+    private volatile ProvinceMembershipIndex _provincesByState;
+    private ProvinceMembershipIndex _lastProvinceMembership;
+
+    /// <summary>Invalidate the state-to-provinces index after the map's borders may have changed.</summary>
+    public void InvalidateStateProvinces()
+    {
+        lock (_provinceMembershipGate)
+            _provincesByState = null;
+    }
+
+    /// <summary>The provinces of a state, in ascending province order.</summary>
     public ReadOnlySpan<int> ProvincesOfState(int stateMapIndex)
     {
-        if (_provincesByState is null)
-        {
-            var stateCount = 0;
-            for (var p = 1; p < ProvinceToState.Length; p++)
-                if (ProvinceToState[p] > stateCount) stateCount = ProvinceToState[p];
-            var buckets = new List<int>[stateCount + 1];
-            for (var p = 1; p < ProvinceToState.Length; p++)
-            {
-                var state = ProvinceToState[p];
-                buckets[state] ??= new List<int>(16);
-                buckets[state].Add(p);
-            }
-            _provincesByState = new int[stateCount + 1][];
-            for (var s = 0; s <= stateCount; s++)
-                _provincesByState[s] = buckets[s]?.ToArray() ?? Array.Empty<int>();
-        }
-        return (uint)stateMapIndex < (uint)_provincesByState.Length
-            ? _provincesByState[stateMapIndex]
-            : ReadOnlySpan<int>.Empty;
+        if ((uint)stateMapIndex > ushort.MaxValue) return ReadOnlySpan<int>.Empty;
+        var index = _provincesByState ?? RefreshProvinceMembership();
+        return index.ForState(stateMapIndex);
     }
+
+    private ProvinceMembershipIndex RefreshProvinceMembership()
+    {
+        lock (_provinceMembershipGate)
+        {
+            if (_provincesByState is { } current) return current;
+
+            // Ownership changes also invalidate the state's caches. When province
+            // membership stayed the same, the completed index can be published again.
+            if (_lastProvinceMembership is null ||
+                !ProvinceToState.AsSpan().SequenceEqual(_lastProvinceMembership.StateByProvince))
+                _lastProvinceMembership = new ProvinceMembershipIndex((ushort[])ProvinceToState.Clone());
+
+            _provincesByState = _lastProvinceMembership;
+            return _lastProvinceMembership;
+        }
+    }
+
+    private sealed class ProvinceMembershipIndex
+    {
+        public readonly ushort[] StateByProvince;
+        private readonly int[] _offsets;
+        private readonly int[] _provinces;
+
+        public ProvinceMembershipIndex(ushort[] stateByProvince)
+        {
+            StateByProvince = stateByProvince;
+            var highestState = 0;
+            for (var province = 1; province < stateByProvince.Length; province++)
+                highestState = Math.Max(highestState, stateByProvince[province]);
+
+            _offsets = new int[highestState + 2];
+            for (var province = 1; province < stateByProvince.Length; province++)
+                _offsets[stateByProvince[province]]++;
+            for (var state = 1; state < _offsets.Length; state++)
+                _offsets[state] += _offsets[state - 1];
+
+            _provinces = new int[stateByProvince.Length - 1];
+            // Walk backwards from each row's end to preserve ascending province order.
+            // The same counters end up at each row's start.
+            for (var province = stateByProvince.Length - 1; province > 0; province--)
+                _provinces[--_offsets[stateByProvince[province]]] = province;
+        }
+
+        public ReadOnlySpan<int> ForState(int stateMapIndex) =>
+            stateMapIndex < _offsets.Length - 1
+                ? _provinces.AsSpan(_offsets[stateMapIndex], _offsets[stateMapIndex + 1] - _offsets[stateMapIndex])
+                : ReadOnlySpan<int>.Empty;
+    }
+
     public byte[] RiverIntensityByProvince { get; private set; }
     public bool[] LakeAccessByProvince { get; private set; }
 
@@ -731,6 +763,7 @@ public sealed class ProvinceTopology
         Array.Copy(_authoredNation, ProvinceToNation, _authoredNation.Length);
         Array.Copy(_authoredState, ProvinceToState, _authoredState.Length);
         Array.Clear(DestroyedByProvince);
+        InvalidateStateProvinces();
         return true;
     }
 

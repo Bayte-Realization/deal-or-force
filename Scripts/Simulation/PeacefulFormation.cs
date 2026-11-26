@@ -92,6 +92,10 @@ public static class PeacefulFormation
     /// each answer walked every province in the world and built two sets of regions. Keyed and
     /// invalidated exactly as <see cref="Territory"/> is, so the two cannot disagree.
     /// </summary>
+    [ThreadStatic] private static HashSet<int> _regionNamedScratch;
+    [ThreadStatic] private static HashSet<int> _regionWantedScratch;
+    [ThreadStatic] private static List<int> _regionProvincesScratch;
+
     private static int[] RegionProvinceList(Campaign campaign, FormableNation definition)
     {
         if (definition is null || campaign?.ProvinceMap is null || definition.RequiredRegions.Length == 0)
@@ -107,7 +111,8 @@ public static class PeacefulFormation
                 cache.Regions.Clear();
             }
             if (cache.Regions.TryGetValue(definition.Id, out var cached)) return cached;
-            var named = new HashSet<int>();
+            var named = _regionNamedScratch ??= new HashSet<int>();
+            named.Clear();
             var required = definition.RequiredRegions;
             var states = campaign.States;
             for (var si = 0; si < states.Count; si++)
@@ -122,7 +127,8 @@ public static class PeacefulFormation
                     }
                 }
             }
-            var wanted = new HashSet<int>();
+            var wanted = _regionWantedScratch ??= new HashSet<int>();
+            wanted.Clear();
             for (var si = 0; si < states.Count; si++)
             {
                 var st = states[si];
@@ -130,10 +136,14 @@ public static class PeacefulFormation
                     wanted.Add(st.MapIndex);
             }
             var map = campaign.ProvinceMap;
-            var provinces = new List<int>();
+            var provinces = _regionProvincesScratch ??= new List<int>();
+            provinces.Clear();
             for (var p = 1; p <= map.ProvinceCount; p++)
                 if (wanted.Contains(map.ProvinceToState[p])) provinces.Add(p);
             var result = provinces.ToArray();
+            provinces.Clear();
+            named.Clear();
+            wanted.Clear();
             cache.Regions[definition.Id] = result;
             return result;
         }
