@@ -12,11 +12,52 @@ public partial class DealOrForceGame
     private readonly List<double> _frameDurations = new(600);
     private readonly Dictionary<string, (double Time, long Allocations, int Runs)> _lastProfiles = new();
 
+    private double _stEngineGapMs;
+    private double _stProcMs;
+    private double _stDrainMs;
+    private double _stLockFreeMs;
+    private double _stFencedWaitMs;
+    private double _stFencedReadMs;
+    private double _stHudRefreshMs;
+    private double _stNewShellMs;
+    private double _stFencedGlobeMs;
+    private double _stModMs;
+    private double _stAutosaveMs;
+    private double _stSyncClockMs;
+    private long _lastProcessEndTicks;
+
+    internal void RecordFramePhases(
+        double engineGapMs, double procMs, double drainMs, double lockFreeMs,
+        double fencedWaitMs, double fencedReadMs, double hudRefreshMs, double newShellMs,
+        double fencedGlobeMs, double modMs, double autosaveMs, double syncClockMs)
+    {
+        _stEngineGapMs = engineGapMs;
+        _stProcMs = procMs;
+        _stDrainMs = drainMs;
+        _stLockFreeMs = lockFreeMs;
+        _stFencedWaitMs = fencedWaitMs;
+        _stFencedReadMs = fencedReadMs;
+        _stHudRefreshMs = hudRefreshMs;
+        _stNewShellMs = newShellMs;
+        _stFencedGlobeMs = fencedGlobeMs;
+        _stModMs = modMs;
+        _stAutosaveMs = autosaveMs;
+        _stSyncClockMs = syncClockMs;
+    }
+
     private void StartDiagnostics()
     {
         // The journal goes where the player's other files are, so `logs/` holds the engine log
         // and these channels side by side instead of the two folders it used to be.
-        if (!DiagnosticLogs.Start(GamePaths.Logs))
+        // On Android, mirror to app-specific external storage so My Files & adb can read performance.log directly.
+        var logDir = DealOrForce.Platform.BootCrashDiagnostics.IsAndroidRuntime &&
+                     !string.IsNullOrWhiteSpace(DealOrForce.Platform.BootCrashDiagnostics.AccessibleLogDirectory)
+            ? DealOrForce.Platform.BootCrashDiagnostics.AccessibleLogDirectory
+            : GamePaths.Logs;
+        if (!DiagnosticLogs.Start(logDir) &&
+            !string.Equals(logDir, GamePaths.Logs, StringComparison.OrdinalIgnoreCase))
+            DiagnosticLogs.Start(GamePaths.Logs);
+        if (!DiagnosticLogs.Enabled)
         {
             if (DiagnosticLogs.LastFailure.Length > 0) GD.PushWarning("Diagnostic files unavailable: " + DiagnosticLogs.LastFailure);
             return;
@@ -56,6 +97,7 @@ public partial class DealOrForceGame
         _frameReportAccumulator += wall / 1000.0;
         if (_frameDurations.Count < 4096) _frameDurations.Add(wall);
         if (wall >= 100 && !_isBackgroundFramePaced) DiagnosticLogs.Write("performance", $"FRAME_STALL frame_ms={DiagnosticLogs.N(wall)} speed={_speed} paused={_campaign.IsPaused} pending_seconds={DiagnosticLogs.N(_frameClock.Pending)} " +
+            $"phases=gap={DiagnosticLogs.N(_stEngineGapMs)}/proc={DiagnosticLogs.N(_stProcMs)}/drain={DiagnosticLogs.N(_stDrainMs)}/lf={DiagnosticLogs.N(_stLockFreeMs)}/fw={DiagnosticLogs.N(_stFencedWaitMs)}/fr={DiagnosticLogs.N(_stFencedReadMs)}/hud={DiagnosticLogs.N(_stHudRefreshMs)}/shell={DiagnosticLogs.N(_stNewShellMs)}/globe={DiagnosticLogs.N(_stFencedGlobeMs)}/mod={DiagnosticLogs.N(_stModMs)}/save={DiagnosticLogs.N(_stAutosaveMs)}/clk={DiagnosticLogs.N(_stSyncClockMs)} " +
             $"after={ButtonMotion.LastPressed} {DiagnosticLogs.N((now - ButtonMotion.LastPressedUsec) / 1000.0)}ms_ago");
         if (_frameReportAccumulator < 5) return;
         var seconds = _frameReportAccumulator;

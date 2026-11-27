@@ -206,9 +206,11 @@ public partial class DealOrForceGame : Control
         // Tracy's frame boundary (TracyBridge): first, before the early return, so a loading
         // screen still shows up as frames. Compiled away in every build without DOF_TRACY.
         TracyBridge.InterfaceFrame();
-        if (_isLoading || !_startupComplete) return;
+        if (_isLoading || !_startupComplete) { _lastProcessEndTicks = 0; return; }
         _globe?.SetViewportRenderingPaused(IsGlobeObscuredByFullCoverModal());
         var processWorkStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+        var engineGapMs = _lastProcessEndTicks == 0 ? 0.0 : System.Diagnostics.Stopwatch.GetElapsedTime(_lastProcessEndTicks, processWorkStarted).TotalMilliseconds;
+        double drainMs = 0.0, lfMs = 0.0, fwMs = 0.0, frMs = 0.0, hudMs = 0.0, newShellMs = 0.0, fencedGlobeMs = 0.0, modMs = 0.0, autosaveMs = 0.0, clkMs = 0.0;
         // Before anything else in the frame: a machine that cannot hold thirty frames a second
         // has to be allowed to spend less on this frame, not the one after a settings screen.
         MaintainQuality(delta);
@@ -216,8 +218,12 @@ public partial class DealOrForceGame : Control
         if (_developerConsoleLayer is { Visible: true } && DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true)
             _developerConsole?.UpdateTouchKeyboardLayout();
         BindStepCompletion();
+        var clkSw = System.Diagnostics.Stopwatch.GetTimestamp();
         EnsureBackgroundSimSynced();
+        clkMs = System.Diagnostics.Stopwatch.GetElapsedTime(clkSw).TotalMilliseconds;
+        var drainSw = System.Diagnostics.Stopwatch.GetTimestamp();
         DrainBackgroundSimUpdates();
+        drainMs = System.Diagnostics.Stopwatch.GetElapsedTime(drainSw).TotalMilliseconds;
         RefreshMediaPreview();
         RefreshSoundtrackPlayer(delta);
         // Before any of the early returns below it: a panel is read while the game is
@@ -232,6 +238,7 @@ public partial class DealOrForceGame : Control
         {
             if (_campaign is not null)
             {
+                var hudSw = System.Diagnostics.Stopwatch.GetTimestamp();
                 MaintainArmyBar(delta);
                 FlushInterfaceIfDue(delta);
                 if (_bgHudRefreshDue && _campaign.SimulationFault.Length == 0)
@@ -239,7 +246,10 @@ public partial class DealOrForceGame : Control
                     _bgHudRefreshDue = false;
                     Refresh();
                 }
+                hudMs = System.Diagnostics.Stopwatch.GetElapsedTime(hudSw).TotalMilliseconds;
+                var shSw = System.Diagnostics.Stopwatch.GetTimestamp();
                 TickNewShell(delta);
+                newShellMs = System.Diagnostics.Stopwatch.GetElapsedTime(shSw).TotalMilliseconds;
             }
         }
         else
@@ -249,7 +259,9 @@ public partial class DealOrForceGame : Control
             // Frame-0 lock-free world visual sync: updates political overlays, occupation stripes,
             // live war fronts, GPU battle badges, GPU compute / incremental plate repaints, and
             // country label placement WITHOUT acquiring CampaignAccessGate.
+            var lfSw = System.Diagnostics.Stopwatch.GetTimestamp();
             var presentedVisualVer = _globe?.SyncLockFreeWorldVisuals(_simRunner) ?? 0;
+            lfMs = System.Diagnostics.Stopwatch.GetElapsedTime(lfSw).TotalMilliseconds;
             var fastSim = !(hudSnap?.IsPaused ?? _campaign!.IsPaused) && _speed >= 4;
             var globeNeedsSync = _globe is not null && _globe.NeedsFencedSync(fastSim);
             var globeUrgent = _globe is not null && _globe.NeedsUrgentFencedSync(fastSim);
@@ -264,12 +276,16 @@ public partial class DealOrForceGame : Control
             var urgentLive = globeUrgent || AnyLegacyModalOrScreenVisible() || (hudSnap?.PendingEventCount ?? 0) > 0 ||
                              (hudSnap?.IsPaused ?? false) ||
                              (Time.GetTicksMsec() - _lastBgLiveReadMsec >= liveReadIntervalMs);
+            var fwSw = System.Diagnostics.Stopwatch.GetTimestamp();
             var gotRead = needLive && _campaign!.TryEnterRead(0, requestWindowOnMiss: urgentLive);
+            fwMs = System.Diagnostics.Stopwatch.GetElapsedTime(fwSw).TotalMilliseconds;
             if (gotRead)
             {
                 _lastBgLiveReadMsec = Time.GetTicksMsec();
+                var frSw = System.Diagnostics.Stopwatch.GetTimestamp();
                 try
                 {
+                    var hudSw = System.Diagnostics.Stopwatch.GetTimestamp();
                     MaintainArmyBar(delta);
                     FlushInterfaceIfDue(delta);
                     if (_bgHudRefreshDue && _campaign.SimulationFault.Length == 0)
@@ -277,18 +293,26 @@ public partial class DealOrForceGame : Control
                         _bgHudRefreshDue = false;
                         Refresh();
                     }
+                    hudMs = System.Diagnostics.Stopwatch.GetElapsedTime(hudSw).TotalMilliseconds;
+                    var shSw = System.Diagnostics.Stopwatch.GetTimestamp();
                     TickNewShell(delta, allowLiveReads: true);
+                    newShellMs = System.Diagnostics.Stopwatch.GetElapsedTime(shSw).TotalMilliseconds;
+                    var glSw = System.Diagnostics.Stopwatch.GetTimestamp();
                     _globe?.SyncWorldVisualsUnderReadLock(_campaign, delta);
+                    fencedGlobeMs = System.Diagnostics.Stopwatch.GetElapsedTime(glSw).TotalMilliseconds;
                 }
                 finally
                 {
                     _campaign.ExitRead();
+                    frMs = System.Diagnostics.Stopwatch.GetElapsedTime(frSw).TotalMilliseconds;
                 }
             }
             else if (isNewShell)
             {
                 _interfaceSinceRefresh = Math.Min(RunningInterfaceInterval, _interfaceSinceRefresh + delta);
+                var shSw = System.Diagnostics.Stopwatch.GetTimestamp();
                 TickNewShell(delta, allowLiveReads: false);
+                newShellMs = System.Diagnostics.Stopwatch.GetElapsedTime(shSw).TotalMilliseconds;
             }
             if (isNewShell)
                 _shell?.DatePlate.RefreshClock();
@@ -312,22 +336,43 @@ public partial class DealOrForceGame : Control
             _modLoader.CaptureCrossoverHydrology ??= () => _globe?.CaptureCrossoverHydrology();
             _modLoader.PresentCrossoverVoxels ??= blocks => _globe?.PresentCrossoverVoxels(blocks);
             _modLoader.PresentCrossoverWorks ??= works => _globe?.PresentCrossoverWorks(works);
-            if (_modLoader.HasRuntimeCode) _modLoader.OnFrame(_campaign, delta);
+            if (_modLoader.HasRuntimeCode)
+            {
+                var modSw = System.Diagnostics.Stopwatch.GetTimestamp();
+                _modLoader.OnFrame(_campaign, delta);
+                modMs = System.Diagnostics.Stopwatch.GetElapsedTime(modSw).TotalMilliseconds;
+            }
         }
         if (!string.IsNullOrEmpty(_campaign?.Curse))
             EnsureScreen("world_curse", BuildWorldCurseLayer);
         UpdateWorldCurse(delta);
-        if (IsNetworkClient) { _pendingAutosave = false; if (_campaign is not null) ReportFrameCost(delta); return; }
-        if (_campaign is null) { _pendingAutosave = false; return; }
+        if (IsNetworkClient)
+        {
+            _pendingAutosave = false;
+            if (_campaign is not null)
+            {
+                RecordFramePhases(engineGapMs, System.Diagnostics.Stopwatch.GetElapsedTime(processWorkStarted).TotalMilliseconds,
+                    drainMs, lfMs, fwMs, frMs, hudMs, newShellMs, fencedGlobeMs, modMs, autosaveMs, clkMs);
+                ReportFrameCost(delta);
+            }
+            _lastProcessEndTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+            return;
+        }
+        if (_campaign is null) { _pendingAutosave = false; _lastProcessEndTicks = System.Diagnostics.Stopwatch.GetTimestamp(); return; }
         // Run autosave on the frame after a completed step rather than stacking it onto a sim slice.
         if (_pendingAutosave && !_campaign.MidStep)
         {
             _pendingAutosave = false;
+            var saveSw = System.Diagnostics.Stopwatch.GetTimestamp();
             MaybeAutosave();
+            autosaveMs = System.Diagnostics.Stopwatch.GetElapsedTime(saveSw).TotalMilliseconds;
         }
         // Reported whether or not time is running: a measurement that only arrives when
         // everything is already going well is no use for finding out why it is not.
+        RecordFramePhases(engineGapMs, System.Diagnostics.Stopwatch.GetElapsedTime(processWorkStarted).TotalMilliseconds,
+            drainMs, lfMs, fwMs, frMs, hudMs, newShellMs, fencedGlobeMs, modMs, autosaveMs, clkMs);
         ReportFrameCost(delta);
+        _lastProcessEndTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         if (_simRunner.IsActive && ReferenceEquals(_simRunner.Campaign, _campaign)) return;
         // Time is given a slice of the frame rather than a number of days.
         //

@@ -31,7 +31,7 @@ public partial class DealOrForceGame
                 ? "no campaign open"
                 : $"{_campaign.Player?.DisplayName ?? "no country chosen"} · day {_campaign.ElapsedDays}",
             SettingsFile = GamePaths.SettingsFile,
-            LogsFolder = GamePaths.Logs,
+            LogsFolder = !string.IsNullOrWhiteSpace(DiagnosticLogs.DirectoryPath) ? DiagnosticLogs.DirectoryPath : GamePaths.Logs,
             SavesFolder = GamePaths.Saves,
             ReportsFolder = GamePaths.Reports,
         };
