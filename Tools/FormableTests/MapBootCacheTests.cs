@@ -586,11 +586,12 @@ static class MapBootCacheTests
               setupSrc.Contains("Viewport.Msaa.Disabled", StringComparison.Ordinal) &&
               setupSrc.Contains("MobileEffectiveRenderScale(", StringComparison.Ordinal) &&
               setupSrc.Contains("0.82f", StringComparison.Ordinal) &&
+              setupSrc.Contains("0.85f", StringComparison.Ordinal) &&
               setupSrc.Contains("0.95f", StringComparison.Ordinal) &&
-              setupSrc.Contains("0.65f", StringComparison.Ordinal) &&
+              setupSrc.Contains("0.50f", StringComparison.Ordinal) &&
               !setupSrc.Contains("0.68f", StringComparison.Ordinal) &&
               !setupSrc.Contains("0.78f", StringComparison.Ordinal),
-            "GlobePresentation.Setup caps mobile SubViewport long edge at 1600/2048, uses Msaa2X on High and 0.82f/0.95f/0.65f MobileEffectiveRenderScale bounds");
+            "GlobePresentation.Setup caps mobile SubViewport long edge at 1600/2048, uses Msaa2X on High and 0.82f/0.85f/0.95f/0.50f MobileEffectiveRenderScale bounds");
 
         var globeSrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "GlobePresentation.cs"));
         Check(globeSrc.Contains("TryReadHydrology(", StringComparison.Ordinal) &&

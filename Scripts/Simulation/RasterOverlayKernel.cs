@@ -37,6 +37,7 @@ public static class RasterOverlayKernel
     private static IntPtr _library;
     private static PackOverlaysDelegate _nativePack;
     private static bool _probed;
+    [ThreadStatic]
     private static uint[] _flatPalette;
 
     public static string BackendStatus { get; private set; } = "managed-flat-soa";
@@ -151,6 +152,52 @@ public static class RasterOverlayKernel
             }
         }
 
+        if (_nativePack is null &&
+            Kernels.NativeRasterBake.TryPackProvinceOverlays(
+                provinceCount,
+                owners,
+                paintedOwners,
+                controllers,
+                palette,
+                occupiedAlpha,
+                unownedPaletteIndex,
+                fallbackRgba,
+                controlPixels,
+                ownerPixels,
+                ownerIdPixels,
+                out var rustMoved))
+        {
+            BackendStatus = "rust-dof-kernels-v1";
+            return rustMoved;
+        }
+
+        return PackProvinceOverlaysManaged(
+            count,
+            owners,
+            paintedOwners,
+            controllers,
+            palette,
+            occupiedAlpha,
+            unownedPaletteIndex,
+            fallbackRgba,
+            controlPixels,
+            ownerPixels,
+            ownerIdPixels);
+    }
+
+    internal static bool PackProvinceOverlaysManaged(
+        int count,
+        ushort[] owners,
+        ushort[] paintedOwners,
+        ushort[] controllers,
+        uint[] palette,
+        byte occupiedAlpha,
+        ushort unownedPaletteIndex,
+        uint fallbackRgba,
+        byte[] controlPixels,
+        byte[] ownerPixels,
+        byte[] ownerIdPixels)
+    {
         Array.Clear(controlPixels, 0, Math.Min(BufferSize, controlPixels.Length));
         Array.Clear(ownerPixels, 0, Math.Min(BufferSize, ownerPixels.Length));
         Array.Clear(ownerIdPixels, 0, Math.Min(BufferSize, ownerIdPixels.Length));

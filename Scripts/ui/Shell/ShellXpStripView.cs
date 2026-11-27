@@ -336,11 +336,15 @@ internal sealed class ShellXpStripView
 
     public void Refresh(Campaign world, Nation player)
     {
-        if (_strip is null || world is null || player is null) return;
+        if (_strip is null || world is null) return;
         var compact = _profile?.Compact ?? false;
-        var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId == player.Id ? snap : null;
-
         RefreshObserverBadge(world, player, compact);
+
+        var watchingWorld = (_ctx.IsWatchingWorld?.Invoke() ?? false) || player is null;
+        if (_strip.Visible == watchingWorld) _strip.Visible = !watchingWorld;
+        if (watchingWorld) return;
+
+        var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId == player.Id ? snap : null;
 
         var day = hs?.ElapsedDays ?? world.ElapsedDays;
         var warRev = hs?.WarRevision ?? world.WarRevision;
@@ -486,12 +490,13 @@ internal sealed class ShellXpStripView
         var watchingWorld = _ctx.IsWatchingWorld?.Invoke() ?? false;
         var watched = _ctx.GetObservedNation?.Invoke();
         var note = _ctx.GetObserverTransientNote?.Invoke() ?? "";
-        var sig = (watchingWorld, watched?.Id ?? -1, player.Id, compact, Loc.Language, note);
+        var sig = (watchingWorld, watched?.Id ?? -1, player?.Id ?? -1, compact, Loc.Language, note);
         if (_hasObsSig && _lastObsSig.Equals(sig)) return;
         _hasObsSig = true;
         _lastObsSig = sig;
 
-        if (watchingWorld)
+        var subject = watched ?? player;
+        if (watchingWorld || subject is null)
         {
             _observerLabel.Text = Loc.Get(compact ? "shell.obs.badge_world_compact" : "shell.obs.badge_world");
             var tip = Loc.Get("shell.obs.badge_tip_world");
@@ -499,7 +504,6 @@ internal sealed class ShellXpStripView
         }
         else
         {
-            var subject = watched ?? player;
             var tagOrName = compact ? subject.Tag : subject.DisplayName;
             _observerLabel.Text = Loc.Format(compact ? "shell.obs.badge_country_compact_fmt" : "shell.obs.badge_country_fmt", tagOrName);
             var tip = Loc.Format("shell.obs.badge_tip_country_fmt", subject.DisplayName);

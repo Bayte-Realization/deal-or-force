@@ -338,7 +338,7 @@ public partial class DealOrForceGame
             var template = army.TemplateId;
             _selectedArmies.Clear();
             _selectedArmies.AddRange(_campaign.Armies.Where(candidate =>
-                candidate.NationId == _campaign.Player.Id && candidate.TemplateId == template));
+                _campaign?.Player is { } player && candidate.NationId == player.Id && candidate.TemplateId == template));
             _selectedArmy = _selectedArmies.FirstOrDefault();
             SetArmyFeedback(Simulation.Loc.Format(
                 Simulation.Plural.Key("{0:N0} division of {1} selected.", _selectedArmies.Count),

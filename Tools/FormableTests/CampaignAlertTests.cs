@@ -74,12 +74,12 @@ static class StaffPortfolioTests
         Check(n.TaxRate==tax, "works ministry does not set taxes");
         var projects=c.Construction.Count; Delegation.Set(n,Delegation.Construction,false); Delegation.Tick(c,n);
         Check(c.Construction.Count==projects, "revoking construction preserves existing projects");
-        n.CurrentResearch=""; Delegation.Set(n,Delegation.Research,false); Day(c,7); ResearchSystem.Tick(c);
+        n.CurrentResearch=""; Delegation.Set(n,Delegation.Research,false); Day(c,7+ResearchSystem.WeeklySlot); ResearchSystem.Tick(c);
         Check(n.CurrentResearch.Length==0, "manual research does not silently choose a project");
-        Delegation.Set(n,Delegation.Research,true); Day(c,14); ResearchSystem.Tick(c);
+        Delegation.Set(n,Delegation.Research,true); Day(c,14+ResearchSystem.WeeklySlot); ResearchSystem.Tick(c);
         Check(n.CurrentResearch.Length>0 && n.ResearchProgress.Count>0, "delegated research chooses and advances a real technology");
         var research=n.CurrentResearch; var progress=n.ResearchProgress[research];
-        Delegation.Set(n,Delegation.Research,false); Day(c,21); ResearchSystem.Tick(c);
+        Delegation.Set(n,Delegation.Research,false); Day(c,21+ResearchSystem.WeeklySlot); ResearchSystem.Tick(c);
         Check(n.CurrentResearch==research && n.ResearchProgress[research]>progress, "revoking selection does not halt current research");
         n.Cabinet.Clear(); n.LastCabinetChangeDay=-9999; Day(c,47);
         Rulers.Tick(c); Check(n.Cabinet.Count==0, "manual personnel office does not appoint ministers");

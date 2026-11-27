@@ -180,10 +180,10 @@ void fragment() {
         star.Scale = Vector3.One * width;
     }
 
-    private void UpdateCapitalMarkerScale()
+    private void UpdateCapitalMarkerScale(bool force = false)
     {
         foreach (var (node, _) in _capitalMarkers)
-            if (IsInstanceValid(node) && node is Sprite3D star) SizeCapitalMarker(star);
+            if (IsInstanceValid(node) && (force || node.Visible) && node is Sprite3D star) SizeCapitalMarker(star);
     }
 
     /// <summary>

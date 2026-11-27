@@ -380,14 +380,12 @@ public sealed partial class GlobePresentation
         bool withinLod,
         float horizon = 0.18f)
     {
-        if (!IsInstanceValid(root) || !IsInstanceValid(_camera)) return;
-        root.Visible = withinLod;
-        if (!withinLod) return;
+        if (!TryPrepareMarkerVisibilityRoot(root, withinLod, ref horizon, out var rootTransform, out var rootBasis)) return;
 
         if (ReferenceEquals(markers, _capitalMarkers) && _capitalRTree is { Count: > 0 })
         {
             var vpSize = ViewportSize();
-            ComputeGeoFrustumBounds(vpSize, root.GlobalTransform.Basis, 5f,
+            ComputeGeoFrustumBounds(vpSize, rootBasis, 5f,
                 out var minLat, out var maxLat, out var minLon, out var maxLon, out var fullLon,
                 out var latB, out var lonB, out var spanB);
             var capKey = (_flatMap, latB, lonB, spanB, _capitalRTreeVersion);
@@ -421,7 +419,7 @@ public sealed partial class GlobePresentation
                 }
                 else
                 {
-                    vis = marker.Normal.Dot(capViewNormal) > horizon && !_coveredCounters.Contains(marker.Node);
+                    vis = IsOverlaySurfaceMarkerVisible(rootBasis, rootTransform, marker.Normal, marker.Node, capViewNormal, horizon);
                 }
                 if (marker.Node.Visible != vis) marker.Node.Visible = vis;
                 if (vis) _capitalPrevVisible.Add(marker.Node);
@@ -450,7 +448,7 @@ public sealed partial class GlobePresentation
         foreach (var marker in markers)
             if (IsInstanceValid(marker.Node))
             {
-                var visible = marker.Normal.Dot(viewNormal) > horizon && !_coveredCounters.Contains(marker.Node);
+                var visible = IsOverlaySurfaceMarkerVisible(rootBasis, rootTransform, marker.Normal, marker.Node, viewNormal, horizon);
                 if (marker.Node.Visible != visible) marker.Node.Visible = visible;
             }
     }

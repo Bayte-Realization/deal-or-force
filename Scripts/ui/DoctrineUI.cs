@@ -456,6 +456,7 @@ public partial class DealOrForceGame
 
     private Button CreateAdoptStrategyButton(Nation n, StrategicDoctrine course, bool inForce, string refusal, bool compact)
     {
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         var label = inForce ? Loc.Get("in force")
             : n.StrategicDoctrine.Id.Length == 0 ? Loc.Get("take this course")
             : Loc.Format("change course ({0})", Fmt.Number(course.PoliticalCost));
@@ -463,14 +464,14 @@ public partial class DealOrForceGame
             label,
             () =>
             {
-                if (_campaign?.Player is not { } player) return;
+                if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player) return;
                 ApplyDoctrineCommand(new AdoptStrategicDoctrineCommand
                     { IssuerId = player.Id, DoctrineId = course.Id });
-            }, compact ? 0 : 0, compact ? 28 : 32, !inForce && refusal.Length == 0 && !compact,
+            }, compact ? 0 : 0, compact ? 28 : 32, !observing && !inForce && refusal.Length == 0 && !compact,
             "res://game/gfx/interface/icons/icon_agenda.png");
         button.Name = "AdoptStrategy_" + course.Id;
-        button.Disabled = inForce || refusal.Length > 0;
-        button.TooltipText = Ui.Tip(refusal.Length > 0 ? refusal : Tr(course.Description));
+        button.Disabled = observing || inForce || refusal.Length > 0;
+        button.TooltipText = Ui.Tip(observing ? Tr("obs.ui.action.readonly") : refusal.Length > 0 ? refusal : Tr(course.Description));
         return button;
     }
 
@@ -493,7 +494,7 @@ public partial class DealOrForceGame
     /// this does not tick the clock or fast-forward a patiently studied article.</summary>
     private void ApplyDoctrineCommand(ICampaignCommand command)
     {
-        if (_campaign?.Player is null || command is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null || command is null) return;
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
         _doctrineScreenDay = -1;

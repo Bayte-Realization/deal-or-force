@@ -129,7 +129,7 @@ static class GeopoliticalDynamicsTests
         var n3 = new Nation { Id = 3, MapIndex = 4, Tag = "N3", Population = 10_000_000, CapitalLatitude = 53f, CapitalLongitude = 13f };
         campaign.Nations.AddRange(new[] { hegemon, n1, n2, n3 });
 
-        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(campaign, 7L * 24);
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(campaign, (7L + Statecraft.WeeklySlot) * 24);
         Statecraft.Tick(campaign);
 
         var coalition = Statecraft.CoalitionAgainst(campaign, hegemon.Id);

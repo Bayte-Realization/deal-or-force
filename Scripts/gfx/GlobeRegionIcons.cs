@@ -99,53 +99,23 @@ public sealed partial class GlobePresentation
     private bool _regionIconsSuppressed;
 
     /// <summary>
-    /// Every frame: decides when the layout may be redone, fades the badges, and asks for a redraw
-    /// while anything on the overlay is moving.
+    /// Lock-free per-frame camera tracking, badge alpha fade, and 2D _Draw() scheduling.
     /// </summary>
-    private void KeepRegionIcons(double delta)
+    private void KeepRegionIconsVisualSync(double delta)
     {
+        _badgeVisualSyncFrame = Engine.GetProcessFrames();
         var wanted = RegionIconsWanted;
         var transform = _camera.GlobalTransform;
-        var moved = _badgeLastSize < 0f || !transform.IsEqualApprox(_badgeLastCamera) || Mathf.Abs(_camera.Size - _badgeLastSize) > 0.0001f;
+        var moved = _badgeLastSize < 0f || _badgeLastFlatMap != _flatMap ||
+                    !transform.IsEqualApprox(_badgeLastCamera) ||
+                    Mathf.Abs(_camera.Size - _badgeLastSize) > 0.0001f;
         _badgeLastCamera = transform;
         _badgeLastSize = _camera.Size;
+        _badgeLastFlatMap = _flatMap;
+        if (moved) _badgeMovedSinceLayoutTick = true;
         _badgeStill = moved ? 0 : _badgeStill + delta;
         _badgeDataAge += delta;
 
-        var isTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
-        if (wanted)
-        {
-            // A new decision once the view has rested a moment, after a long zoom, a new layer,
-            // or every few seconds of rest for what changed in the world (a project begun, unrest).
-            var distance = ViewDistance;
-            if (_badgeMode != _mapMode) { _badgeMode = _mapMode; _badgeLayoutDue = true; }
-            if (_badgeLayoutDistance > 0f && MathF.Abs(distance - _badgeLayoutDistance) / _badgeLayoutDistance > 0.18f) _badgeLayoutDue = true;
-            if (_badgeStill >= 0.18 && (_badgeLayoutDue || _badgeDataAge >= 3.0))
-            {
-                LayOutRegionBadges();
-                _badgeLayoutDue = false;
-                _badgeDataAge = 0;
-                _badgeLayoutDistance = distance;
-            }
-            else if (moved)
-            {
-                // On touch/emulators, defer badge layout entirely until the camera settles;
-                // on desktop, run the light moving pass four times a second.
-                _badgeLayoutDue = true;
-                if (!isTouch)
-                {
-                    _badgeMovingClock += delta;
-                    if (_badgeMovingClock >= 0.25)
-                    {
-                        _badgeMovingClock = 0;
-                        LayOutRegionBadges(moving: true);
-                        _badgeLayoutDistance = distance;
-                    }
-                }
-            }
-        }
-
-        // Fades: in over a fifth of a second, out a little quicker.
         var animating = false;
         foreach (var badge in _regionBadges.Values)
         {
@@ -154,35 +124,53 @@ public sealed partial class GlobePresentation
             badge.Alpha = Mathf.MoveToward(badge.Alpha, target, (float)delta * (target > badge.Alpha ? 5f : 7f));
             animating = true;
         }
-        var inMotion = _flatMap ? FlatViewInMotion : GlobeViewInMotion;
-        if (animating || (moved && wanted))
+        var hasActive2DOverlays = AnyRegionBadgeActive() || _seaLiftHasActiveBadges ||
+                                  (_flatMap && _auxiliaryCounters.Count > 0);
+        if (MapOverlaySyncRules.ShouldQueueOverlayRedraw(moved, animating || _badgePendingRedraw, hasActive2DOverlays))
         {
-            if (isTouch && (moved || inMotion))
-            {
-                _badgeRedrawClock += delta;
-                if (_badgeRedrawClock >= 0.066)
-                {
-                    _badgeRedrawClock = 0;
-                    _badgePendingRedraw = false;
-                    QueueRedraw();
-                }
-                else
-                {
-                    _badgePendingRedraw = true;
-                }
-            }
-            else
-            {
-                _badgeRedrawClock = 0;
-                _badgePendingRedraw = false;
-                QueueRedraw();
-            }
-        }
-        else if (_badgePendingRedraw && !moved && !inMotion)
-        {
-            _badgeRedrawClock = 0;
             _badgePendingRedraw = false;
             QueueRedraw();
+        }
+    }
+
+    /// <summary>
+    /// Fenced region badge layout pass (runs only when Simulation read lock is held).
+    /// </summary>
+    private void KeepRegionIcons(double delta)
+    {
+        if (_badgeVisualSyncFrame != Engine.GetProcessFrames())
+            KeepRegionIconsVisualSync(delta);
+        if (!RegionIconsWanted) return;
+
+        var distance = ViewDistance;
+        if (_badgeMode != _mapMode) { _badgeMode = _mapMode; _badgeLayoutDue = true; }
+        if (_badgeLayoutDistance > 0f && MathF.Abs(distance - _badgeLayoutDistance) / _badgeLayoutDistance > 0.18f)
+            _badgeLayoutDue = true;
+        if (_badgeStill >= 0.18 && (_badgeLayoutDue || _badgeDataAge >= 3.0))
+        {
+            LayOutRegionBadges();
+            _badgeLayoutDue = false;
+            _badgeDataAge = 0;
+            _badgeMovingClock = 0;
+            _badgeLayoutDistance = distance;
+            _badgeMovedSinceLayoutTick = false;
+            QueueRedraw();
+        }
+        else if (_badgeMovedSinceLayoutTick)
+        {
+            _badgeMovedSinceLayoutTick = false;
+            _badgeLayoutDue = true;
+            if (Platform.PlatformProfile.Current?.IsTouchPrimary != true)
+            {
+                _badgeMovingClock += delta;
+                if (_badgeMovingClock >= 0.25)
+                {
+                    _badgeMovingClock = 0;
+                    LayOutRegionBadges(moving: true);
+                    _badgeLayoutDistance = distance;
+                    QueueRedraw();
+                }
+            }
         }
     }
 
@@ -459,7 +447,9 @@ public sealed partial class GlobePresentation
     {
         if (!IsInstanceValid(_capitalRoot)) return null;
         var world = _capitalRoot.GlobalTransform * PresentationPoint(latitude, longitude, SurfaceMarkerRadius);
-        if (!_flatMap && world.Normalized().Dot(_camera.GlobalPosition.Normalized()) < CityHorizon() + 0.02f) return null;
+        if (!_flatMap && MapOverlaySyncRules.IsBeyondGlobeHorizon(
+                ToNum(world), ToNum(_camera.GlobalPosition), MathF.Min(0.995f, CityHorizon() + 0.02f)))
+            return null;
         if (_camera.IsPositionBehind(world)) return null;
         return _camera.UnprojectPosition(world);
     }

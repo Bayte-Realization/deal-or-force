@@ -7,6 +7,9 @@ namespace DealOrForce.Simulation;
 
 public sealed partial class Campaign
 {
+    /// <summary>Day-of-cycle slot on which the weekly numeric integrity check runs (day 3).</summary>
+    internal static int NumericIntegritySlot(int cycle) => cycle > 3 ? 3 : cycle > 1 ? cycle - 1 : 0;
+
     /// <summary>
     /// Advance one whole campaign day, whatever the step length is.
     ///
@@ -179,8 +182,8 @@ public sealed partial class Campaign
             {
                 if (ranAny && bounded)
                 {
-                    // An interactive tap or a command is waiting: hand the gate back now.
-                    if (AccessGate.HasPriorityReaderRequested || AccessGate.HasWriteWaiter) break;
+                    // An interactive tap or a command (or a starving renderer) is waiting: hand the gate back now.
+                    if (AccessGate.HasPriorityReaderRequested || AccessGate.IsReaderStarving || AccessGate.HasWriteWaiter) break;
                     var now = System.Diagnostics.Stopwatch.GetTimestamp();
                     if (stepPreEntryCutoff != 0 && now >= stepPreEntryCutoff) break;
                     if (heavyBounded && _heavyNext &&
@@ -193,7 +196,7 @@ public sealed partial class Campaign
                 _stageStarted = heavyBounded ? stageStarted : System.Diagnostics.Stopwatch.GetTimestamp();
                 _heavyNext = false;
                 if (!stages.MoveNext()) { finished = true; break; }
-                if (bounded && (AccessGate.HasPriorityReaderRequested || AccessGate.HasWriteWaiter)) break;
+                if (bounded && (AccessGate.HasPriorityReaderRequested || AccessGate.IsReaderStarving || AccessGate.HasWriteWaiter)) break;
                 // An unbounded step never takes the heavy break. The ceiling is a second
                 // stop only for a call that asked for one.
                 if (bounded && System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds >= milliseconds) break;
@@ -827,7 +830,8 @@ public sealed partial class Campaign
             // Before political actions read thresholds: comparisons with NaN can otherwise
             // authorise every uprising. Do not let one bad economy contaminate the map.
             string invalid = null;
-            if (ElapsedDays % 7 == 0)
+            var integrityCycle = Math.Max(1, Defines.EconomyTickDays);
+            if (ElapsedDays > 0 && ElapsedDays % integrityCycle == NumericIntegritySlot(integrityCycle))
             {
                 using (var integrity = NumericIntegrity.FirstLiveIssueStages(this, found => invalid = found).GetEnumerator())
                 {

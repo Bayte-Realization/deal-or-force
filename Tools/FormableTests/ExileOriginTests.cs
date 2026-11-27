@@ -80,6 +80,7 @@ static class ExileOriginTests
         NoRawIdsForNames();
         OldSavesSettle();
         GraduatedMovementExilesAlongsideParent();
+        NestedRisingNamesAreUnwrappedAndRepaired();
     }
 
     static void WhoHadAGovernment()
@@ -420,5 +421,201 @@ static class ExileOriginTests
         Check(grad.Landless && grad.Movement is { Dissolved: false },
             "a graduated catalog movement that loses its ground goes back into exile even when its former parent state is already in exile for the same region");
         _ = holder;
+    }
+
+    static void NestedRisingNamesAreUnwrappedAndRepaired()
+    {
+        var previousLanguage = Loc.Language;
+        try
+        {
+            Loc.Language = "english";
+
+            // 1. LooksLikeKey recognizes rising: recipes with or without dots, plus leaked wrappers.
+            Check(NationNaming.LooksLikeKey("rising:salvation_front:VEN:Venezuela"),
+                "LooksLikeKey flags rising: recipes even when they contain no dot");
+            Check(NationNaming.LooksLikeKey("rising:military_council@ve_v@Zulia:VEN:Venezuela"),
+                "LooksLikeKey flags regional rising: recipes");
+            Check(NationNaming.LooksLikeKey("Republic of rising:salvation_front:VEN:Venezuela"),
+                "LooksLikeKey flags names containing leaked rising: recipes");
+            Check(!NationNaming.LooksLikeKey("Republic of Venezuela"),
+                "LooksLikeKey leaves ordinary country names alone");
+
+            // 2. TryUnwrapRisingBase + TryResolveRising + SanitizeRisingText peel nested rising: layers cleanly.
+            const string nested = "rising:salvation_front:R01:rising:transitional_council:VEN:Venezuela";
+            Check(CountryNames.TryUnwrapRisingBase(nested, out var unwrappedTag, out var unwrappedLabel) &&
+                  unwrappedTag == "VEN" && unwrappedLabel == "Venezuela",
+                $"TryUnwrapRisingBase peels nested rising: to innermost VEN/Venezuela (got {unwrappedTag}/{unwrappedLabel})");
+            Check(CountryNames.TryResolveRising(nested, out var resolvedEn) &&
+                  !RawId(resolvedEn) && resolvedEn.Contains("Venezuela", StringComparison.Ordinal),
+                $"TryResolveRising formats nested rising: cleanly in English (got \"{resolvedEn}\")");
+            const string nestedRegional = "rising:military_council@ve_v@Zulia:R01:rising:salvation_front:VEN:Venezuela";
+            Check(CountryNames.TryResolveRising(nestedRegional, out var resolvedRegEn) &&
+                  !RawId(resolvedRegEn) && resolvedRegEn.Contains("Zulia", StringComparison.Ordinal),
+                $"TryResolveRising formats nested regional rising: cleanly in English (got \"{resolvedRegEn}\")");
+            Check(CountryNames.SanitizeRisingText("Republic of rising:salvation_front:VEN:Venezuela") == "Republic of Venezuela",
+                "SanitizeRisingText strips leaked rising: inside Republic of ...");
+            Check(!RawId(CountryNames.Recorded(nested)) && !RawId(CountryNames.Recorded("Republic of rising:salvation_front:VEN:Venezuela")),
+                "Recorded never leaks raw rising: into chronicle/war history");
+
+            // 3. RisingParent extracts innermost tag/name and prevents CivilWarOutbreak from nesting.
+            var risingParent = new Nation { Id = 77, Tag = "R01", Name = "rising:salvation_front:VEN:Venezuela", MapIndex = 510 };
+            var (rpTag, rpName) = CountryNames.RisingParent(risingParent);
+            Check(rpTag == "VEN" && rpName == "Venezuela",
+                $"RisingParent unwraps rising: parent to VEN/Venezuela (got {rpTag}/{rpName})");
+
+            var cw = new Campaign(20261126) { ScenarioId = "nested_rising_cw" };
+            var observer = cw.AddNation(new Nation { Tag = "OBS", Name = "Observer", MapIndex = 600, Population = 1_000_000 });
+            var cwParent = cw.AddNation(new Nation
+            {
+                Tag = "R01", Name = "rising:salvation_front:VEN:Venezuela", MapIndex = 601,
+                Population = 4_000_000, Stability = 0.15f, Government = "presidential_republic",
+                Ideology = "nationalism", CapitalStateMapIndex = 4001
+            });
+            for (var i = 0; i < 4; i++)
+            {
+                var st = new ScenarioState
+                {
+                    MapIndex = 4001 + i, NationMapIndex = cwParent.MapIndex,
+                    Id = $"cw_r{i}", Name = $"Sector {i}", Population = 1_000_000,
+                    Stability = 0.1f, Radicalism = 0.8f
+                };
+                st.PopulationGroups.Add(new PopulationGroup { Culture = "russian", Religion = "orthodox", Size = 1_000_000 });
+                cw.States.Add(st);
+            }
+            const int cwW = 128, cwH = 32;
+            var cwStates = new ushort[cwW * cwH];
+            var cwOwners = new ushort[cwW * cwH];
+            for (var y = 0; y < cwH; y++)
+                for (var x = 0; x < cwW; x++)
+                {
+                    cwStates[y * cwW + x] = (ushort)(4001 + (x / 32));
+                    cwOwners[y * cwW + x] = (ushort)cwParent.MapIndex;
+                }
+            cw.AttachProvinceTopology(ProvinceTopology.Build(cwStates, cwOwners, cwW, cwH, _ => false));
+            cw.ConfigureSinglePlayer(observer.Id);
+            SetDay(cw, 200);
+            var outbreak = CivilWarOutbreak.Break(cw, cwParent, ignoreStability: true);
+            Check(outbreak?.Seceded is { } childRebel &&
+                  childRebel.Name.StartsWith("rising:", StringComparison.Ordinal) &&
+                  childRebel.Name.Split(':', 4) is { Length: 4 } cwParts &&
+                  cwParts[2] == "VEN" && cwParts[3] == "Venezuela" &&
+                  !cwParts[3].StartsWith("rising:", StringComparison.Ordinal) &&
+                  !RawId(CountryNames.Resolve(childRebel, false)),
+                $"civil war breaking out inside a rising: faction does not nest rising: (got \"{outbreak?.Seceded?.Name}\")");
+
+            // 4. AssignDistinctSurvivorIdentity and Factions.SettleCivilWarSurvivors reject rising: fallback labels and set valid FoundNameId.
+            var (sc, survivor, venParent, _) = Fixture();
+            venParent.Tag = "VEN";
+            venParent.Name = "Venezuela";
+            survivor.Tag = "R02";
+            survivor.Name = "rising:salvation_front:VEN:Venezuela";
+            survivor.Ideology = "liberalism";
+            survivor.SecededFromId = survivor.RevoltParentId = venParent.Id;
+            var zulia = new ScenarioState { MapIndex = 3004, NationMapIndex = survivor.MapIndex, Id = "ve_v", Name = "Zulia", Population = 800_000 };
+            zulia.PopulationGroups.Add(new PopulationGroup { Culture = "russian", Religion = "orthodox", Size = 800_000 });
+            sc.States.Add(zulia);
+            sc.InvalidateStateIndex();
+            SecessionEvents.AssignDistinctSurvivorIdentity(sc, survivor, venParent, "rising:salvation_front:VEN:Venezuela");
+            Check(!RawId(survivor.Name) && !survivor.Name.Contains("rising:", StringComparison.Ordinal) &&
+                  survivor.Name != "Venezuela" &&
+                  survivor.FoundNameKind == "region" && survivor.FoundNameId == "ve_v" &&
+                  !RawId(survivor.FoundNameBase) && !RawId(CountryNames.Resolve(survivor, false)),
+                $"AssignDistinctSurvivorIdentity rejects rising: fallback and binds FoundNameId=\"ve_v\" (got name=\"{survivor.Name}\", kind={survivor.FoundNameKind}, id={survivor.FoundNameId})");
+
+            var landlessSurvivor = sc.AddNation(new Nation { Tag = "R03", Name = "rising:salvation_front:VEN:Venezuela", MapIndex = 509, Ideology = "conservatism" });
+            SecessionEvents.AssignDistinctSurvivorIdentity(sc, landlessSurvivor, venParent, "rising:salvation_front:VEN:Venezuela");
+            Check(!RawId(landlessSurvivor.Name) && !landlessSurvivor.Name.Contains("rising:", StringComparison.Ordinal) &&
+                  landlessSurvivor.FoundNameKind == "literal" && landlessSurvivor.FoundNameId == "" &&
+                  !RawId(landlessSurvivor.FoundNameBase),
+                $"AssignDistinctSurvivorIdentity sets FoundNameKind=\"literal\" when seat is absent (got name=\"{landlessSurvivor.Name}\", kind={landlessSurvivor.FoundNameKind})");
+
+            var staleCamp = new Campaign(20261126) { ScenarioId = "rising_stalemate" };
+            var venParent2 = staleCamp.AddNation(new Nation { Tag = "VEN", Name = "Venezuela", MapIndex = 510, Government = "presidential_republic" });
+            var stalemateRebel = staleCamp.AddNation(new Nation
+            {
+                Tag = "R04", Name = nested, MapIndex = 511, Population = 700_000,
+                Government = "provisional_government", Ideology = "socialism",
+                SecededFromId = venParent2.Id, RevoltParentId = venParent2.Id
+            });
+            var lara = new ScenarioState { MapIndex = 3005, NationMapIndex = stalemateRebel.MapIndex, Id = "ve_k", Name = "Lara", Population = 700_000 };
+            lara.PopulationGroups.Add(new PopulationGroup { Culture = "russian", Religion = "orthodox", Size = 700_000 });
+            staleCamp.States.Add(lara);
+            staleCamp.InvalidateStateIndex();
+            var stalemateWar = new StrategicWar { Id = 99, AttackerId = venParent2.Id, DefenderId = stalemateRebel.Id, Ended = true, WinnerId = -1, CivilConflict = true };
+            Factions.SettleCivilWarSurvivors(staleCamp, stalemateWar);
+            Check(!RawId(stalemateRebel.Name) && !stalemateRebel.Name.Contains("rising:", StringComparison.Ordinal) &&
+                  stalemateRebel.FoundNameKind == "region" && stalemateRebel.FoundNameId == "ve_k" &&
+                  !RawId(CountryNames.Resolve(stalemateRebel, false)),
+                $"Factions.SettleCivilWarSurvivors settles nested rising: without leaking rising: (got name=\"{stalemateRebel.Name}\", id={stalemateRebel.FoundNameId})");
+
+            // 5. MigrateLegacy repairs corrupted save entries cleanly in both EN and RU, and is idempotent.
+            var migEn = new Campaign(20261127) { ScenarioId = "rising_migrate_en" };
+            var unboundRegion = migEn.AddNation(new Nation
+            {
+                Tag = "M01", MapIndex = 701, Population = 800_000,
+                Name = "Republic of rising:salvation_front:VEN:Venezuela",
+                FoundNameKind = "region", FoundNameId = "", FoundNameForm = "republic",
+                FoundNameBase = "rising:salvation_front:VEN:Venezuela",
+                Government = "parliamentary_republic", Ideology = "liberalism"
+            });
+            migEn.States.Add(new ScenarioState { MapIndex = 4101, NationMapIndex = unboundRegion.MapIndex, Id = "ve_f", Name = "Bolívar", Population = 800_000 });
+            var literalRising = migEn.AddNation(new Nation
+            {
+                Tag = "M02", MapIndex = 702, Population = 500_000,
+                Name = "Republic of rising:salvation_front:VEN:Venezuela",
+                FoundNameKind = "literal", FoundNameId = nested, FoundNameForm = "republic",
+                FoundNameBase = nested,
+                Government = "parliamentary_republic", Ideology = "liberalism"
+            });
+            migEn.InvalidateStateIndex();
+
+            Check(NationNaming.MigrateLegacy(migEn) >= 2, "MigrateLegacy repairs leaked rising: region/literal nations in English");
+            Check(NationNaming.MigrateLegacy(migEn) == 0, "MigrateLegacy repair for rising: entries is idempotent");
+            var enRegName = CountryNames.Resolve(unboundRegion, false);
+            var enLitName = CountryNames.Resolve(literalRising, false);
+            Check(unboundRegion.FoundNameId == "ve_f" && !RawId(enRegName) && enRegName == "Republic of Bolívar",
+                $"EN unbound rising region repaired to Republic of Bolívar (got \"{enRegName}\")");
+            Check(!RawId(enLitName) && enLitName == "Republic of Venezuela",
+                $"EN nested rising literal repaired to Republic of Venezuela (got \"{enLitName}\")");
+
+            Loc.Language = "russian";
+            var ruRegAfter = NationNaming.Render(migEn, unboundRegion, false);
+            var ruLitAfter = CountryNames.Resolve(literalRising, false);
+            Check(!RawId(ruRegAfter) && ruRegAfter.Contains("Боливар", StringComparison.Ordinal) &&
+                  !RawId(ruLitAfter) && ruLitAfter == "Республика Венесуэла",
+                $"repaired identities render cleanly in Russian (region=\"{ruRegAfter}\", literal=\"{ruLitAfter}\")");
+
+            var migRu = new Campaign(20261128) { ScenarioId = "rising_migrate_ru" };
+            var ruRegion = migRu.AddNation(new Nation
+            {
+                Tag = "M03", MapIndex = 703, Population = 800_000,
+                Name = "Republic of rising:salvation_front:VEN:Venezuela",
+                FoundNameKind = "region", FoundNameId = "", FoundNameForm = "republic",
+                FoundNameBase = "rising:salvation_front:VEN:Venezuela",
+                Government = "parliamentary_republic", Ideology = "liberalism"
+            });
+            migRu.States.Add(new ScenarioState { MapIndex = 4102, NationMapIndex = ruRegion.MapIndex, Id = "ve_f", Name = "Bolívar", Population = 800_000 });
+            var ruLiteral = migRu.AddNation(new Nation
+            {
+                Tag = "M04", MapIndex = 704, Population = 500_000,
+                Name = "Republic of rising:salvation_front:VEN:Venezuela",
+                FoundNameKind = "literal", FoundNameId = nested, FoundNameForm = "republic",
+                FoundNameBase = nested,
+                Government = "parliamentary_republic", Ideology = "liberalism"
+            });
+            migRu.InvalidateStateIndex();
+
+            Check(NationNaming.MigrateLegacy(migRu) >= 2 && NationNaming.MigrateLegacy(migRu) == 0,
+                "MigrateLegacy repairs corrupted entries when run directly under Russian localization");
+            var ruDirectReg = CountryNames.Resolve(ruRegion, false);
+            var ruDirectLit = CountryNames.Resolve(ruLiteral, false);
+            Check(ruRegion.FoundNameId == "ve_f" && !RawId(ruDirectReg) && ruDirectReg.Contains("Боливар", StringComparison.Ordinal) &&
+                  !RawId(ruDirectLit) && ruDirectLit == "Республика Венесуэла",
+                $"RU repair produces clean Russian names without rising: (region=\"{ruDirectReg}\", literal=\"{ruDirectLit}\")");
+        }
+        finally
+        {
+            Loc.Language = previousLanguage;
+        }
     }
 }

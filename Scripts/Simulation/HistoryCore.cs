@@ -138,7 +138,7 @@ public sealed class CampaignHistory
                     _samples[entry.Key] = new List<NationHistorySample>();
                     continue;
                 }
-                var copy = new List<NationHistorySample>(src.Count + 16);
+                var copy = new List<NationHistorySample>(src.Count);
                 copy.AddRange(src);
                 _samples[entry.Key] = copy;
             }
@@ -233,7 +233,7 @@ public sealed class CampaignHistory
             {
                 // Room for a year, not for forty: a list grows as it is filled, and a movement
                 // born yesterday was handed 32 kB for a ledger it may never write a line of.
-                values = new List<NationHistorySample>(64);
+                values = new List<NationHistorySample>(landless ? 8 : 32);
                 _samples[nation.Id] = values;
             }
 

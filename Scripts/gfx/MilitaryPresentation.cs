@@ -12,6 +12,7 @@ public sealed partial class GlobePresentation
     private readonly Dictionary<int, (Node3D Node, Vector3 Normal)> _battleMarkers = new();
     private ProvinceTopology _battleAnchorMap;
     private ProvinceBoundaryAnchor _battleAnchors;
+    private byte[] _counterTextureScratch;
 
     private void CreateMilitaryOverlays(Node3D world)
     {
@@ -45,11 +46,16 @@ public sealed partial class GlobePresentation
         if (_armyCounterTextures.TryGetValue(key, out var cached)) return cached;
         const int width = 176;
         const int height = 104;
-        // Drawn supersampled and brought down with a Lanczos filter.
+        // Drawn supersampled and brought down with a Bilinear filter.
         const int s = 2;
         var w = width * s;
         var h = height * s;
-        var pixels = new byte[w * h * 4];
+        var needed = w * h * 4;
+        var pixels = _counterTextureScratch;
+        if (pixels is null || pixels.Length != needed)
+            pixels = _counterTextureScratch = new byte[needed];
+        else
+            Array.Clear(pixels);
         var national = new Color(nation.Color);
         var brass = Ui.Colour("map.counter_rim");
         var rimLight = national.Lightened(0.36f).Lerp(brass, 0.22f);
@@ -201,7 +207,7 @@ public sealed partial class GlobePresentation
         try
         {
             using var image = Image.CreateFromData(w, h, false, Image.Format.Rgba8, pixels);
-            image.Resize(width, height, Image.Interpolation.Lanczos);
+            image.Resize(width, height, Image.Interpolation.Bilinear);
             image.GenerateMipmaps();
             var texture = ImageTexture.CreateFromImage(image);
             _armyCounterTextures[key] = texture;
@@ -797,7 +803,7 @@ public sealed partial class GlobePresentation
         return hash.ToHashCode();
     }
 
-    private void UpdateMilitaryPresentation()
+    private void UpdateMilitaryPresentation(bool forceNow = false)
     {
         if (_campaign is null) return;
         var fingerprint = MilitaryPresentationFingerprint();
@@ -806,7 +812,7 @@ public sealed partial class GlobePresentation
             _militaryPresentationFingerprint = fingerprint;
             UpdateMilitaryMarkerPresentation();
         }
-        UpdateBattleMarkers();
+        UpdateBattleMarkers(forceNow);
     }
 
     private void UpdateMilitaryMarkerPresentation()
@@ -878,6 +884,8 @@ public sealed partial class GlobePresentation
     private long _battleMarkerDay = -1;
     private int _battleMarkerCount = -1;
     private int _battleViewer = -1;
+    private bool _battleMarkerFlatMap;
+    private int _battleMarkerFlatBucket = int.MinValue;
     private int _lastBattleSelectedHash = int.MinValue;
     private readonly HashSet<int> _activeBattleIds = new();
     private readonly List<int> _finishedBattleIds = new();
@@ -896,7 +904,7 @@ public sealed partial class GlobePresentation
     /// grind only inside a tick, so the work happens once a day; only the placement, which
     /// follows the camera, still happens every frame.
     /// </summary>
-    private void UpdateBattleMarkers()
+    private void UpdateBattleMarkers(bool forceNow = false)
     {
         if (!IsInstanceValid(_battleRoot) || _campaign?.ProvinceMap is null) return;
         var viewer = FogOfWarActive && _campaign.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
@@ -904,15 +912,22 @@ public sealed partial class GlobePresentation
         foreach (var battle in _campaign.Battles) if (!battle.Ended) active++;
         var selHash = _selectedArmyIds.Count;
         foreach (var id in _selectedArmyIds) selHash ^= HashCode.Combine(id);
+        var isMobileOrTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
+                              Platform.PlatformProfile.Current?.IsMobile == true;
         var fastSim = _campaign is { IsPaused: false, Speed: >= 4 };
         var timeSinceLast = System.Diagnostics.Stopwatch.GetElapsedTime(_lastBattleRebuildStamp).TotalSeconds;
-        var dueByTime = !fastSim || timeSinceLast >= 0.14;
-        var structureChanged = _battleViewer != viewer || _battleMarkerCount != active || selHash != _lastBattleSelectedHash;
+        var dueByTime = !fastSim || timeSinceLast >= (isMobileOrTouch ? 0.14 : 0.033);
+        var flatBucket = _flatMap ? Mathf.FloorToInt(_flatX * 0.25f) : 0;
+        var structureChanged = _battleViewer != viewer || _battleMarkerCount != active ||
+            _battleMarkerFlatMap != _flatMap || _battleMarkerFlatBucket != flatBucket ||
+            selHash != _lastBattleSelectedHash;
 
-        if (structureChanged || (_battleMarkerDay != _campaign.ElapsedHours && dueByTime))
+        if (forceNow || structureChanged || (_battleMarkerDay != _campaign.ElapsedHours && dueByTime))
         {
             _lastBattleRebuildStamp = System.Diagnostics.Stopwatch.GetTimestamp();
             _battleViewer = viewer;
+            _battleMarkerFlatMap = _flatMap;
+            _battleMarkerFlatBucket = flatBucket;
             _battleMarkerDay = _campaign.ElapsedHours;
             _battleMarkerCount = active;
             _lastBattleSelectedHash = selHash;
@@ -928,7 +943,7 @@ public sealed partial class GlobePresentation
         FinishBattleMarkers();
     }
 
-    private const int BattleBadgePoolCap = 24;
+    private const int BattleBadgePoolCap = 192;
     private readonly Queue<Node3D> _battleBadgePool = new();
 
     private void RebuildBattleMarkers()
@@ -973,9 +988,12 @@ public sealed partial class GlobePresentation
         var qualityTier = CurrentShaderQualityTier();
         var battleSymbol = BattleSymbolFor(SpriteCatalog.TextureOf("icon_battle", "res://game/gfx/interface/icons/icon_battle.png"));
 
+        var map = _campaign.ProvinceMap;
         foreach (var battle in _campaign.Battles)
         {
             if (!_activeBattleIds.Contains(battle.Id)) continue;
+            if (!GlobeLineSanity.TryValidateProvinceId(battle.ProvinceId, map.ProvinceCount, map.ProvinceCenterCell))
+                continue;
             if (!_battleMarkers.TryGetValue(battle.Id, out var marker))
             {
                 Node3D node = null;
@@ -1002,7 +1020,8 @@ public sealed partial class GlobePresentation
                 _battleMarkers[battle.Id] = marker;
             }
 
-            var location = _campaign.ProvinceMap.CenterOf(battle.ProvinceId);
+            var location = map.CenterOf(battle.ProvinceId);
+            if (!GlobeLineSanity.IsValidGeo(location.Latitude, location.Longitude)) continue;
             var origin = 0;
             // Participants are stable identities, not visual counter positions. Prefer a
             // deterministic adjacent attacking province; internal battles keep the centre.
@@ -1015,7 +1034,9 @@ public sealed partial class GlobePresentation
             {
                 if (armyId < bestArmyId &&
                     _armyById.TryGetValue(armyId, out var army) &&
-                    _battleAnchors.TryFind(battle.ProvinceId, army.ProvinceId, out var border))
+                    GlobeLineSanity.TryValidateProvinceId(army.ProvinceId, map.ProvinceCount, map.ProvinceCenterCell) &&
+                    _battleAnchors.TryFind(battle.ProvinceId, army.ProvinceId, out var border) &&
+                    GlobeLineSanity.IsValidGeo(border.Latitude, border.Longitude))
                 {
                     bestArmyId = armyId;
                     bestBorder = border;
@@ -1028,7 +1049,9 @@ public sealed partial class GlobePresentation
                 location = bestBorder;
                 origin = bestOrigin;
             }
-            marker.Normal = SurfacePoint(location.Latitude, location.Longitude, 1f).Normalized();
+            marker.Normal = GlobeLineSanity.TrySafeNormalize(ToNum(SurfacePoint(location.Latitude, location.Longitude, 1f)), out var unitNorm)
+                ? ToGd(unitNorm)
+                : Vector3.Up;
             _battleMarkers[battle.Id] = marker;
             marker.Node.SetMeta("province_id", battle.ProvinceId);
             marker.Node.SetMeta("attacking_province_id", origin);
@@ -1060,28 +1083,37 @@ public sealed partial class GlobePresentation
             marker.Node.SetMeta("endurance_share", detailed ? share : -1f);
 
             var playerId = _campaign.Player?.Id ?? -1;
+            var battleNeighbors = map.Neighbors is not null &&
+                battle.ProvinceId > 0 && battle.ProvinceId < map.Neighbors.Length
+                ? map.Neighbors[battle.ProvinceId]
+                : Array.Empty<int>();
             _selectedBattleOriginScratch.Clear();
             foreach (var armyId in battle.Attackers)
             {
                 if (_armyById.TryGetValue(armyId, out var attArmy) &&
                     attArmy.NationId == playerId &&
                     _selectedArmyIds.Contains(armyId) &&
-                    attArmy.ProvinceId > 0 && attArmy.ProvinceId != battle.ProvinceId)
+                    GlobeLineSanity.TryValidateProvinceId(attArmy.ProvinceId, map.ProvinceCount, map.ProvinceCenterCell) &&
+                    attArmy.ProvinceId != battle.ProvinceId &&
+                    Array.IndexOf(battleNeighbors, attArmy.ProvinceId) >= 0)
                 {
                     _selectedBattleOriginScratch.Add(attArmy.ProvinceId);
                 }
             }
-            var battleProgress = Math.Clamp(telemetry.AttackerProgress, 0.42f, 0.98f);
+            var battleProgress = GlobeLineSanity.SafeClamp(telemetry.AttackerProgress, 0.42f, 0.98f, 0.5f);
             _battleOriginScratch.Clear();
             foreach (var armyId in battle.Attackers)
             {
                 if (_armyById.TryGetValue(armyId, out var attArmy) &&
-                    attArmy.ProvinceId > 0 && attArmy.ProvinceId != battle.ProvinceId &&
+                    GlobeLineSanity.TryValidateProvinceId(attArmy.ProvinceId, map.ProvinceCount, map.ProvinceCenterCell) &&
+                    attArmy.ProvinceId != battle.ProvinceId &&
+                    Array.IndexOf(battleNeighbors, attArmy.ProvinceId) >= 0 &&
                     _battleOriginScratch.Add(attArmy.ProvinceId) &&
                     !_selectedBattleOriginScratch.Contains(attArmy.ProvinceId))
                 {
                     var targetAnchor = attArmy.ProvinceId != origin &&
-                        _battleAnchors.TryFind(battle.ProvinceId, attArmy.ProvinceId, out var flankBorder)
+                        _battleAnchors.TryFind(battle.ProvinceId, attArmy.ProvinceId, out var flankBorder) &&
+                        GlobeLineSanity.IsValidGeo(flankBorder.Latitude, flankBorder.Longitude)
                         ? flankBorder
                         : location;
                     RecordBattleAssaultArrow(targetAnchor, attArmy.ProvinceId, battleProgress);
@@ -1094,16 +1126,20 @@ public sealed partial class GlobePresentation
     /// <summary>Which markers the camera can see. Cheap, and camera-dependent, so per frame.</summary>
     private void FinishBattleMarkers()
     {
+        if (!IsInstanceValid(_battleRoot) || !IsInstanceValid(_camera)) return;
         _battleRoot.Visible = MilitaryMarkersEnabled && ViewDistance <= 14f;
         if (!_flatMap && _battleRoot.Visible)
         {
             var view = _camera.GlobalPosition.Normalized();
             var basis = _battleRoot.GlobalBasis;
-            var limb = GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length());
+            var horizon = CityHorizon();
             foreach (var marker in _battleMarkers.Values)
-                if (IsInstanceValid(marker.Node)) marker.Node.Visible = (basis * marker.Normal).Dot(view) > limb;
+                if (IsInstanceValid(marker.Node))
+                    marker.Node.Visible = !MapOverlaySyncRules.IsBeyondGlobeHorizon(
+                                              ToNum(basis * marker.Normal), ToNum(view), horizon) &&
+                                          !_camera.IsPositionBehind(marker.Node.GlobalPosition);
         }
-        else
+        else if (_battleRoot.Visible)
             foreach (var marker in _battleMarkers.Values)
                 if (IsInstanceValid(marker.Node)) marker.Node.Visible = true;
         FinishBattleVfxVisibility();

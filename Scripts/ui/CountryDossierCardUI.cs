@@ -116,10 +116,12 @@ public partial class DealOrForceGame
                 StyleButton(button, page == _countryDossierTab);
             }
         }
-        _countryFactsScroll.Visible = _countryDossierTab != "Actions" || nation == _campaign.Player;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        var player = _campaign?.Player;
+        _countryFactsScroll.Visible = observing || player is null || _countryDossierTab != "Actions" || nation == player;
         if (_countryCardFlagEdit is not null)
-            _countryCardFlagEdit.Visible = nation == _campaign.Player && CampaignCosmetics.CanEdit(_campaign, _campaign.Player, nation);
-        _countryOrdersScroll.Visible = _countryDossierTab == "Actions" && nation != _campaign.Player;
+            _countryCardFlagEdit.Visible = !observing && player is not null && nation == player && CampaignCosmetics.CanEdit(_campaign, player, nation);
+        _countryOrdersScroll.Visible = !observing && player is not null && _countryDossierTab == "Actions" && nation != player;
         // Opening actions does not execute them. This is still the one shared action block.
         _countryCardCaption.TooltipText = Ui.Tip(nation.DisplayName + "\n" +
             Tr(PoliticsCore.GovernmentOf(nation).Name) + " · " + Tr(PoliticsCore.IdeologyOf(nation).Name) + "\n" +

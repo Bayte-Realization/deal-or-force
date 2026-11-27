@@ -65,6 +65,14 @@
     "description": "Off: a peace treaty hands over whole regions only, so borders follow the map's regions. On: every treaty, other governments' as well as yours, takes exactly the provinces it names, and the border runs where the armies stopped. Regions cut in two stay cut.",
     "default": false
   },
+  "ai_diplomacy_lod": {
+    "category": "game", "scope": "campaign", "order": 106, "kind": "choice",
+    "name": "AI diplomacy detail",
+    "description": "How often distant minor countries without shared interests re-evaluate diplomacy with each other. Full checks every pair weekly. World significance treats every country equally by borders, treaties, great powers, GDP and live crises. Balanced also keeps all player diplomacy at full frequency. Player-centric focuses weekly budget on your sphere, great powers and active treaties (and falls back to World significance in Observer mode).",
+    "values": ["full", "world", "balanced", "player_focus"],
+    "labels": ["Full (no simplification)", "World significance (player-independent)", "Balanced (player + world)", "Player-centric (maximum speed)"],
+    "default": "balanced"
+  },
   "show_first_steps": {
     "category": "interface", "order": 205, "kind": "toggle",
     "name": "First steps",

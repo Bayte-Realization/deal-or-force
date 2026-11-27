@@ -57,6 +57,17 @@ public static class FrontierField
     public static byte[] Build(ushort[] authoredHolders, ushort[] cellToProvince, int width, int height,
         ushort[] owners, ushort[] authoredOwners)
     {
+        byte[] bytes = null;
+        return BuildInto(authoredHolders, cellToProvince, width, height, owners, authoredOwners, ref bytes);
+    }
+
+    /// <summary>
+    /// Variant of <see cref="Build"/> that writes into a caller-supplied reusable byte array
+    /// (allocated/resized on demand) so wartime frontier repaints avoid repeated ~16.6 MB LOH allocations.
+    /// </summary>
+    public static byte[] BuildInto(ushort[] authoredHolders, ushort[] cellToProvince, int width, int height,
+        ushort[] owners, ushort[] authoredOwners, ref byte[] reusableBytes)
+    {
         if (authoredHolders is null || cellToProvince is null) throw new ArgumentNullException(nameof(authoredHolders));
         if (width <= 0 || height <= 0)
             throw new ArgumentException("The field dimensions must be positive.");
@@ -64,23 +75,37 @@ public static class FrontierField
         if (authoredHolders.Length < cells || cellToProvince.Length < cells)
             throw new ArgumentException("The grids are smaller than the field asked for.");
 
-        if (NativeKernelsLoader.EnableRasterDefault &&
-            NativeRasterBake.TryBuildFrontier(authoredHolders, cellToProvince, width, height, owners, authoredOwners, Cap, Smoothing, out var nativeBytes) &&
-            nativeBytes is not null)
-            return nativeBytes;
+        if (reusableBytes is null || reusableBytes.Length != cells)
+            reusableBytes = new byte[cells];
 
-        return BuildManaged(authoredHolders, cellToProvince, width, height, owners, authoredOwners);
+        if (NativeKernelsLoader.EnableRasterDefault &&
+            NativeRasterBake.TryBakeInto(authoredHolders, cellToProvince, width, height, owners, authoredOwners, Cap, Smoothing, reusableBytes))
+            return reusableBytes;
+
+        BuildManagedInto(authoredHolders, cellToProvince, width, height, owners, authoredOwners, reusableBytes);
+        return reusableBytes;
     }
 
     internal static byte[] BuildManaged(ushort[] authoredHolders, ushort[] cellToProvince, int width, int height,
         ushort[] owners, ushort[] authoredOwners)
     {
         if (authoredHolders is null || cellToProvince is null) throw new ArgumentNullException(nameof(authoredHolders));
+        if (width <= 0 || height <= 0)
+            throw new ArgumentException("The field dimensions must be positive.");
+        var cells = checked(width * height);
+        var bytes = new byte[cells];
+        BuildManagedInto(authoredHolders, cellToProvince, width, height, owners, authoredOwners, bytes);
+        return bytes;
+    }
+
+    private static void BuildManagedInto(ushort[] authoredHolders, ushort[] cellToProvince, int width, int height,
+        ushort[] owners, ushort[] authoredOwners, byte[] bytes)
+    {
+        if (authoredHolders is null || cellToProvince is null) throw new ArgumentNullException(nameof(authoredHolders));
         var cells = width * height;
-        if (authoredHolders.Length < cells || cellToProvince.Length < cells)
+        if (authoredHolders.Length < cells || cellToProvince.Length < cells || bytes is null || bytes.Length < cells)
             throw new ArgumentException("The grids are smaller than the field asked for.");
 
-        var bytes = new byte[cells];
         var opts = BoundedParallel;
         lock (ScratchLock)
         {
@@ -118,7 +143,6 @@ public static class FrontierField
                 }
             });
         }
-        return bytes;
     }
 
     /// <summary>

@@ -98,9 +98,11 @@ public partial class DealOrForceGame
         ClearDetail();
 
         var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
+        var player = _campaign.Player;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         // Its own, or administered by it although another owns it (HeldRegions): held ground is worked as one's own.
-        var owned = _selectedState.NationMapIndex == _campaign.Player.MapIndex ||
-                    (_selectedState.HeldById == _campaign.Player.Id && Simulation.HeldRegions.Administered(_campaign, _selectedState));
+        var owned = !observing && player is not null && (_selectedState.NationMapIndex == player.MapIndex ||
+                    (_selectedState.HeldById == player.Id && Simulation.HeldRegions.Administered(_campaign, _selectedState)));
         _sideBody.Text = RegionOfCaption(_selectedState, owner) +
                          (owned ? "" : Tr(" · foreign ground, read-only"));
 
@@ -491,9 +493,12 @@ public partial class DealOrForceGame
     /// <summary>Queue one or several of a building here; several stop at the first that cannot start.</summary>
     private void QueueRegionalBuilding(BuildingKind kind, int count = 1)
     {
-        if (_selectedState is null || _selectedState.NationMapIndex != _campaign.Player.MapIndex)
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player ||
+            _selectedState is null || _selectedState.NationMapIndex != player.MapIndex)
         {
-            _regionActionFeedback.Text = Tr("Only an owned region can receive construction orders.");
+            _regionActionFeedback.Text = Tr(ObserverUiRules.IsObserving(_campaign, _observerMode)
+                ? "obs.ui.action.readonly"
+                : "Only an owned region can receive construction orders.");
             return;
         }
         var before = _campaign.Construction.Count;
@@ -502,7 +507,7 @@ public partial class DealOrForceGame
             var was = _campaign.Construction.Count;
             _campaign.Commands.Enqueue(new QueueConstructionCommand
             {
-                IssuerId = _campaign.Player.Id,
+                IssuerId = player.Id,
                 StateMapIndex = _selectedState.MapIndex,
                 Building = kind
             });
@@ -522,12 +527,12 @@ public partial class DealOrForceGame
 
     private void RefreshMoveCapitalButton()
     {
-        if (_moveCapitalButton is null || _selectedState is null || _campaign?.Player is null) return;
-        var player = _campaign.Player;
+        if (_moveCapitalButton is null || _selectedState is null || _campaign?.Player is not { } player) return;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         SyncCapitalCityChooser();
         // A capital moves into a city: one usable city here and the button names it, several and
         // it opens the list (CapitalCityChooserUI).
-        var refusal = CapitalMoveRefusal();
+        var refusal = observing ? "obs.ui.action.readonly" : CapitalMoveRefusal();
         _moveCapitalButton.Disabled = refusal.Length > 0;
         _moveCapitalButton.TooltipText = Ui.Tip(refusal.Length > 0
             ? Tr(refusal)
@@ -542,15 +547,18 @@ public partial class DealOrForceGame
 
     private void MoveCapitalHere()
     {
-        if (_selectedState is null || _campaign?.Player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _selectedState is null || _campaign?.Player is null) return;
         ChooseCapitalCity();
     }
 
     private void RaiseRegionalArmy()
     {
-        if (_selectedState is null || _selectedState.NationMapIndex != _campaign.Player.MapIndex)
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player ||
+            _selectedState is null || _selectedState.NationMapIndex != player.MapIndex)
         {
-            _regionActionFeedback.Text = Tr("Recruitment is available only in an owned region.");
+            _regionActionFeedback.Text = Tr(ObserverUiRules.IsObserving(_campaign, _observerMode)
+                ? "obs.ui.action.readonly"
+                : "Recruitment is available only in an owned region.");
             return;
         }
         OpenRecruitment(_selectedState.MapIndex);

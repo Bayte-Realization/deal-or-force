@@ -221,6 +221,7 @@ public partial class DealOrForceGame
 
     private void OpenProductionScreen()
     {
+        if (InspectedProductionNation() is null) return;
         // Built on first open: 404 ms of pools and rows that a campaign start does not need.
         EnsureScreen("production", BuildProductionScreen);
         _openScreen = "Production";
@@ -240,12 +241,13 @@ public partial class DealOrForceGame
 
     private void RefreshProductionScreen()
     {
-        if (_productionLayer is null || !_productionLayer.Visible || _campaign?.Player is null) return;
-        var player = _campaign.Player;
+        if (_productionLayer is null || !_productionLayer.Visible) return;
+        if (InspectedProductionNation() is not { } player) { CloseProductionScreen(); return; }
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         _productionAllocation = ProductionProgramme.Allocate(_campaign, player);
         var a = _productionAllocation;
         foreach (var (step, button) in _productionConversionButtons)
-            button.Disabled = step < 0 ? a.Converted == 0 : a.Converted >= a.RawCivilian;
+            button.Disabled = observing || (step < 0 ? a.Converted == 0 : a.Converted >= a.RawCivilian);
         _productionSummary.Text = Tr("Allocate factories to production lines. Earlier lines receive capacity first.");
         foreach (var (pool, card) in _productionPoolCards)
         {
@@ -268,17 +270,21 @@ public partial class DealOrForceGame
 
     private List<ProductionLine> CopyProductionLines()
     {
-        var a = ProductionProgramme.Allocate(_campaign, _campaign.Player);
-        return _campaign.Player.ProductionLines.Where(l => l is not null && ProductionProgramme.IsLineable(l.Good))
+        var nation = InspectedProductionNation();
+        if (nation is null) return new List<ProductionLine>();
+        var a = ProductionProgramme.Allocate(_campaign, nation);
+        return nation.ProductionLines.Where(l => l is not null && ProductionProgramme.IsLineable(l.Good))
             .Select(l => new ProductionLine { Good = l.Good, Units = l.Units < 0 ? a.Assigned(l.Good) : l.Units }).ToList();
     }
     private void ChangeProductionConversion(int delta)
     {
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         var a = ProductionProgramme.Allocate(_campaign, _campaign.Player);
         CommitProductionProgramme(Math.Clamp(a.Converted + delta, 0, a.RawCivilian), CopyProductionLines());
     }
     private void SetProductionUnits(ProductionLineRow row, int units)
     {
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         var a = ProductionProgramme.Allocate(_campaign, _campaign.Player);
         var lines = CopyProductionLines();
         var line = lines.Find(l => l.Good == row.Good);
@@ -286,8 +292,11 @@ public partial class DealOrForceGame
         line.Units = Math.Clamp(units, 0, a.Assigned(row.Good) + a.Free(ProductionProgramme.PoolOf(row.Good)));
         CommitProductionProgramme(a.Converted, lines);
     }
-    private void StepProductionUnits(ProductionLineRow row, int delta) =>
+    private void StepProductionUnits(ProductionLineRow row, int delta)
+    {
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         SetProductionUnits(row, ProductionProgramme.Allocate(_campaign, _campaign.Player).Assigned(row.Good) + delta);
+    }
 
     private ProductionLineRow BuildProductionLine()
     {
@@ -516,36 +525,42 @@ public partial class DealOrForceGame
             ? Simulation.Loc.Format("All {0} civilian units are converted to military. Convert some back to open a civilian line.", a.RawCivilian)
             : ProductionNoFactories(pool);
 
+    private Nation InspectedProductionNation() =>
+        ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+
     /// <summary>Where a pool's factories come from and how long one takes here, for a pool with no factories.</summary>
     private string ProductionNoFactories(ProductionPool pool)
     {
         var kind = pool == ProductionPool.Civilian ? BuildingKind.CivilianIndustry : BuildingKind.ArmsIndustry;
+        var nation = InspectedProductionNation();
         return Simulation.Loc.Format("No factories yet. Build {0} on the Economy screen: about {1} days each here, longer behind other sites.",
-            Simulation.Loc.Get(BuildingCatalog.Get(kind).Name), ConstructionCost.ExpectedDays(_campaign, _campaign.Player, kind));
+            Simulation.Loc.Get(BuildingCatalog.Get(kind).Name), ConstructionCost.ExpectedDays(_campaign, nation, kind));
     }
     private void RefreshProductionLinePicker()
     {
         var selected = _productionLinePicker.Selected >= 0
             ? _productionLinePicker.GetItemMetadata(_productionLinePicker.Selected).AsInt32() : -1;
         _productionLinePicker.Clear();
+        var nation = InspectedProductionNation();
+        if (nation is null) return;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         foreach (var good in ProductionProgramme.Lineable)
         {
-            if (_campaign.Player.ProductionLines.Any(l => l.Good == good)) continue;
+            if (nation.ProductionLines.Any(l => l.Good == good)) continue;
             var index = _productionLinePicker.ItemCount;
             _productionLinePicker.AddItem(Tr(CommodityCatalog.Get(good).Name) + " · " +
                 Tr(ProductionProgramme.PoolOf(good) == ProductionPool.Civilian ? "Civilian units" : "Military units"));
             _productionLinePicker.SetItemMetadata(index, (int)good);
             if ((int)good == selected) _productionLinePicker.Select(index);
         }
-        _productionAddLineButton.Disabled = _productionLinePicker.ItemCount == 0;
-        _productionLinePicker.Disabled = _productionLinePicker.ItemCount == 0;
+        _productionAddLineButton.Disabled = observing || _productionLinePicker.ItemCount == 0;
+        _productionLinePicker.Disabled = observing || _productionLinePicker.ItemCount == 0;
         if (_productionLinePicker.ItemCount == 0) _productionLinePicker.Text = Tr("All production lines are open");
     }
 
     private void RefreshProductionShortages()
     {
-        if (_campaign?.Player is null) return;
-        var player = _campaign.Player;
+        if (InspectedProductionNation() is not { } player) return;
         foreach (var child in _productionShortageRows.GetChildren())
         {
             _productionShortageRows.RemoveChild(child);
@@ -584,7 +599,7 @@ public partial class DealOrForceGame
 
     private void CommitProductionProgramme(int converted, List<ProductionLine> lines)
     {
-        if (_campaign?.Player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetProductionProgrammeCommand
         {
             IssuerId = _campaign.Player.Id, ConvertedCivilianUnits = converted, Lines = lines

@@ -5,9 +5,9 @@
 **A grand strategy game about the whole world, from the morning of 1 January 2024.**
 Every country on the map is yours to play, and the computer runs the others with the same
 commands for most actions; the [differences that remain](docs/PLAYER_AI_PARITY_2026_11_18_RU.md)
-are being closed one at a time, peace first. Version **PortAlpha 0.8.7.3**.
+are being closed one at a time, peace first. Version **PortAlpha 0.8.8.2**.
 
-[![PortAlpha 0.8.7.3](https://img.shields.io/badge/PortAlpha-0.8.7.3-2f6fb3)](docs/CHANGELOG_0.8.7.3_EN.md)
+[![PortAlpha 0.8.8.2](https://img.shields.io/badge/PortAlpha-0.8.8.2-2f6fb3)](docs/CHANGELOG_0.8.8.2_EN.md)
 [![Engine](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED.md)
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-3a7f3a)](LICENSE)
@@ -30,23 +30,45 @@ are being closed one at a time, peace first. Version **PortAlpha 0.8.7.3**.
   [itch.io](https://bayte-realization.itch.io/deal-or-force).
   Extract the whole archive and run `Deal or Force Launcher.exe`.
 - **From source** — see [Building and running](#building-and-running) below.
-- The [PortAlpha 0.8.7.3 changelog](docs/CHANGELOG_0.8.7.3_EN.md) covers adaptive Speed 1–5
-  step pacing, Android zero-drift pinch-zoom, instant Speed-5 map taps, localized Touch-Mode
-  controls, GLES3/HUD optimizations, and simulation caching fixes; the
-  [cumulative 0.8.5.3 changelog](docs/CHANGELOG_0.8.5.3_EN.md) covers the earlier 0.8
-  interface, rules, and scaling history.
+- The [PortAlpha 0.8.8.2 changelog](docs/CHANGELOG_0.8.8.2_EN.md) adds Rust SIMD native kernels
+  (`dof_kernels` AVX2 + Android ARM64 NEON), staggered weekly simulation stages, Mobile Turbo Sim,
+  Two-Tier AI Distance LOD, half-res/ETC2 mobile VRAM cuts, and map overlay / Observer UI fixes;
+  earlier notes live in [0.8.7.3](docs/CHANGELOG_0.8.7.3_EN.md) and [0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md).
 - It is built by one person, openly with the help of AI.
 
 Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [devlog](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## New in PortAlpha 0.8.7.3
+## New in PortAlpha 0.8.8.2
 
 Built on **Godot 4.8 Beta 3 .NET** and **.NET 10** (active publication branch **PortAlpha**, preserving
 historical `EntertAlpha` and `ReimAlpha`). Full release notes are in
-[PortAlpha 0.8.7.3 changelog](docs/CHANGELOG_0.8.7.3_EN.md) and the earlier 0.8 series in
-[CHANGELOG 0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md).
+[PortAlpha 0.8.8.2 changelog](docs/CHANGELOG_0.8.8.2_EN.md),
+[0.8.7.3](docs/CHANGELOG_0.8.7.3_EN.md), and [0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md).
+
+- **Native Rust SIMD kernels (`dof_kernels`, Win64 AVX2 + Android ARM64 NEON).** Extended
+  `native/dof_kernels/` with bit-exact diplomacy opinion decay/pair scoring, market clearing/pricing,
+  and SIMD latitude-band great-circle filters (`1.68×–3.56×` kernel speedups in `KernelBench`),
+  live-wired into `OpinionCore` and `MarketCore`, packaged as Win64 `dof_kernels.dll` and 16 KB
+  page-aligned Android `libdof_kernels.so` with automatic pure-C# fallback.
+- **Staggered weekly simulation stages, Two-Tier AI Distance LOD & Quiet-Front cache.** Weekly
+  heavy passes (`MarketCore`, `BrainDrain`, `TechnologyCore`, `StatePartition`/`Economy`,
+  `MovementRules`, `Statecraft`) stagger across `ElapsedDays % 7`, `WeeklyDiplomacyScan` applies
+  active/background LOD with a precomputed `StaticSeaGraph`, `FrontManager` caches unchanged fronts
+  via `QuietFronts`, and `FrontDisengagement` reuses an 8-slot route LRU — cutting smooth-frame
+  worst spikes and pushing Year-1 `SimBench` speed up to `21+ d/s` by Day 365 while keeping bit-exact
+  determinism.
+- **Android Turbo Sim, half-res map textures & selective GPU-only ETC2/ASTC VRAM reduction.**
+  Untouched Speed 4–5 throttles 3D globe redraws to ~18 Hz with instant touch/input wake while
+  keeping HUD at 60 Hz, raises mobile render-scale adaptation (`0.50f` floor, `0.85f` high-DPI),
+  halves mobile raster textures (`2880×1440`), and enables `compress/mode=2` on verified GPU-only
+  assets without breaking CPU `.GetImage()` textures.
+- **Clean map lines, zero-lag camera-locked overlays & populated Observer Landless Movements.**
+  Fixed infinite attack/front/battle arrows across date-line seams and unseeded `cell=0` centers,
+  synchronized 2D city/label/icon overlays on Frame 0 with horizon culling (`MapOverlaySyncRules` /
+  `GlobeOverlaySync`) so back-of-Earth cities never float over the Atlantic, and fixed empty
+  Landless Movements panels and top-bar/work-panel behavior in Observer mode.
 
 - **Adaptive Speed 1–5 pacing, `ProvinceTopology` / `MovementFall` fixes & GC cuts (Waves 1–3).**
   `BackgroundSimRunner.AdaptiveStepPacing` brings AoH3-style `1h / 2h / 4h / 8h / 24h` adaptive
@@ -290,7 +312,7 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 
 | | |
 |---|---|
-| [Changelog PortAlpha 0.8.7.3](docs/CHANGELOG_0.8.7.3_EN.md) · [0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md) · [0.8.3.5](docs/CHANGELOG_0.8.3.5_EN.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) | **PortAlpha 0.8.7.3 notes and previous changelogs** |
+| [Changelog PortAlpha 0.8.8.2](docs/CHANGELOG_0.8.8.2_EN.md) · [0.8.7.3](docs/CHANGELOG_0.8.7.3_EN.md) · [0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md) · [0.8.3.5](docs/CHANGELOG_0.8.3.5_EN.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_EN.md) | **PortAlpha 0.8.8.2 notes and previous changelogs** |
 | [Overhaul programme](docs/OVERHAUL_PROGRAMME_2026_11_14_RU.md) | the fifteen fronts of the rework and what "done" means for each (Russian) |
 | [Deal rework](docs/DEALS_REWORK_2026_11_14_RU.md) | what is wrong with deals today and the plan for them, step by step (Russian) |
 | [TUTORIAL](docs/TUTORIAL.md) | **your first campaign, hand held** |

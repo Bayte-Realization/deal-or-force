@@ -478,7 +478,7 @@ float boundary_coverage(sampler2D ids, vec2 uv, bool smooth_edges, out float nea
 /// has moved answers with its new one.
 float nation_at(vec2 cell, vec2 size) {
     float nation = id_at(nation_ids, cell, size);
-    if (owners_moved < 0.5) return nation;
+    if (nation < 0.5 || owners_moved < 0.5) return nation;
     float province = id_at(province_ids, cell, size);
     if (province < 0.5) return nation;
     float low = mod(province, 256.0);
@@ -493,6 +493,29 @@ vec4 nation_row(vec2 cell, vec2 size) {
                 nation_at(cell + vec2(1.0, 0.0), size), nation_at(cell + vec2(2.0, 0.0), size));
 }
 
+float nation_at_cached(vec2 cell, vec2 size, inout float cache_prov, inout float cache_moved_flag, inout float cache_moved_owner) {
+    float nation = id_at(nation_ids, cell, size);
+    if (nation < 0.5 || owners_moved < 0.5) return nation;
+    float province = id_at(province_ids, cell, size);
+    if (province < 0.5) return nation;
+    if (abs(province - cache_prov) >= 0.5) {
+        float low = mod(province, 256.0);
+        float high = floor(province / 256.0);
+        vec4 moved = texture(province_owner_ids, (vec2(low, high) + vec2(0.5)) / 256.0);
+        cache_prov = province;
+        cache_moved_flag = moved.b;
+        cache_moved_owner = floor(moved.r * 255.0 + 0.5) + floor(moved.g * 255.0 + 0.5) * 256.0;
+    }
+    return cache_moved_flag > 0.5 ? cache_moved_owner : nation;
+}
+
+vec4 nation_row_cached(vec2 cell, vec2 size, inout float cp, inout float cmf, inout float cmo) {
+    return vec4(nation_at_cached(cell + vec2(-1.0, 0.0), size, cp, cmf, cmo),
+                nation_at_cached(cell, size, cp, cmf, cmo),
+                nation_at_cached(cell + vec2(1.0, 0.0), size, cp, cmf, cmo),
+                nation_at_cached(cell + vec2(2.0, 0.0), size, cp, cmf, cmo));
+}
+
 /// The same for countries - and, the sea being a country id like any other here, for every
 /// shore on the map as well.
 float nation_coverage(vec2 uv, bool smooth_edges, out float near_id, out float other_id, out float reach) {
@@ -500,16 +523,21 @@ float nation_coverage(vec2 uv, bool smooth_edges, out float near_id, out float o
     vec2 grid = uv * size - vec2(0.5);
     vec2 base_cell = floor(grid);
     vec2 f = grid - base_cell;
+    float cp = -1.0;
+    float cmf = 0.0;
+    float cmo = 0.0;
 
     if (smooth_edges) {
-        return resolve_block(nation_row(base_cell + vec2(0.0, -1.0), size), nation_row(base_cell, size),
-                             nation_row(base_cell + vec2(0.0, 1.0), size), nation_row(base_cell + vec2(0.0, 2.0), size),
+        return resolve_block(nation_row_cached(base_cell + vec2(0.0, -1.0), size, cp, cmf, cmo),
+                             nation_row_cached(base_cell, size, cp, cmf, cmo),
+                             nation_row_cached(base_cell + vec2(0.0, 1.0), size, cp, cmf, cmo),
+                             nation_row_cached(base_cell + vec2(0.0, 2.0), size, cp, cmf, cmo),
                              f, near_id, other_id, reach);
     }
-    float i00 = nation_at(base_cell, size);
-    float i10 = nation_at(base_cell + vec2(1.0, 0.0), size);
-    float i01 = nation_at(base_cell + vec2(0.0, 1.0), size);
-    float i11 = nation_at(base_cell + vec2(1.0, 1.0), size);
+    float i00 = nation_at_cached(base_cell, size, cp, cmf, cmo);
+    float i10 = nation_at_cached(base_cell + vec2(1.0, 0.0), size, cp, cmf, cmo);
+    float i01 = nation_at_cached(base_cell + vec2(0.0, 1.0), size, cp, cmf, cmo);
+    float i11 = nation_at_cached(base_cell + vec2(1.0, 1.0), size, cp, cmf, cmo);
 
     float w00 = (1.0 - f.x) * (1.0 - f.y);
     float w10 = f.x * (1.0 - f.y);
@@ -944,8 +972,14 @@ void fragment() {
     vec2 map_drift = vec2(0.0);
     vec2 map_uv = UV;
     if (map_smoothing > 0.5) {
-        map_drift = vec2(grain(UV * id_size * 0.9), grain(UV * id_size * 0.9 + 71.3));
-        map_uv = UV + map_drift * id_wander_texels * clamp(3.2 - id_span * 0.4, 0.0, 1.0) / id_size;
+        bool need_map_wander = id_span < 8.0;
+        bool need_terrain_drift = terrain_ready > 0.5 && !(atlas_look > 0.5 && paper_mix > 0.999 && terrain_mode < 0.5);
+        if (need_map_wander || need_terrain_drift) {
+            map_drift = vec2(grain(UV * id_size * 0.9), grain(UV * id_size * 0.9 + 71.3));
+            if (need_map_wander) {
+                map_uv = UV + map_drift * id_wander_texels * clamp(3.2 - id_span * 0.4, 0.0, 1.0) / id_size;
+            }
+        }
     }
 
     // Far away the authored raster is right: a screen pixel covers many map texels and what
@@ -972,10 +1006,14 @@ void fragment() {
     // has the map smoothed at all. On Mobile, step down to fast 2x2 bilinear once texels
     // shrink below ~0.55px (while keeping full 4x4 reconstruction up close for razor-sharp coasts).
     bool smooth_edges = map_smoothing > 0.5 && id_span < (quality_tier > 1.5 ? 1.25 : (quality_tier > 0.5 ? 1.85 : 8.0));
-    float near_nation;
-    float other_nation;
-    float nation_reach;
-    float nation_cover = nation_coverage(map_uv, smooth_edges, near_nation, other_nation, nation_reach);
+    float near_nation = 0.0;
+    float other_nation = 0.0;
+    float nation_reach = 1.5;
+    float nation_cover = 1.0;
+    bool deep_ocean_fast = frontier_ready > 0.5 && frontier_cells_all > 3.5 && political_smooth.a < 0.001 && province < 0.5;
+    if (!deep_ocean_fast) {
+        nation_cover = nation_coverage(map_uv, smooth_edges, near_nation, other_nation, nation_reach);
+    }
     float nation_aa = id_aa;
     float nation_share = smoothstep(0.5 - nation_aa, 0.5 + nation_aa, nation_cover);
 
@@ -1288,7 +1326,7 @@ void fragment() {
             float elev = 0.5;
             float ridge_convexity = 0.0;
             vec2 raw_slope = vec2(0.0);
-            if (relief_height_ready > 0.5) {
+            if (relief_height_ready > 0.5 && political.a > 0.001 && (relief_shading > 0.001 || realistic_look > 0.5)) {
                 vec2 ht_size = vec2(textureSize(relief_height, 0));
                 vec2 ht = 1.0 / ht_size;
                 float relief_cos = max(cos((0.5 - clamp(UV.y, 0.0, 1.0)) * 3.1415927), 0.035);

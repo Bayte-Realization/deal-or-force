@@ -252,6 +252,7 @@ public sealed partial class GlobePresentation
     public void SetFlatMap(bool enabled)
     {
         if (_flatMap == enabled || !IsInstanceValid(_camera) || !ProjectionAllowed(enabled)) return;
+        WakeGlobeRendering();
         _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero;
         _flatZoomAnchorActive = false;
         if (enabled)
@@ -303,6 +304,7 @@ public sealed partial class GlobePresentation
         _orbit.Rotation = Vector3.Zero;
         _camera.Position = new Vector3(_flatX, _flatY, 12f);
         _camera.LookAt(new Vector3(_flatX, _flatY, 0f), Vector3.Up);
+        _camera.ForceUpdateTransform();
     }
 
     private void ClampFlatCamera()
@@ -384,22 +386,21 @@ public sealed partial class GlobePresentation
             var nextProvince = stack[0].Route.Count > 0 ? stack[0].Route[0] : -1;
             if (nextProvince > 0 && nextProvince <= topology.ProvinceCount)
             {
-                var allMarchingSameStep = true;
+                var movingCount = 0;
                 var progressSum = 0f;
                 for (var i = 0; i < stack.Count; i++)
                 {
                     var a = stack[i];
-                    if (a.Route.Count == 0 || a.Route[0] != nextProvince || a.MoveProgress <= 0.001f)
+                    if (a.Route.Count > 0 && a.Route[0] == nextProvince && a.MoveProgress > 0.001f)
                     {
-                        allMarchingSameStep = false;
-                        break;
+                        movingCount++;
+                        progressSum += a.MoveProgress;
                     }
-                    progressSum += a.MoveProgress;
                 }
-                if (allMarchingSameStep)
+                if (movingCount > 0 && movingCount * 2 >= stack.Count)
                 {
                     var next = topology.CenterOf(nextProvince);
-                    var t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp(progressSum / stack.Count, 0f, 1f));
+                    var t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp(progressSum / movingCount, 0f, 1f));
                     var dLon = next.Longitude - start.Longitude;
                     if (dLon > 180f) dLon -= 360f;
                     else if (dLon < -180f) dLon += 360f;
@@ -516,9 +517,10 @@ public sealed partial class GlobePresentation
 
     private void UpdateFlatMobileMarkers(bool force)
     {
-        var mapRev = _campaign?.MapRevision ?? -1;
-        var hours = _campaign?.ElapsedHours ?? -1;
-        var unpaused = _campaign is { IsPaused: false };
+        var snap = CurrentRenderSnapshot();
+        var mapRev = snap is { Version: > 0 } ? snap.MapRevision : (_campaign?.MapRevision ?? -1);
+        var hours = snap is { Version: > 0 } ? snap.ElapsedHours : (_campaign?.ElapsedHours ?? -1);
+        var unpaused = snap is { Version: > 0 } ? !snap.IsPaused : (_campaign is { IsPaused: false });
         var camSize = _flatZoom;
         var simOrCountDirty = force ||
             _lastFlatMobileMapRev != mapRev ||
@@ -632,12 +634,10 @@ public sealed partial class GlobePresentation
             foreach (var marker in _armyStacks.Values)
             {
                 if (!IsInstanceValid(marker.Node)) continue;
-                // Per-frame flat updates only write the target; the projection switch snaps
-                // both values through SnapArmyMarkerPositions before this method is used.
-                var targetPos = ArmyMarkerPosition(marker);
+                // Per-frame flat updates use read-lock-cached geo (zero off-lock Army.Route race).
+                var targetPos = ArmyMarkerPositionFromCachedGeo(marker);
                 marker.TargetPosition = targetPos;
-                var loc = ArmyPresentationLocation(marker.Stack);
-                var baseX = loc.Longitude / 360f * FlatMapWidth;
+                var baseX = (marker.CachedGeoValid ? marker.CachedGeoLon : ArmyPresentationLocation(marker.Stack).Longitude) / 360f * FlatMapWidth;
                 _flatArmyWrapCache.Add((marker, baseX, DateLineSeam.NearestCopy(baseX, _flatX, FlatMapWidth)));
             }
         }
@@ -650,7 +650,7 @@ public sealed partial class GlobePresentation
                 if (wrappedX == entry.WrappedX) continue;
                 _flatArmyWrapCache[i] = (entry.Marker, entry.BaseX, wrappedX);
                 if (!IsInstanceValid(entry.Marker.Node)) continue;
-                entry.Marker.TargetPosition = ArmyMarkerPosition(entry.Marker);
+                entry.Marker.TargetPosition = ArmyMarkerPositionFromCachedGeo(entry.Marker);
             }
         }
     }
@@ -811,6 +811,7 @@ public sealed partial class GlobePresentation
     public void SetMapMode(StrategicMapMode mode)
     {
         _mapMode = mode;
+        WakeGlobeRendering();
         _globeMaterial?.SetShaderParameter("terrain_mode", mode == StrategicMapMode.Terrain ? 1f : mode == StrategicMapMode.Relief ? 2f : 0f);
         _globeMaterial?.SetShaderParameter("map_mode", mode == StrategicMapMode.Political ? 0f : 1f);
         RefreshMapModePalette();
@@ -832,6 +833,7 @@ public sealed partial class GlobePresentation
     private void RefreshMapModePaletteCore()
     {
         if (_campaign is null || _globeMaterial is null) return;
+        WakeGlobeRendering();
         _lastMapModeDay = _campaign.ElapsedDays;
         _globeMaterial.SetShaderParameter("resource_mode", 0f);
         if (_mapMode == StrategicMapMode.Resources)

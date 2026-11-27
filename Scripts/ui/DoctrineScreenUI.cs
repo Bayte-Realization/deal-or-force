@@ -142,6 +142,7 @@ public partial class DealOrForceGame
     /// <summary>Opening the book: the world stays behind it, and the map does not take the wheel.</summary>
     private void OpenDoctrineScreen()
     {
+        if (ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true) is null) return;
         EnsureScreen("doctrine", BuildDoctrineScreen);
         _openScreen = "Doctrines";
         _sidePanel.Visible = false;
@@ -182,8 +183,12 @@ public partial class DealOrForceGame
 
     private void RefreshDoctrineScreen()
     {
-        if (_doctrineLayer is not { Visible: true } || _campaign?.Player is null) return;
-        var n = _campaign.Player;
+        if (_doctrineLayer is not { Visible: true }) return;
+        if (ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true) is not { } n)
+        {
+            CloseDoctrineScreen();
+            return;
+        }
         var weekly = _campaign.Defines.PoliticalPointsPerWeek +
             _campaign.Defines.PoliticalPointsStabilityWeight * n.Stability;
         var countryName = n.DisplayName;

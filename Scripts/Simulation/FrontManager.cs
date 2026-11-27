@@ -124,6 +124,39 @@ public static class FrontManager
         public bool ReservesReady;
         public bool NationIndexActive;
 
+        public readonly record struct QuietFrontKey(int WarId, int LineId, int NationId);
+
+        public sealed class QuietFrontEntry
+        {
+            public ProvinceTopology Topology;
+            public ushort[] Controllers;
+            public int OwnershipRevision;
+            public int MapRevision;
+            public int WarRevision;
+            public int AllianceRevision;
+            public int StrategicRevision;
+            public int RouteAccessVersion;
+            public int WorldArmyCount;
+            public int WorldBattleCount;
+            public int WarBelligerents;
+            public bool WarEnded;
+            public bool IsHuman;
+            public bool CommandDelegated;
+            public ulong PostsSurfaceHash;
+            public ulong ArmiesHash;
+            public ulong LineHash;
+            public ulong DefinesHash;
+            public bool HasBattleCandidates;
+            public bool SafeAcrossForeignMapFlip;
+            public int NextWakeDay;
+            public int[] RankedPosts = Array.Empty<int>();
+            public KeyValuePair<int, Army[]>[] AllocatedGroups = Array.Empty<KeyValuePair<int, Army[]>>();
+        }
+
+        public readonly Dictionary<QuietFrontKey, QuietFrontEntry> QuietFronts = new();
+        public int QuietOwnershipRevision = -1;
+        public int QuietFrontHits;
+
         // Reusable synchronous BFS scratch for Repost (never spans a yield return).
         public int[] RoutePrevious = Array.Empty<int>();
         public int[] RouteStamp = Array.Empty<int>();
@@ -203,6 +236,9 @@ public static class FrontManager
 
     /// <summary>Re-postings made since the campaign began, for the bench and the console.</summary>
     public static int Reposts { get; private set; }
+
+    internal static int QuietFrontCacheHits(Campaign campaign) =>
+        campaign is not null && Boards.TryGetValue(campaign, out var board) ? board.QuietFrontHits : 0;
 
     /// <summary>Look at every front in the world.</summary>
     public static void Tick(Campaign campaign)
@@ -504,6 +540,237 @@ public static class FrontManager
         return army.FrontLineId < 0 && war is not null && army.AssignedWarId == war.Id;
     }
 
+    private static ulong Mix64(ulong h, ulong value)
+    {
+        h ^= value;
+        h *= 1099511628211UL;
+        return h;
+    }
+
+    private static ulong MixString(ulong h, string text)
+    {
+        if (string.IsNullOrEmpty(text)) return Mix64(h, 0UL);
+        h = Mix64(h, (ulong)text.Length);
+        for (var i = 0; i < text.Length; i++) h = Mix64(h, text[i]);
+        return h;
+    }
+
+    private static ulong ComputePostsSurfaceHash(ProvinceTopology topology, ushort[] controllers)
+    {
+        var h = 14695981039346656037UL;
+        h = Mix64(h, (ulong)Posts.Count);
+        var neighbors = topology.Neighbors;
+        var toNation = topology.ProvinceToNation;
+        for (var i = 0; i < Posts.Count; i++)
+        {
+            var post = Posts[i];
+            h = Mix64(h, (ulong)post);
+            h = Mix64(h, (uint)post < (uint)controllers.Length ? controllers[post] : 0UL);
+            h = Mix64(h, (uint)post < (uint)toNation.Length ? toNation[post] : 0UL);
+            h = Mix64(h, BitConverter.SingleToUInt32Bits(EnemyPower.GetValueOrDefault(post)));
+            if ((uint)post < (uint)neighbors.Length)
+            {
+                var adj = neighbors[post];
+                for (var ni = 0; ni < adj.Length; ni++)
+                {
+                    var nb = adj[ni];
+                    h = Mix64(h, (ulong)nb);
+                    h = Mix64(h, (uint)nb < (uint)controllers.Length ? controllers[nb] : 0UL);
+                    h = Mix64(h, BitConverter.SingleToUInt32Bits(EnemyPower.GetValueOrDefault(nb)));
+                }
+            }
+        }
+        return h;
+    }
+
+    private static ulong ComputeArmiesSignature(Campaign campaign, Nation nation, StrategicWar war, DrawnFrontLine line,
+        List<Army> ownArmies, int today, Defines defines, out bool hasBattleCandidates, out int nextWakeDay)
+    {
+        var h = 14695981039346656037UL;
+        hasBattleCandidates = false;
+        nextWakeDay = int.MaxValue;
+        var settleDays = Math.Max(0, defines.FrontSettleDays);
+        var ownCount = 0;
+        for (var i = 0; i < ownArmies.Count; i++)
+        {
+            var army = ownArmies[i];
+            if (army.NationId != nation.Id) continue;
+            ownCount++;
+            h = Mix64(h, (ulong)army.Id);
+            h = Mix64(h, (ulong)army.ProvinceId);
+            h = Mix64(h, BitConverter.SingleToUInt32Bits(army.Latitude));
+            h = Mix64(h, BitConverter.SingleToUInt32Bits(army.Longitude));
+            h = Mix64(h, (ulong)army.OrderProvinceId);
+            h = Mix64(h, (ulong)(int)army.OrderKind);
+            h = Mix64(h, (ulong)army.FrontLineId);
+            h = Mix64(h, (ulong)army.AssignedWarId);
+            h = Mix64(h, army.DirectOrder ? 1UL : 0UL);
+            h = Mix64(h, army.InBattle ? 1UL : 0UL);
+            h = Mix64(h, (ulong)army.BattleId);
+            h = Mix64(h, (ulong)army.EmbarkedFleetId);
+            h = Mix64(h, (ulong)army.DaysCutOff);
+            h = Mix64(h, (ulong)army.SupplyDistance);
+            h = Mix64(h, (ulong)army.Route.Count);
+            if (army.Route.Count > 0)
+            {
+                h = Mix64(h, (ulong)army.Route[0]);
+                h = Mix64(h, (ulong)army.Route[^1]);
+            }
+            h = MixString(h, army.TemplateId);
+            h = Mix64(h, BitConverter.SingleToUInt32Bits(army.Divisions));
+            h = Mix64(h, BitConverter.SingleToUInt32Bits(army.Power));
+            h = Mix64(h, (ulong)army.ReadyDay);
+            h = Mix64(h, (ulong)army.OrderIssuedDay);
+
+            if (settleDays > 0 && army.OrderIssuedDay >= 0 && today - army.OrderIssuedDay < settleDays)
+            {
+                var wake = army.OrderIssuedDay + settleDays;
+                if (wake < nextWakeDay) nextWakeDay = wake;
+            }
+            if (army.ReadyDay > today && army.ReadyDay < nextWakeDay)
+                nextWakeDay = army.ReadyDay;
+            if (war is not null && army.InBattle && FrontDisengagement.Eligible(campaign, nation, war, line, army))
+                hasBattleCandidates = true;
+        }
+        return Mix64(h, (ulong)ownCount);
+    }
+
+    private static ulong ComputeLineHash(DrawnFrontLine line)
+    {
+        if (line is null) return 0UL;
+        var h = 14695981039346656037UL;
+        h = Mix64(h, (ulong)line.Id);
+        h = Mix64(h, (ulong)(int)line.Kind);
+        h = Mix64(h, (ulong)(int)line.Cohesion);
+        h = Mix64(h, (ulong)line.BorderNationId);
+        h = Mix64(h, (line.AllEnemies ? 1UL : 0UL) | (line.WholeBorder ? 2UL : 0UL));
+        h = Mix64(h, (ulong)line.BorderRevision);
+        h = Mix64(h, (ulong)line.EnemyStamp);
+        h = Mix64(h, (ulong)line.Posts.Count);
+        h = Mix64(h, (ulong)line.ArmyIds.Count);
+        h = Mix64(h, (ulong)line.Objectives.Count);
+        var armyXor = 0UL;
+        var armySum = 0UL;
+        foreach (var id in line.ArmyIds)
+        {
+            var m = ((ulong)(uint)id + 0x9E3779B97F4A7C15UL) * 0xBF58476D1CE4E5B9UL;
+            armyXor ^= m;
+            armySum += m;
+        }
+        h = Mix64(h, armyXor ^ (armySum * 0x94D049BB133111EBUL));
+        var objXor = 0UL;
+        var objSum = 0UL;
+        foreach (var (k, v) in line.Objectives)
+        {
+            var pair = (((ulong)(uint)k << 32) | (uint)v) * 0xBF58476D1CE4E5B9UL;
+            objXor ^= pair;
+            objSum += pair;
+        }
+        return Mix64(h, objXor ^ (objSum * 0x94D049BB133111EBUL));
+    }
+
+    private static ulong ComputeDefinesHash(Defines d)
+    {
+        var h = 14695981039346656037UL;
+        h = Mix64(h, d.FrontStaffMovesAdvances ? 1UL : 0UL);
+        h = Mix64(h, (ulong)d.FrontSettleDays);
+        h = Mix64(h, (ulong)d.FrontRepostsPerLook);
+        h = Mix64(h, BitConverter.SingleToUInt32Bits(d.FrontRepostsPerPost));
+        h = Mix64(h, d.FrontStaffRelievesPockets ? 1UL : 0UL);
+        h = Mix64(h, d.FrontStaffDisengages ? 1UL : 0UL);
+        h = Mix64(h, BitConverter.SingleToUInt32Bits(d.FrontHoleAdvanceNeed));
+        h = Mix64(h, BitConverter.SingleToUInt32Bits(d.ExclaveDefenceWeight));
+        h = Mix64(h, BitConverter.SingleToUInt32Bits(d.FrontThinQuietRatio));
+        h = Mix64(h, (ulong)d.FrontDisengagementMinimumBattleDays);
+        h = Mix64(h, BitConverter.SingleToUInt32Bits(d.FrontDisengagementMaximumShare));
+        h = Mix64(h, BitConverter.SingleToUInt32Bits(d.FrontDisengagementDefenceRatio));
+        return h;
+    }
+
+    private static bool MatchesQuietEntry(Scratch.QuietFrontEntry entry, ProvinceTopology topology, ushort[] controllers,
+        int ownershipRev, int mapRev, int warRev, int allianceRev, int strategicRev, int routeAccessVer,
+        int worldArmies, int worldBattles, int warBelligerents, bool warEnded,
+        bool isHuman, bool commandDelegated, ulong postsSurfaceHash, ulong armiesHash,
+        ulong lineHash, ulong definesHash, int today)
+    {
+        if (!ReferenceEquals(entry.Topology, topology) || !ReferenceEquals(entry.Controllers, controllers))
+            return false;
+        if (entry.OwnershipRevision != ownershipRev || entry.WarRevision != warRev ||
+            entry.AllianceRevision != allianceRev || entry.StrategicRevision != strategicRev ||
+            entry.RouteAccessVersion != routeAccessVer)
+            return false;
+        if (entry.WarBelligerents != warBelligerents || entry.WarEnded != warEnded ||
+            entry.IsHuman != isHuman || entry.CommandDelegated != commandDelegated)
+            return false;
+        if (entry.PostsSurfaceHash != postsSurfaceHash || entry.ArmiesHash != armiesHash ||
+            entry.LineHash != lineHash || entry.DefinesHash != definesHash)
+            return false;
+        if (today >= entry.NextWakeDay)
+            return false;
+        if (entry.MapRevision == mapRev && entry.WorldArmyCount == worldArmies && entry.WorldBattleCount == worldBattles)
+            return true;
+        return entry.SafeAcrossForeignMapFlip && !entry.HasBattleCandidates;
+    }
+
+    private static void RestoreQuietFront(Scratch.QuietFrontEntry entry)
+    {
+        foreach (var list in Allocated.Values) { list.Clear(); Spare.Push(list); }
+        Allocated.Clear();
+        Posts.Clear();
+        Posts.AddRange(entry.RankedPosts);
+        for (var i = 0; i < entry.AllocatedGroups.Length; i++)
+        {
+            var group = entry.AllocatedGroups[i];
+            var bucket = Take();
+            bucket.AddRange(group.Value);
+            Allocated[group.Key] = bucket;
+        }
+        Active.QuietFrontHits++;
+    }
+
+    private static void SaveQuietFront(Scratch.QuietFrontKey key, ProvinceTopology topology, ushort[] controllers,
+        int ownershipRev, int mapRev, int warRev, int allianceRev, int strategicRev, int routeAccessVer,
+        int worldArmies, int worldBattles, int warBelligerents, bool warEnded,
+        bool isHuman, bool commandDelegated, ulong postsSurfaceHash, ulong armiesHash,
+        ulong lineHash, ulong definesHash, bool hasBattleCandidates, bool hasEmptyHoles,
+        bool hasPocket, bool rebalanceRouteFailed, int nextWakeDay, int today)
+    {
+        if (!Active.QuietFronts.TryGetValue(key, out var entry))
+            Active.QuietFronts[key] = entry = new Scratch.QuietFrontEntry();
+        entry.Topology = topology;
+        entry.Controllers = controllers;
+        entry.OwnershipRevision = ownershipRev;
+        entry.MapRevision = mapRev;
+        entry.WarRevision = warRev;
+        entry.AllianceRevision = allianceRev;
+        entry.StrategicRevision = strategicRev;
+        entry.RouteAccessVersion = routeAccessVer;
+        entry.WorldArmyCount = worldArmies;
+        entry.WorldBattleCount = worldBattles;
+        entry.WarBelligerents = warBelligerents;
+        entry.WarEnded = warEnded;
+        entry.IsHuman = isHuman;
+        entry.CommandDelegated = commandDelegated;
+        entry.PostsSurfaceHash = postsSurfaceHash;
+        entry.ArmiesHash = armiesHash;
+        entry.LineHash = lineHash;
+        entry.DefinesHash = definesHash;
+        entry.HasBattleCandidates = hasBattleCandidates;
+        entry.SafeAcrossForeignMapFlip = !hasEmptyHoles && !hasPocket && !rebalanceRouteFailed && !hasBattleCandidates;
+        entry.NextWakeDay = (hasEmptyHoles && hasBattleCandidates) ? today : nextWakeDay;
+        entry.RankedPosts = Posts.ToArray();
+        if (Allocated.Count == 0)
+        {
+            entry.AllocatedGroups = Array.Empty<KeyValuePair<int, Army[]>>();
+            return;
+        }
+        var groups = new KeyValuePair<int, Army[]>[Allocated.Count];
+        var gi = 0;
+        foreach (var (post, units) in Allocated)
+            groups[gi++] = new KeyValuePair<int, Army[]>(post, units.ToArray());
+        entry.AllocatedGroups = groups;
+    }
+
     private static void Arrange(Campaign campaign, Nation nation, StrategicWar war, DrawnFrontLine line)
     {
         using var measured = SimProfiler.Measure("    staff:arrange");
@@ -513,6 +780,65 @@ public static class FrontManager
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         var defines = campaign.Defines;
+        var today = campaign.ElapsedDays;
+
+        var ownershipRev = campaign.OwnershipRevision;
+        if (Active.QuietOwnershipRevision != ownershipRev)
+        {
+            if (Active.QuietFronts.Count > 256) Active.QuietFronts.Clear();
+            Active.QuietOwnershipRevision = ownershipRev;
+        }
+        var ownArmies = NationArmies(campaign, nation.Id);
+        var key = new Scratch.QuietFrontKey(war?.Id ?? -1, line?.Id ?? -1, nation.Id);
+        var mapRev = campaign.MapRevision;
+        var warRev = campaign.WarRevision;
+        var allianceRev = campaign.AllianceRevision;
+        var strategicRev = campaign.StrategicRevision;
+        var routeAccessVer = DiplomaticRelation.RouteAccessMutationVersion;
+        var worldArmies = campaign.Armies.Count;
+        var worldBattles = campaign.Battles.Count;
+        var warBelligerents = war?.BelligerentCount ?? 0;
+        var warEnded = war?.Ended ?? false;
+        var isHuman = campaign.IsHumanControlled(nation);
+        var commandDelegated = !isHuman || Delegation.Holds(nation, Delegation.Command);
+        var postsSurfaceHash = ComputePostsSurfaceHash(topology, controllers);
+        var armiesHash = ComputeArmiesSignature(campaign, nation, war, line, ownArmies, today, defines,
+            out var hasBattleCandidates, out var nextWakeDay);
+        var lineHash = ComputeLineHash(line);
+        var definesHash = ComputeDefinesHash(defines);
+
+        if (Active.QuietFronts.TryGetValue(key, out var cached) &&
+            MatchesQuietEntry(cached, topology, controllers, ownershipRev, mapRev, warRev, allianceRev,
+                strategicRev, routeAccessVer, worldArmies, worldBattles, warBelligerents, warEnded,
+                isHuman, commandDelegated, postsSurfaceHash, armiesHash, lineHash, definesHash, today))
+        {
+            RestoreQuietFront(cached);
+            return;
+        }
+
+        var repostsBefore = Reposts;
+        ArrangeUncached(campaign, nation, war, line, topology, controllers, defines, today, ownArmies,
+            out var hasEmptyHoles, out var hasPocket, out var rebalanceRouteFailed);
+        if (Reposts == repostsBefore)
+        {
+            SaveQuietFront(key, topology, controllers, ownershipRev, mapRev, warRev, allianceRev, strategicRev,
+                routeAccessVer, worldArmies, worldBattles, warBelligerents, warEnded,
+                isHuman, commandDelegated, postsSurfaceHash, armiesHash, lineHash, definesHash,
+                hasBattleCandidates, hasEmptyHoles, hasPocket, rebalanceRouteFailed, nextWakeDay, today);
+        }
+        else
+        {
+            Active.QuietFronts.Remove(key);
+        }
+    }
+
+    private static void ArrangeUncached(Campaign campaign, Nation nation, StrategicWar war, DrawnFrontLine line,
+        ProvinceTopology topology, ushort[] controllers, Defines defines, int today, List<Army> ownArmies,
+        out bool hasEmptyHoles, out bool hasPocket, out bool rebalanceRouteFailed)
+    {
+        hasEmptyHoles = false;
+        hasPocket = false;
+        rebalanceRouteFailed = false;
 
         PostSet.Clear();
         PostStates.Clear();
@@ -534,7 +860,6 @@ public static class FrontManager
         // Who is holding what: a division counts for the post it is going to, or the post it
         // is standing on when what it is going to is not a post - an advance's objective is
         // the enemy's province, and the ground it attacks from is the post it holds.
-        var ownArmies = NationArmies(campaign, nation.Id);
         var holders = 0;
         var power = 0f;
         var reserves = Active.Reserves;
@@ -579,8 +904,10 @@ public static class FrontManager
             there.Add(army);
             if (there.Count == 2) multiStackPosts++;
         }
+        hasPocket = pocket is not null;
+        for (var pi = 0; pi < Posts.Count; pi++)
+            if (Count(Posts[pi]) == 0) { hasEmptyHoles = true; break; }
         Active.ReservesReady = war is not null;
-        var today = campaign.ElapsedDays;
         var mayBorrow = war is not null && line is null &&
             (!campaign.IsHumanControlled(nation) || Delegation.Holds(nation, Delegation.Command));
         var referenceCount = holders;
@@ -768,7 +1095,8 @@ public static class FrontManager
             Refused.Clear();
             var mover = Nearest(Allocated[richest], poorest, campaign, today, defines,
                 allowSettled: richestSurplus >= 2f);
-            if (mover is null || !Repost(campaign, nation, mover, poorest, ref multiStackPosts)) break;
+            if (mover is null) break;
+            if (!Repost(campaign, nation, mover, poorest, ref multiStackPosts)) { rebalanceRouteFailed = true; break; }
             budget--;
         }
     }

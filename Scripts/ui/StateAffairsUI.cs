@@ -194,7 +194,7 @@ public partial class DealOrForceGame
 
     private void OnBudgetDelegationToggled(bool delegated)
     {
-        if (_campaign?.Player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetDelegationCommand
         {
             IssuerId = _campaign.Player.Id,
@@ -255,8 +255,9 @@ public partial class DealOrForceGame
     private string BuildingPickerItem(BuildingKind kind)
     {
         var definition = BuildingCatalog.Get(kind);
+        var nation = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
         return Simulation.Loc.Format("{0} · {1}",
-            Simulation.Loc.Get(definition.Name), Fmt.Money(ConstructionCost.Of(_campaign, _campaign?.Player, kind)));
+            Simulation.Loc.Get(definition.Name), Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)));
     }
 
     /// <summary>Put the picker back into the player's language, keeping what was chosen.</summary>
@@ -274,16 +275,22 @@ public partial class DealOrForceGame
 
     private void RefreshStateAffairs()
     {
-        if (_budgetDelegated is not null && _campaign?.Player is { } governing)
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        if (_budgetDelegated is not null)
         {
-            _budgetDelegated.ButtonPressed = Delegation.Holds(governing, Delegation.Budget);
-            _budgetDelegated.Text = Tr(Delegation.Holds(governing, Delegation.Budget)
-                ? "The treasury is running itself"
-                : "Let the treasury run itself");
+            _budgetDelegated.Disabled = observing || _campaign?.Player is null;
+            if (_campaign?.Player is { } governing)
+            {
+                _budgetDelegated.SetPressedNoSignal(Delegation.Holds(governing, Delegation.Budget));
+                _budgetDelegated.Text = Tr(Delegation.Holds(governing, Delegation.Budget)
+                    ? "The treasury is running itself"
+                    : "Let the treasury run itself");
+            }
         }
 
-        if (_stateAffairsLayer is null || !_stateAffairsLayer.Visible || _campaign?.Player is null) return;
-        var nation = _campaign.Player;
+        if (_stateAffairsLayer is null || !_stateAffairsLayer.Visible) return;
+        var nation = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+        if (nation is null) { CloseStateAffairs(); return; }
         RefreshStateAffairsStaff(nation);
 
         _stateAffairsTitle.Text = Simulation.Loc.Format("STATE AFFAIRS · {0}", nation.DisplayName.ToUpperInvariant());
@@ -513,7 +520,7 @@ public partial class DealOrForceGame
 
     private void OnPolicyRateChanged(string lineId, double value)
     {
-        if (_updatingStateAffairs || _campaign?.Player is null) return;
+        if (_updatingStateAffairs || ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new Simulation.SetPolicyRateCommand
         {
             IssuerId = _campaign.Player.Id,
@@ -537,6 +544,7 @@ public partial class DealOrForceGame
         _policyRevenueControls.Visible = true;
         _policyExpenseControls.Visible = true;
 
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         var atWar = _campaign is not null &&
                     _campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
         var weeklyOutput = nation.Gdp / 52f;
@@ -550,6 +558,7 @@ public partial class DealOrForceGame
             // the country it is attached to. It grows to fit rather than crop.
             if (rate > slider.MaxValue) slider.MaxValue = rate;
             slider.SetValueNoSignal(rate);
+            slider.Editable = !observing;
             if (!_policyReadings.TryGetValue(line.Id, out var reading)) continue;
             var amount = Simulation.BudgetCore.Amount(nation, line, weeklyOutput, atWar);
             reading.Text = Simulation.Loc.Format("{0:P1} · {1}", rate, Fmt.Money(amount));
@@ -720,13 +729,14 @@ public partial class DealOrForceGame
             lines.AddChild(status);
             var captured = project.Id;
             var drop = ActionButton("×", () => CancelConstruction(captured), 30, 24);
+            drop.Disabled = ObserverUiRules.IsObserving(_campaign, _observerMode);
             drop.TooltipText = Ui.Tip(Tr("Call this site off. What has already been spent stays spent; the rest is never taken."));
             row.AddChild(drop);
         }
     }
     private void SetStateTradePolicy(TradePolicy policy)
     {
-        if (_campaign?.Player is null || _campaign.Player?.Id != _campaign.Player.Id) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetTradePolicyCommand { IssuerId = _campaign.Player.Id, Policy = policy });
         _campaign.Commands.ApplyAll(_campaign);
         // The feedback is the trade screen's own, because that is where the buttons are.
@@ -736,7 +746,7 @@ public partial class DealOrForceGame
     }
     private void SetStateGovernmentFocus(GovernmentFocus focus)
     {
-        if (_campaign?.Player is null || _campaign.Player?.Id != _campaign.Player.Id) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetGovernmentFocusCommand { IssuerId = _campaign.Player.Id, Focus = focus });
         _campaign.Commands.ApplyAll(_campaign);
         _stateGovernanceFeedback.Text = Simulation.Loc.Format("{0} adopted.", GovernmentFocusRules.Name(focus));

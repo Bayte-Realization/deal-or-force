@@ -241,13 +241,15 @@ public static partial class NationNaming
                 if (adjective.Length > 0) return adjective;
                 return DemographyCatalog.Culture(nation.FoundNameId) is { Country.Length: > 0 } people
                     ? Loc.Get(people.Country)
-                    : nation.FoundNameBase;
+                    : CountryNames.SanitizeRisingText(nation.FoundNameBase);
             case "land":
                 return LandAtlas.Find(nation.FoundNameId) is { } land
                     ? LandAtlas.Name(land)
-                    : nation.FoundNameBase;
+                    : CountryNames.SanitizeRisingText(nation.FoundNameBase);
             case "free_tag":
-                var freeCountry = CountryNames.Of(nation.FoundNameId);
+                var freeCountry = CountryNames.HasRisingRecipe(nation.FoundNameId)
+                    ? CountryNames.SanitizeRisingText(nation.FoundNameId)
+                    : CountryNames.Of(nation.FoundNameId);
                 return Loc.Has("name.found.free")
                     ? Loc.Format("name.found.free", freeCountry)
                     : "Free " + freeCountry;
@@ -271,30 +273,37 @@ public static partial class NationNaming
                     }
                     return resolved;
                 }
-                return nation.FoundNameBase;
+                return CountryNames.SanitizeRisingText(nation.FoundNameBase);
             case "tag":
-                return CountryNames.Of(nation.FoundNameId);
+                return CountryNames.HasRisingRecipe(nation.FoundNameId)
+                    ? CountryNames.SanitizeRisingText(nation.FoundNameId)
+                    : CountryNames.Of(nation.FoundNameId);
             case "formable":
                 return FormableNations.Find(nation.FoundNameId) is { Name.Length: > 0 } catalogued
                     ? Loc.GetOr(catalogued.Name, catalogued.Name)
-                    : nation.FoundNameBase;
+                    : CountryNames.SanitizeRisingText(nation.FoundNameBase);
             case "literal":
                 // A recipe nothing defines is not a name. The formable's own row in the data is.
                 if (TryTranslate(nation.FoundNameId, out var literal)) return literal;
                 if (FormableIdOf(nation.FoundNameId) is { Length: > 0 } fId &&
                     FormableNations.Find(fId) is { Name.Length: > 0 } fDef)
                     return Loc.GetOr(fDef.Name, fDef.Name);
-                return nation.FoundNameBase;
+                return CountryNames.SanitizeRisingText(nation.FoundNameBase);
             case "direction":
-                if (!ReadDirection(nation.FoundNameId, out var direction, out var kind, out var id)) return nation.FoundNameBase;
-                var sided = SourceName(kind, id, nation.FoundNameBase);
+                var sanitizedDirectionBase = CountryNames.SanitizeRisingText(nation.FoundNameBase);
+                if (!ReadDirection(nation.FoundNameId, out var direction, out var kind, out var id))
+                    return sanitizedDirectionBase;
+                var sided = SourceName(kind, id, sanitizedDirectionBase);
                 // A source that already names a side takes no second one: "Northern
                 // Matabeleland South" was a state founded on Matabeleland South.
                 return NamesASide(sided) ? sided : Loc.Format("name.direction." + direction, sided);
             default:
                 // An unknown recipe from an older save: its stored name is a name unless it
                 // is a key, in which case the country's own name is the only honest answer.
-                return LooksLikeKey(nation.Name) ? CountryNames.Of(nation.Tag) : nation.Name ?? "";
+                var sanitized = CountryNames.SanitizeRisingText(nation.Name);
+                return string.IsNullOrEmpty(sanitized) || LooksLikeKey(sanitized)
+                    ? CountryNames.Of(nation.Tag)
+                    : sanitized;
         }
     }
 
@@ -360,8 +369,30 @@ public static partial class NationNaming
         if (parent.FoundNameKind == "direction" &&
             ReadDirection(parent.FoundNameId, out _, out var kind, out var id)) return (kind, id);
         if (parent.FoundNameKind == "culture") return ("culture", parent.FoundNameId);
-        if (parent.FoundNameKind == "region") return ("literal", "region." + parent.FoundNameId + ".name");
-        if (parent.FoundNameKind == "literal") return ("literal", parent.FoundNameId);
+        if (parent.FoundNameKind == "region")
+        {
+            if (!string.IsNullOrEmpty(parent.FoundNameId))
+                return ("literal", "region." + parent.FoundNameId + ".name");
+            var sanitizedRegionBase = CountryNames.SanitizeRisingText(parent.FoundNameBase ?? "");
+            if (sanitizedRegionBase.Length > 0) return ("literal", sanitizedRegionBase);
+        }
+        if (parent.FoundNameKind == "literal")
+        {
+            if (!string.IsNullOrEmpty(parent.FoundNameId))
+            {
+                if (parent.FoundNameId.StartsWith("rising:", StringComparison.Ordinal) &&
+                    CountryNames.TryUnwrapRisingBase(parent.FoundNameId, out var litTag, out var litLabel))
+                {
+                    if (!string.IsNullOrEmpty(litTag) && Loc.Has("country." + litTag + ".name"))
+                        return ("tag", litTag);
+                    if (!string.IsNullOrEmpty(litLabel))
+                        return ("literal", litLabel);
+                }
+                return ("literal", CountryNames.SanitizeRisingText(parent.FoundNameId));
+            }
+            var sanitizedLiteralBase = CountryNames.SanitizeRisingText(parent.FoundNameBase ?? "");
+            if (sanitizedLiteralBase.Length > 0) return ("literal", sanitizedLiteralBase);
+        }
         if (parent.FoundNameKind == "tag" && Loc.Has("country." + parent.FoundNameId + ".name"))
             return ("tag", parent.FoundNameId);
         // A movement's tag row is the movement's label ("Belarusian democratic forces"), not a
@@ -371,17 +402,21 @@ public static partial class NationNaming
         if (Loc.Has("country." + parent.Tag + ".name")) return ("tag", parent.Tag);
         // Civil opposition's raw name is a recipe of its own. Prefer its country base,
         // not a new state called "Republic of National Salvation Front of ...".
-        if (parent.Name?.StartsWith("rising:", StringComparison.Ordinal) == true)
+        if (parent.Name?.StartsWith("rising:", StringComparison.Ordinal) == true &&
+            CountryNames.TryUnwrapRisingBase(parent.Name, out var innerTag, out var innerLabel))
         {
-            var parts = parent.Name.Split(':', 4);
-            if (parts.Length == 4)
-                return Loc.Has("country." + parts[2] + ".name") ? ("tag", parts[2]) : ("literal", parts[3]);
+            if (!string.IsNullOrEmpty(innerTag) && Loc.Has("country." + innerTag + ".name"))
+                return ("tag", innerTag);
+            if (!string.IsNullOrEmpty(innerLabel))
+                return ("literal", innerLabel);
+            if (!string.IsNullOrEmpty(innerTag))
+                return ("tag", innerTag);
         }
         // A split is named for what it split from, so the ingredient has to be the parent's
         // base and not its displayed name: India's own name reads "Republic of India" once its
         // politics have changed, and a south that took that as its base would be the Republic
         // of South Republic of India.
-        return ("literal", WithoutFormOfState(parent.Name ?? ""));
+        return ("literal", WithoutFormOfState(CountryNames.SanitizeRisingText(parent.Name ?? "")));
     }
 
     private static bool ReadDirection(string recipe, out string direction, out string kind, out string id)
@@ -435,9 +470,16 @@ public static partial class NationNaming
     {
         name = "";
         if (string.IsNullOrEmpty(id)) return false;
+        if (id.StartsWith("rising:", StringComparison.Ordinal))
+            return CountryNames.TryUnwrapRisingBase(id, out _, out name) && name.Length > 0;
         // A recipe is a key; a literal is a sentence. A literal that happens to contain a dot
         // is still a literal, so only something shaped like a key is asked of the tables.
         if (!LooksLikeKey(id)) { name = id; return true; }
+        if (CountryNames.HasRisingRecipe(id))
+        {
+            name = CountryNames.SanitizeRisingText(id);
+            return name.Length > 0 && !LooksLikeKey(name);
+        }
         if (!Loc.Has(id)) return false;
         var text = Loc.Get(id);
         if (text.Length == 0 || string.Equals(text, id, StringComparison.Ordinal)) return false;
@@ -448,7 +490,10 @@ public static partial class NationNaming
     /// <summary>Whether a string is shaped like one of this game's localisation keys.</summary>
     public static bool LooksLikeKey(string text)
     {
-        if (string.IsNullOrEmpty(text) || !text.Contains('.')) return false;
+        if (string.IsNullOrEmpty(text)) return false;
+        if (text.StartsWith("rising:", StringComparison.Ordinal) || CountryNames.HasRisingRecipe(text))
+            return true;
+        if (!text.Contains('.')) return false;
         foreach (var prefix in KeyPrefixes)
             if (text.StartsWith(prefix, StringComparison.Ordinal)) return true;
         return false;

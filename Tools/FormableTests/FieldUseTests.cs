@@ -183,7 +183,7 @@ static class FieldUseTests
             var project = TechnologyCatalog.Of("industrial_automation");
             Check(project is not null && ResearchSystem.Available(nation, project), "the open project is one Poland can actually research");
             nation.CurrentResearch = project.Id;
-            SetElapsedDay(campaign, 7);
+            SetElapsedDay(campaign, 7 + ResearchSystem.WeeklySlot);
             var week = ResearchSystem.WeeklyPoints(campaign, nation);
             ResearchSystem.Tick(campaign);
             var practiced = ResearchSystem.Familiarity(nation, military[0].Id);

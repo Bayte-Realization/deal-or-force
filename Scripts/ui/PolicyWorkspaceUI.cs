@@ -165,12 +165,17 @@ public partial class DealOrForceGame
         BuildPolicyTarget(); RebuildPolicyList(); RefreshPolicyWorkspace();
     }
 
+    private Nation InspectedPolicyNation() =>
+        ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+
     private void BuildPolicyTarget()
     {
         ClearPolicyRows(_policyContext);
+        var nation = InspectedPolicyNation();
+        if (nation is null) return;
         if (PolicyScope == "region")
         {
-            var states = _campaign.StatesOf(_campaign.Player).OrderBy(s => s.DisplayName).ToArray();
+            var states = _campaign.StatesOf(nation).OrderBy(s => s.DisplayName).ToArray();
             if (!states.Any(s => s.MapIndex == _lawRegion)) _lawRegion = states.FirstOrDefault()?.MapIndex ?? 0;
             _policyContext.AddChild(Title("Governed region", 12, Ui.Colour("text.caption")));
             var select = new OptionButton { Name = "PolicyRegion", SizeFlagsHorizontal = SizeFlags.ExpandFill, FitToLongestItem = false };
@@ -181,7 +186,7 @@ public partial class DealOrForceGame
         }
         else if (PolicyScope == "foreign")
         {
-            var targets = _campaign.Nations.Where(t => t.Id != _campaign.Player.Id && !_campaign.Fallen.Contains(t.Id))
+            var targets = _campaign.Nations.Where(t => t.Id != nation.Id && !_campaign.Fallen.Contains(t.Id))
                 .OrderBy(t => t.DisplayName).ToArray();
             if (!targets.Any(t => t.Tag == _lawTarget)) _lawTarget = targets.FirstOrDefault()?.Tag ?? "";
             _policyContext.AddChild(Title("Country or movement", 12, Ui.Colour("text.caption")));
@@ -198,7 +203,7 @@ public partial class DealOrForceGame
 
     private void RebuildPolicyList()
     {
-        if (_policyLayer is not { Visible: true } || _campaign?.Player is null) return;
+        if (_policyLayer is not { Visible: true } || InspectedPolicyNation() is null) return;
         ClearPolicyRows(_policyList);
         if (_policyTab == "Crises")
         {
@@ -231,8 +236,8 @@ public partial class DealOrForceGame
 
     private void RefreshPolicyWorkspace()
     {
-        if (_policyLayer is not { Visible: true } || _campaign?.Player is null) return;
-        var n = _campaign.Player;
+        if (_policyLayer is not { Visible: true }) return;
+        if (InspectedPolicyNation() is not { } n) { ClosePolicyWorkspace(); return; }
         // Political credit belongs where political action is taken, and the Laws workspace is
         // where it is taken: a law, an agenda, a course in war all come out of this number.
         var credit = _campaign.Defines.PoliticalPointsPerWeek +

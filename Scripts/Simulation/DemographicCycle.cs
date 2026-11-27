@@ -179,6 +179,35 @@ public static class DemographicCycle
     private const int StageRegions = 64;
     private const int UnboundedStageRegions = 256;
     [ThreadStatic] private static List<ScenarioState> _dueStatesScratch;
+    [ThreadStatic] private static CohortBatchScratch _cohortScratch;
+
+    private sealed class CohortBatchScratch
+    {
+        public ScenarioState[] States = Array.Empty<ScenarioState>();
+        public float[] Population = Array.Empty<float>();
+        public long[] Births = Array.Empty<long>();
+        public long[] Deaths = Array.Empty<long>();
+        public float[] Young = Array.Empty<float>();
+        public float[] Old = Array.Empty<float>();
+        public float[] OutYoung = Array.Empty<float>();
+        public float[] OutOld = Array.Empty<float>();
+        public float[] OutWorking = Array.Empty<float>();
+
+        public void EnsureCapacity(int count)
+        {
+            if (States.Length >= count) return;
+            var cap = Math.Max(count, States.Length == 0 ? 64 : States.Length * 2);
+            States = new ScenarioState[cap];
+            Population = new float[cap];
+            Births = new long[cap];
+            Deaths = new long[cap];
+            Young = new float[cap];
+            Old = new float[cap];
+            OutYoung = new float[cap];
+            OutOld = new float[cap];
+            OutWorking = new float[cap];
+        }
+    }
 
     /// <summary>
     /// The cycle in stages: the same regions in the same order, a pause when a batch crosses frame budget.
@@ -221,6 +250,89 @@ public static class DemographicCycle
         {
             if (first > 0 && Campaign.StageOverdue()) yield return 0;
             var last = Math.Min(first + batchSize, dueCount);
+            var batchAppliedNative = false;
+            var batchLen = last - first;
+            if (batchLen >= 16 &&
+                !DemographyRulesHook.Installed &&
+                Kernels.NativeKernelsLoader.EnableEconomyDemoDefault &&
+                Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapEconomyDemo))
+            {
+                var scratch = _cohortScratch ??= new CohortBatchScratch();
+                scratch.EnsureCapacity(batchLen);
+                var active = 0;
+                for (var index = first; index < last; index++)
+                {
+                    var state = dueStates[index];
+                    if (state.Unclaimed || state.Population <= 0 ||
+                        state.LastDemographyDay == state.LastHouseholdReviewDay) continue;
+                    scratch.States[active] = state;
+                    scratch.Population[active] = state.Population;
+                    scratch.Births[active] = state.ReviewBirths;
+                    scratch.Deaths[active] = state.ReviewDeaths;
+                    scratch.Young[active] = state.YoungShare;
+                    scratch.Old[active] = state.OldShare;
+                    active++;
+                }
+
+                try
+                {
+                    if (active >= 16 && Kernels.NativeEconomyDemoKernels.TryStepCohortsBatch(
+                            scratch.Population.AsSpan(0, active),
+                            scratch.Births.AsSpan(0, active),
+                            scratch.Deaths.AsSpan(0, active),
+                            scratch.Young.AsSpan(0, active),
+                            scratch.Old.AsSpan(0, active),
+                            defines.DemographyMaturationAnnual,
+                            defines.DemographyAgeingAnnual,
+                            defines.DemographyMortalityOldWeight,
+                            interval,
+                            scratch.OutYoung.AsSpan(0, active),
+                            scratch.OutOld.AsSpan(0, active),
+                            scratch.OutWorking.AsSpan(0, active)))
+                    {
+                        batchAppliedNative = true;
+                        var bStates = scratch.States;
+                        var bYoung = scratch.OutYoung;
+                        var bOld = scratch.OutOld;
+                        if (active >= DeterministicParallel.MinItems && useParallel)
+                        {
+                            DeterministicParallel.ForRange(campaign, 0, active, (from, to) =>
+                            {
+                                for (var k = from; k < to; k++)
+                                {
+                                    var state = bStates[k];
+                                    state.LastDemographyDay = state.LastHouseholdReviewDay;
+                                    state.YoungShare = bYoung[k];
+                                    state.OldShare = bOld[k];
+                                    if (MoveCultures(campaign, state, shield, kinTable, nationsByMap))
+                                        MovementRules.MarkPeopleStateDirty(campaign, state);
+                                }
+                            });
+                            anyChanged = true;
+                        }
+                        else
+                        {
+                            for (var k = 0; k < active; k++)
+                            {
+                                var state = bStates[k];
+                                state.LastDemographyDay = state.LastHouseholdReviewDay;
+                                anyChanged = true;
+                                state.YoungShare = bYoung[k];
+                                state.OldShare = bOld[k];
+                                if (MoveCultures(campaign, state, shield, kinTable, nationsByMap))
+                                    MovementRules.MarkPeopleStateDirty(campaign, state);
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    if (active > 0) Array.Clear(scratch.States, 0, active);
+                }
+            }
+
+            if (batchAppliedNative) continue;
+
             if (last - first >= DeterministicParallel.MinItems && useParallel)
             {
                 DeterministicParallel.ForRange(campaign, first, last, (from, to) =>
@@ -777,6 +889,54 @@ public static class DemographicCycle
     /// modifier source with no campaign in hand, a tooltip, a chart - reads one number instead of
     /// walking a thousand regions.
     /// </summary>
+    [ThreadStatic] private static AggregateScratch _aggregateScratch;
+
+    private sealed class AggregateScratch
+    {
+        public uint[] StateOffsets = Array.Empty<uint>();
+        public float[] OutYoung = Array.Empty<float>();
+        public float[] OutOld = Array.Empty<float>();
+        public float[] OutWorking = Array.Empty<float>();
+        public float[] OutOldExcess = Array.Empty<float>();
+        public long[] OutBirths = Array.Empty<long>();
+        public long[] OutDeaths = Array.Empty<long>();
+        public long[] OutMigration = Array.Empty<long>();
+
+        public long[] StatePop = Array.Empty<long>();
+        public float[] StateYoung = Array.Empty<float>();
+        public float[] StateOld = Array.Empty<float>();
+        public long[] StateBirths = Array.Empty<long>();
+        public long[] StateDeaths = Array.Empty<long>();
+        public long[] StateMigration = Array.Empty<long>();
+
+        public void EnsureNations(int nationCount)
+        {
+            if (StateOffsets.Length < nationCount + 1)
+                StateOffsets = new uint[Math.Max(nationCount + 1, StateOffsets.Length == 0 ? 128 : StateOffsets.Length * 2)];
+            if (OutYoung.Length >= nationCount) return;
+            var cap = Math.Max(nationCount, OutYoung.Length == 0 ? 128 : OutYoung.Length * 2);
+            OutYoung = new float[cap];
+            OutOld = new float[cap];
+            OutWorking = new float[cap];
+            OutOldExcess = new float[cap];
+            OutBirths = new long[cap];
+            OutDeaths = new long[cap];
+            OutMigration = new long[cap];
+        }
+
+        public void EnsureStates(int stateCount)
+        {
+            if (StatePop.Length >= stateCount) return;
+            var cap = Math.Max(stateCount, StatePop.Length == 0 ? 512 : StatePop.Length * 2);
+            StatePop = new long[cap];
+            StateYoung = new float[cap];
+            StateOld = new float[cap];
+            StateBirths = new long[cap];
+            StateDeaths = new long[cap];
+            StateMigration = new long[cap];
+        }
+    }
+
     public static void Aggregate(Campaign campaign)
     {
         var nations = campaign.Nations;
@@ -786,7 +946,80 @@ public static class DemographicCycle
         var defaultOld = campaign.Defines.DemographyOldShareDefault;
         var defaultWorking = WorkingShare(null);
         var refOld = campaign.Defines.DemographyReferenceOldShare;
-        for (var n = 0; n < nations.Count; n++)
+
+        var nationCount = nations.Count;
+        if (Kernels.NativeKernelsLoader.EnableDemoAggregateDefault &&
+            Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapEconomyDemo))
+        {
+            var scratch = _aggregateScratch ??= new AggregateScratch();
+            scratch.EnsureNations(nationCount);
+            var offsets = scratch.StateOffsets;
+            var totalStates = 0;
+            offsets[0] = 0;
+            for (var n = 0; n < nationCount; n++)
+            {
+                var states = campaign.StatesOf(nations[n]);
+                totalStates += states.Length;
+                offsets[n + 1] = (uint)totalStates;
+            }
+
+            scratch.EnsureStates(totalStates);
+            var pos = 0;
+            for (var n = 0; n < nationCount; n++)
+            {
+                var states = campaign.StatesOf(nations[n]);
+                for (var s = 0; s < states.Length; s++)
+                {
+                    var state = states[s];
+                    scratch.StatePop[pos] = state.Population;
+                    scratch.StateYoung[pos] = state.YoungShare;
+                    scratch.StateOld[pos] = state.OldShare;
+                    scratch.StateBirths[pos] = state.ReviewBirths;
+                    scratch.StateDeaths[pos] = state.ReviewDeaths;
+                    scratch.StateMigration[pos] = state.ReviewNetMigration;
+                    pos++;
+                }
+            }
+
+            if (Kernels.NativeEconomyDemoKernels.TryAggregateNations(
+                    nationCount,
+                    offsets.AsSpan(0, nationCount + 1),
+                    scratch.StatePop.AsSpan(0, totalStates),
+                    scratch.StateYoung.AsSpan(0, totalStates),
+                    scratch.StateOld.AsSpan(0, totalStates),
+                    scratch.StateBirths.AsSpan(0, totalStates),
+                    scratch.StateDeaths.AsSpan(0, totalStates),
+                    scratch.StateMigration.AsSpan(0, totalStates),
+                    totalStates,
+                    defaultYoung,
+                    defaultOld,
+                    defaultWorking,
+                    refOld,
+                    scratch.OutYoung.AsSpan(0, nationCount),
+                    scratch.OutOld.AsSpan(0, nationCount),
+                    scratch.OutWorking.AsSpan(0, nationCount),
+                    scratch.OutOldExcess.AsSpan(0, nationCount),
+                    scratch.OutBirths.AsSpan(0, nationCount),
+                    scratch.OutDeaths.AsSpan(0, nationCount),
+                    scratch.OutMigration.AsSpan(0, nationCount)))
+            {
+                for (var n = 0; n < nationCount; n++)
+                {
+                    var nation = nations[n];
+                    var hasStates = offsets[n + 1] > offsets[n];
+                    nation.YoungShare = scratch.OutYoung[n];
+                    nation.OldShare = scratch.OutOld[n];
+                    nation.WorkingShare = scratch.OutWorking[n];
+                    if (hasStates) nation.OldShareExcess = scratch.OutOldExcess[n];
+                    nation.ReviewBirths = scratch.OutBirths[n];
+                    nation.ReviewDeaths = scratch.OutDeaths[n];
+                    nation.ReviewNetMigration = scratch.OutMigration[n];
+                }
+                return;
+            }
+        }
+
+        for (var n = 0; n < nationCount; n++)
         {
             var nation = nations[n];
             var states = campaign.StatesOf(nation);

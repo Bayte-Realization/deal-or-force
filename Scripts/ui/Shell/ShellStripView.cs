@@ -99,7 +99,12 @@ internal sealed class ShellStripView
     public void Refresh()
     {
         var world = _ctx.World;
-        if (world?.Player is not { } player || _dock is null) return;
+        if (_dock is null) return;
+        if (world?.Player is not { } player || (_ctx.IsWatchingWorld?.Invoke() ?? false))
+        {
+            if (_stripPlate.Visible) { _stripPlate.Visible = false; FitStripBounds(); }
+            return;
+        }
 
         _openWarsScratch.Clear();
         var liveHash = new HashCode();
@@ -136,13 +141,13 @@ internal sealed class ShellStripView
         if (_ctx.GetSelectedArmies?.Invoke() is { } selArmies)
             for (var i = 0; i < selArmies.Count; i++)
                 _selectedIdsScratch.Add(selArmies[i].Id);
-        var undoRec = BatchActionUndo.Peek(world, player.Id);
+        var isObs = _ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
+        var undoRec = isObs ? null : DealOrForce.Simulation.Controls.BatchActionUndo.Peek(world, player.Id);
 
         _selectedIdsSortedScratch.Clear();
         foreach (var id in _selectedIdsScratch) _selectedIdsSortedScratch.Add(id);
         _selectedIdsSortedScratch.Sort();
 
-        var isObs = _ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
         liveHash.Add(player.Id);
         liveHash.Add(isObs);
         liveHash.Add(_dock.CompactStripTokens);

@@ -122,12 +122,14 @@ internal sealed class ShellCornerView
         flagBtn.Pressed += () => { _rail.HideHoverTag(); _ctx.PlayCue?.Invoke("shell_plate_tap"); _ctx.ToggleScreen?.Invoke("Nation"); };
         flagBtn.MouseEntered += () =>
         {
-            var nationName = _ctx.World?.Player?.DisplayName ?? Loc.Get("Country");
+            var worldView = (_ctx.IsWatchingWorld?.Invoke() ?? false) || _ctx.World?.Player is null;
+            var nationName = worldView ? Loc.Get("The world") : (_ctx.World?.Player?.DisplayName ?? Loc.Get("Country"));
+            var tagSub = worldView ? Loc.Get("shell.obs.badge_world") : Loc.Get("shell.sub_country");
             var tagX = _profile.LeftRail.Right > 0f ? _profile.LeftRail.Right + 8f : flagBtn.Position.X;
             var tagY = Math.Max(
                 flagBtn.Position.Y + flagBtn.Size.Y + 6f,
                 Math.Max(_profile.CornerNode.Bottom + 6f, _profile.TopPlate.Bottom + (_profile.Compact ? 34f : 44f)));
-            _rail.ShowHoverTag(nationName, "Q", Loc.Get("shell.sub_country"), tagY, tagX);
+            _rail.ShowHoverTag(nationName, "Q", tagSub, tagY, tagX);
         };
         flagBtn.MouseExited += _rail.HideHoverTag;
         _ctx.Root.AddChild(flagBtn);
@@ -450,7 +452,24 @@ internal sealed class ShellCornerView
     public void Refresh()
     {
         var world = _ctx.World;
-        if (world?.Player is not { } player) return;
+        if (world is null) return;
+        var openScreen = _ctx.GetOpenScreen?.Invoke() ?? "";
+        if ((_ctx.IsWatchingWorld?.Invoke() ?? false) || world.Player is null)
+        {
+            if (_atWar) Layout(_ctx.ResolveViewportProfile(false), false);
+            if (_lastTag != "__WORLD__") { _lastTag = "__WORLD__"; ShellCornerTelemetry.FitWorldCrest(_flagTexture, _ctx.Icon("icon_world"), _flagEdgeOverlay, _profile.FlagWellWidth, _profile.FlagWellHeight, _profile.Compact); }
+            if (_rankActiveUnderline.Visible) _rankActiveUnderline.Visible = false;
+            if (_flagButton.ButtonPressed) _flagButton.ButtonPressed = false;
+            if (_lastCountryOpen == true) { _lastCountryOpen = false; _flagButton.AddThemeStyleboxOverride("normal", _flagPocketNormal); }
+            if (_rankNumLabel.Text != "OBS") _rankNumLabel.Text = "OBS";
+            var summary = ObserverUiRules.ComputeWorldSummary(world);
+            var wStamp = (-1, summary.CountryCount, summary.OpenWarCount, summary.LandlessMovementCount, Loc.Language);
+            if (!_flagTipStamp.Equals(wStamp)) { _flagTipStamp = wStamp; var wt = Ui.Tip(ShellCornerTelemetry.BuildWorldFlagTooltip(summary)); _flagButton.TooltipText = wt; _rankHost.TooltipText = wt; }
+            RefreshWorldResources(world, summary, openScreen);
+            _xpStrip.Refresh(world, null); _rail.Refresh(world, null, Warfare.OpenWars(world), openScreen); SyncKeycapVisibility();
+            return;
+        }
+        if (world.Player is not { } player) return;
         var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId == player.Id ? snap : null;
 
         bool atWar;
@@ -479,7 +498,6 @@ internal sealed class ShellCornerView
             FitNaturalFlag(player.Tag);
         }
 
-        var openScreen = _ctx.GetOpenScreen?.Invoke() ?? "";
         var countryOpen = string.Equals(openScreen, "Nation", StringComparison.Ordinal);
         if (_rankActiveUnderline.Visible != countryOpen) _rankActiveUnderline.Visible = countryOpen;
         if (_flagButton.ButtonPressed != countryOpen) _flagButton.ButtonPressed = countryOpen;
@@ -511,6 +529,21 @@ internal sealed class ShellCornerView
         SyncKeycapVisibility();
     }
 
+    private void RefreshWorldResources(Campaign world, ObserverWorldSummary summary, string openScreen)
+    {
+        var lang = Loc.Language;
+        var readout = (-1, (float)summary.WorldGdp, (float)summary.AverageStability, (float)summary.WorldPopulation, world.ElapsedDays, summary.OpenWarCount, true, lang, openScreen);
+        if (_resourceReadout is { } previous && previous.Equals(readout)) return;
+        _resourceReadout = readout;
+        foreach (var kv in _cells)
+        {
+            if (kv.Key == "War") continue;
+            var spec = ShellCornerTelemetry.ResolveWorldCell(kv.Key, summary, openScreen);
+            if (kv.Value.Caption is { } capLbl) { var ct = Loc.Get(spec.CapKey); if (capLbl.Text != ct) capLbl.Text = ct; }
+            UpdateCell(kv.Key, spec.Fig, spec.Unit, spec.ColorTok, "", "shell.state.info", spec.Tip, spec.Active);
+        }
+    }
+
     private bool CellDirty(string id, int sig)
     {
         if (!_cells.TryGetValue(id, out var c) || (c.HasDataSig && c.LastDataSig == sig)) return false;
@@ -520,7 +553,15 @@ internal sealed class ShellCornerView
 
     public void RefreshResources(Nation player)
     {
+        if (_ctx.World is { } w && ((_ctx.IsWatchingWorld?.Invoke() ?? false) || player is null))
+        {
+            RefreshWorldResources(w, ObserverUiRules.ComputeWorldSummary(w), _ctx.GetOpenScreen?.Invoke() ?? "");
+            return;
+        }
         if (player is null) return;
+        foreach (var kv in _cells)
+            if (kv.Key != "War" && kv.Value.Caption is { } cap && cap.HasMeta("shell_cap_key"))
+            { var kt = Loc.Get(cap.GetMeta("shell_cap_key").AsString()); if (cap.Text != kt) cap.Text = kt; }
         var world = _ctx.World;
         var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId == player.Id ? snap : null;
         var openScreen = _ctx.GetOpenScreen?.Invoke() ?? "";
@@ -640,33 +681,15 @@ internal sealed class ShellCornerView
         if (!_cells.TryGetValue(id, out var c)) return;
         if (c.LastFig != fig || c.LastUnit != unit || c.LastFigColor != figColorTok || c.LastDelta != delta || c.LastDeltaColor != deltaColorTok)
         {
-            c.LastFig = fig;
-            c.LastUnit = unit;
-            c.LastFigColor = figColorTok;
-            c.LastDelta = delta;
-            c.LastDeltaColor = deltaColorTok;
-            c.Figure.Text = fig;
-            c.Unit.Text = unit;
-            c.Unit.Visible = unit.Length > 0;
-            c.Figure.AddThemeColorOverride("font_color", Ui.Colour(figColorTok));
-            c.Delta.Text = delta;
-            c.Delta.Visible = delta.Length > 0;
-            if (delta.Length > 0) c.Delta.AddThemeColorOverride("font_color", Ui.Colour(deltaColorTok));
-            var warnRule = figColorTok is "shell.state.negative_text" or "shell.state.warning_text";
-            c.StatusRule.Visible = warnRule;
-            if (warnRule)
-                c.StatusRule.Color = Ui.Colour(figColorTok == "shell.state.negative_text" ? "shell.state.negative" : "shell.state.warning", 0.85f);
+            c.LastFig = fig; c.LastUnit = unit; c.LastFigColor = figColorTok;
+            c.LastDelta = delta; c.LastDeltaColor = deltaColorTok;
+            ShellCornerTelemetry.ApplyCellAppearance(c.Figure, c.Unit, c.Delta, c.StatusRule, fig, unit, figColorTok, delta, deltaColorTok);
         }
-        if (c.LastTooltip != tip)
-        {
-            c.LastTooltip = tip;
-            c.Box.TooltipText = Ui.Tip(tip);
-        }
+        if (c.LastTooltip != tip) { c.LastTooltip = tip; c.Box.TooltipText = Ui.Tip(tip); }
         if (c.LastActive != active)
         {
             c.LastActive = active;
-            _emptyStyle ??= new StyleBoxEmpty();
-            c.Box.AddThemeStyleboxOverride("panel", active ? _ctx.PressedWellStyle(underlineBottom: true) : _emptyStyle);
+            c.Box.AddThemeStyleboxOverride("panel", active ? _ctx.PressedWellStyle(underlineBottom: true) : (_emptyStyle ??= new StyleBoxEmpty()));
             ShellContext.ApplyIconRelief(c.Icon, Ui.Colour(active ? "shell.highlight" : "shell.icon"), active ? 0.88f : 0.62f);
         }
     }
@@ -678,28 +701,15 @@ internal sealed class ShellCornerView
         _rail.SyncKeycapVisibility(vis);
     }
 
-    private void FitNaturalFlag(string tag)
-    {
-        var tex = _ctx.FlagTexture(tag);
-        _flagTexture.Texture = tex;
-        var pad = _profile.Compact ? 8f : 10f;
-        var fitted = ShellLayout.FitFlag(tex?.GetWidth() ?? 300, tex?.GetHeight() ?? 200, Math.Max(8f, _profile.FlagWellWidth - pad), Math.Max(8f, _profile.FlagWellHeight - pad), tag);
-        var pos = new Vector2((_profile.FlagWellWidth - fitted.Width) * 0.5f, (_profile.FlagWellHeight - fitted.Height) * 0.5f);
-        _flagTexture.Position = pos;
-        _flagTexture.Size = new Vector2(fitted.Width, fitted.Height);
-        _flagEdgeOverlay.Visible = !fitted.CutoutSilhouette;
-        _flagEdgeOverlay.Position = pos;
-        _flagEdgeOverlay.Size = new Vector2(fitted.Width, fitted.Height);
-        _flagEdgeOverlay.QueueRedraw();
-    }
+    private void FitNaturalFlag(string tag) =>
+        ShellCornerTelemetry.FitFlagVisual(_flagTexture, _flagEdgeOverlay, _ctx.FlagTexture(tag), tag, _profile);
 
     private (int Rank, double Score, bool Changed) ResolveOverallRank(Campaign world, Nation player)
     {
         var lang = Loc.Language;
         var week = world.ElapsedDays / 7;
         if (ReferenceEquals(_rankCache.World, world) && _rankCache.Week == week &&
-            _rankCache.Rev == world.MapRevision && _rankCache.WarRev == world.WarRevision &&
-            _rankCache.PlayerId == player.Id)
+            _rankCache.Rev == world.MapRevision && _rankCache.WarRev == world.WarRevision && _rankCache.PlayerId == player.Id)
         {
             var langChanged = !string.Equals(_rankCache.Lang, lang, StringComparison.Ordinal);
             if (langChanged)
@@ -708,23 +718,17 @@ internal sealed class ShellCornerView
         }
 
         if (world.RenderSnapshot is { Version: > 0 } snap &&
-            snap.RankWeek == week &&
-            snap.RankMapRev == world.MapRevision &&
-            snap.RankWarRev == world.WarRevision &&
-            snap.RankPlayerId == player.Id &&
-            snap.NationRanksById.Count > 0)
+            snap.RankWeek == week && snap.RankMapRev == world.MapRevision &&
+            snap.RankWarRev == world.WarRevision && snap.RankPlayerId == player.Id && snap.NationRanksById.Count > 0)
         {
-            _rankCache = (world, week, world.MapRevision, world.WarRevision, player.Id, lang,
-                snap.PlayerOverallRank, snap.PlayerOverallScore);
+            _rankCache = (world, week, world.MapRevision, world.WarRevision, player.Id, lang, snap.PlayerOverallRank, snap.PlayerOverallScore);
             return (snap.PlayerOverallRank, snap.PlayerOverallScore, true);
         }
 
         if (world.MidStep)
         {
-            if (world.RenderSnapshot is { Version: > 0 } fallbackSnap &&
-                fallbackSnap.RankPlayerId == player.Id &&
-                fallbackSnap.PlayerOverallRank > 0)
-                return (fallbackSnap.PlayerOverallRank, fallbackSnap.PlayerOverallScore, false);
+            if (world.RenderSnapshot is { Version: > 0 } fbSnap && fbSnap.RankPlayerId == player.Id && fbSnap.PlayerOverallRank > 0)
+                return (fbSnap.PlayerOverallRank, fbSnap.PlayerOverallScore, false);
             if (ReferenceEquals(_rankCache.World, world) && _rankCache.PlayerId == player.Id && _rankCache.Rank >= 0)
                 return (_rankCache.Rank, _rankCache.Score, false);
             return (0, 0.0, false);
@@ -737,17 +741,9 @@ internal sealed class ShellCornerView
             Ui.Metric("rankings.weight.technology", 17),
             Ui.Metric("rankings.weight.prestige", 15));
         var rows = CountryRankings.Read(world, weights);
-        var rank = 0;
-        var score = 0.0;
+        int rank = 0; double score = 0.0;
         for (var i = 0; i < rows.Count; i++)
-        {
-            if (rows[i].NationId == player.Id)
-            {
-                rank = rows[i].OverallRank;
-                score = rows[i].Overall;
-                break;
-            }
-        }
+            if (rows[i].NationId == player.Id) { rank = rows[i].OverallRank; score = rows[i].Overall; break; }
         _rankCache = (world, week, world.MapRevision, world.WarRevision, player.Id, lang, rank, score);
         return (rank, score, true);
     }

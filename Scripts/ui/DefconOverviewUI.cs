@@ -216,7 +216,7 @@ public partial class DealOrForceGame
 
     private void PostureOrder(string action, int targetId)
     {
-        if (_campaign?.Player is not { } player) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player) return;
         _campaign.Commands.Enqueue(new NuclearPostureCommand { IssuerId = player.Id, Action = action, TargetId = targetId });
         _campaign.Commands.ApplyAll(_campaign);
         PlayStrategicCue("ui_select");

@@ -49,6 +49,7 @@ public sealed partial class GlobePresentation
         var tier = CurrentShaderQualityTier();
         var compat = RenderingServer.GetCurrentRenderingMethod() == "gl_compatibility" ? 1f : 0f;
         if (!force && Mathf.IsEqualApprox(tier, _cachedShaderQualityTier)) return;
+        WakeGlobeRendering();
         _cachedShaderQualityTier = tier;
         _globeMaterial?.SetShaderParameter("quality_tier", tier);
         _globeMaterial?.SetShaderParameter("compat_renderer", compat);
@@ -129,8 +130,12 @@ public sealed partial class GlobePresentation
         };
     }
 
-    private bool HandleTouchInput(InputEvent inputEvent) =>
-        _touchAdapter is not null && _touchAdapter.TryHandleInput(inputEvent);
+    private bool HandleTouchInput(InputEvent inputEvent)
+    {
+        if (inputEvent is InputEventScreenTouch or InputEventScreenDrag or InputEventMagnifyGesture or InputEventPanGesture)
+            WakeGlobeRendering();
+        return _touchAdapter is not null && _touchAdapter.TryHandleInput(inputEvent);
+    }
 
     private void TickTouchCamera(double delta, bool blocked)
     {

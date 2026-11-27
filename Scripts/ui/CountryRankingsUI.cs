@@ -24,7 +24,7 @@ public partial class DealOrForceGame
     private VBoxContainer _countryRankingRows;
     private LineEdit _countryRankingSearch;
     private OptionButton _countryRankingMetric;
-    private Button _countryRankingOrder, _countryRankingPrevious, _countryRankingNext;
+    private Button _countryRankingOrder, _countryRankingPrevious, _countryRankingNext, _countryRankingMyCountry;
     private Label _countryRankingCount, _countryRankingDetails, _countryRankingFormula;
     private DecisionDialogLayout _countryRankingLayout;
     private readonly List<(Button Button, Func<Nation> Nation)> _countryRankBadges = new();
@@ -279,7 +279,7 @@ public partial class DealOrForceGame
 
     private void AddCountryRankingFooterActions(HBoxContainer footer)
     {
-        footer.AddChild(ActionButton("My country", () =>
+        _countryRankingMyCountry = ActionButton("My country", () =>
         {
             var campaign = _campaign;
             if (campaign is null || !campaign.TryEnterRead(50, true)) return;
@@ -292,12 +292,14 @@ public partial class DealOrForceGame
             {
                 campaign.ExitRead();
             }
+            if (playerId <= 0) return;
             _countryRankingSearch.Text = "";
             _countryRankingSelected = playerId;
             LocateRankingSelection();
             RefreshCountryRankingPage();
             FocusAndHighlightRankingNation(_countryRankingSelected);
-        }, 0, 34));
+        }, 0, 34);
+        footer.AddChild(_countryRankingMyCountry);
         footer.AddChild(ActionButton("Ranking country dossier", () =>
         {
             var campaign = _campaign;
@@ -433,6 +435,12 @@ public partial class DealOrForceGame
             weights.Economy.ToString("0.#"), weights.Population.ToString("0.#"),
             weights.FieldPower.ToString("0.#"), weights.Technology.ToString("0.#"), weights.Prestige.ToString("0.#"));
         _countryRankingFormula.TooltipText = Tr("ui.prestige.ranking_formula_tip");
+        if (IsInstanceValid(_countryRankingMyCountry))
+        {
+            var hasOwn = _campaign?.Player is not null && !WatchingWorld;
+            _countryRankingMyCountry.Disabled = !hasOwn;
+            _countryRankingMyCountry.TooltipText = Ui.Tip(hasOwn ? "" : Tr("obs.ui.rankings.no_own_country"));
+        }
         _countryRankingLayout?.Refit();
     }
 

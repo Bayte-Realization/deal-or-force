@@ -602,6 +602,7 @@ public sealed partial class GlobePresentation
     {
         if (_highlightedNation == mapIndex) return;
         _highlightedNation = mapIndex;
+        WakeGlobeRendering();
         _globeMaterial?.SetShaderParameter("highlighted_nation", (float)mapIndex);
         InvalidateCities();
     }
@@ -628,16 +629,19 @@ public sealed partial class GlobePresentation
         if (_cachedSelectionActive != activeVal)
         {
             _cachedSelectionActive = activeVal;
+            WakeGlobeRendering();
             _globeMaterial.SetShaderParameter("selection_active", activeVal);
         }
         if (_cachedSelectionRegionId != regionId)
         {
             _cachedSelectionRegionId = regionId;
+            WakeGlobeRendering();
             _globeMaterial.SetShaderParameter("selected_region_id", regionId);
         }
         if (_cachedSelectionProvinceId != provinceId)
         {
             _cachedSelectionProvinceId = provinceId;
+            WakeGlobeRendering();
             _globeMaterial.SetShaderParameter("selected_province_id", provinceId);
         }
         if (regionLive is { } live && _cachedSelectionRegionLive != live)
@@ -684,6 +688,7 @@ public sealed partial class GlobePresentation
             {
                 _cachedSelectionMaterial = _globeMaterial;
                 _cachedSelectionRegionLive = 0f;
+                WakeGlobeRendering();
                 _globeMaterial.SetShaderParameter("selected_region_live", 0f);
             }
             return;
@@ -710,6 +715,7 @@ public sealed partial class GlobePresentation
         UpdateMapImage("selected_region_members", _selectedRegionImage, ref _selectedRegionTexture);
         _cachedSelectionMaterial = _globeMaterial;
         _cachedSelectionRegionLive = 1f;
+        WakeGlobeRendering();
         _globeMaterial.SetShaderParameter("selected_region_live", 1f);
         _lastSelectedRegionLive = liveRegion;
         _lastSelectedRegionCampaign = _campaign;

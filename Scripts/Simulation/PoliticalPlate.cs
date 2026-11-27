@@ -104,18 +104,65 @@ public static class PoliticalPlate
                MapBorders.Between(holder, there, 0, 0, 0, 0) == MapBorderRank.Country;
     }
 
+    [ThreadStatic]
+    private static uint[] _paletteScratch;
+
     /// <summary>
     /// Paint the whole plate: RGBA, one cell after another, water left transparent for the
-    /// shader's own sea.
+    /// shader's own sea. Uses the native <c>dof_kernels</c> raster painter when enabled and available.
     /// </summary>
     public static byte[] Paint(PoliticalPlateSource source, ushort[] owners, ushort[] authoredOwners,
         IReadOnlyDictionary<int, uint> colours, MapPlateShades shades)
     {
+        byte[] pixels = null;
+        return PaintInto(source, owners, authoredOwners, colours, shades, ref pixels);
+    }
+
+    /// <summary>
+    /// Paint the whole plate into a caller-supplied reusable RGBA buffer (allocated/resized if needed)
+    /// to avoid repeated large-object-heap allocations during wartime border repaints.
+    /// </summary>
+    public static byte[] PaintInto(PoliticalPlateSource source, ushort[] owners, ushort[] authoredOwners,
+        IReadOnlyDictionary<int, uint> colours, MapPlateShades shades, ref byte[] pixels)
+    {
+        var width = source.Width;
+        var height = source.Height;
+        var needed = width * height * 4;
+        if (pixels is null || pixels.Length != needed)
+            pixels = new byte[needed];
+        else
+            Array.Clear(pixels);
+        var palette = FillPalette(colours, _paletteScratch ??= new uint[65536]);
+
+        if (Kernels.NativeRasterBake.TryPaintPoliticalPlate(
+                width, height, source.Holders, source.Provinces, source.Geography,
+                owners, authoredOwners, palette,
+                shades.Country, shades.Region, shades.Inland, pixels))
+        {
+            return pixels;
+        }
+
+        PaintManagedInto(source, owners, authoredOwners, palette, shades, pixels);
+        return pixels;
+    }
+
+    internal static byte[] PaintManaged(PoliticalPlateSource source, ushort[] owners, ushort[] authoredOwners,
+        IReadOnlyDictionary<int, uint> colours, MapPlateShades shades)
+    {
+        var width = source.Width;
+        var height = source.Height;
+        var pixels = new byte[width * height * 4];
+        var palette = FillPalette(colours, _paletteScratch ??= new uint[65536]);
+        PaintManagedInto(source, owners, authoredOwners, palette, shades, pixels);
+        return pixels;
+    }
+
+    private static void PaintManagedInto(PoliticalPlateSource source, ushort[] owners, ushort[] authoredOwners,
+        uint[] palette, MapPlateShades shades, byte[] pixels)
+    {
         var width = source.Width;
         var height = source.Height;
         var holders = Holders(source, owners, authoredOwners);
-        var palette = Palette(colours);
-        var pixels = new byte[width * height * 4];
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
@@ -132,7 +179,6 @@ public static class PoliticalPlate
                 pixels[write + 3] = 255;
             }
         }
-        return pixels;
     }
 
     /// <summary>
@@ -176,9 +222,11 @@ public static class PoliticalPlate
 
     // One flat table rather than a dictionary probe per cell: the plate is 1.8 million cells.
     // A country the palette has no colour for is painted the grey of unowned land, as it always was.
-    private static uint[] Palette(IReadOnlyDictionary<int, uint> colours)
+    private static uint[] Palette(IReadOnlyDictionary<int, uint> colours) =>
+        FillPalette(colours, new uint[65536]);
+
+    private static uint[] FillPalette(IReadOnlyDictionary<int, uint> colours, uint[] palette)
     {
-        var palette = new uint[65536];
         Array.Fill(palette, MapBorders.UnownedColour);
         if (colours is not null)
             foreach (var (mapIndex, packed) in colours)

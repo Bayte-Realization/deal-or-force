@@ -157,6 +157,7 @@ internal sealed class ShellOrchestrator
 
     private bool IsPlayerAtWar(Campaign world)
     {
+        if (Context.IsWatchingWorld?.Invoke() ?? false) return false;
         if (Context.HudSnapshot is { Version: > 0 } hs)
             return hs.OpenPlayerWars.Length > 0;
         if (world?.Player is not { } player) return false;
@@ -256,7 +257,7 @@ internal sealed class ShellOrchestrator
         if (resourceDue)
         {
             _lastResourceRefreshMsec = nowMsec;
-            Corner.RefreshResources(world.Player);
+            Corner.RefreshResources(Context.IsWatchingWorld?.Invoke() == true ? null : world.Player);
         }
         if (heavyDue)
         {

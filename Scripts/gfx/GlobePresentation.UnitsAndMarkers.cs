@@ -65,6 +65,12 @@ public sealed partial class GlobePresentation
         public Vector3 DisplayPosition;
         /// <summary>False until the display position has caught up, so a new counter does not fly in from the origin.</summary>
         public bool MotionSettled;
+        public float CachedGeoLat;
+        public float CachedGeoLon;
+        public bool CachedGeoValid;
+        public bool CachedIsMoving;
+        public bool HasPendingArrivalGlide;
+        public string CachedNodeName = "";
     }
 
     private readonly Stack<ArmyStackMarker> _armyMarkerPool = new();
@@ -217,7 +223,7 @@ public sealed partial class GlobePresentation
     /// </summary>
     private void UpdateCounterScale(bool force = false)
     {
-        UpdateCapitalMarkerScale();
+        UpdateCapitalMarkerScale(force);
         if (_flatMap)
         {
             _counterWorldPixel = _camera.Size / Math.Max(1f, _camera.GetViewport().GetVisibleRect().Size.Y);
@@ -356,7 +362,7 @@ public sealed partial class GlobePresentation
     {
         if (!IsInstanceValid(_camera)) return;
         UpdateMarkerVisibility(_armyRoot, _armyMarkers, MilitaryMarkersEnabled && (_flatMap || ViewDistance <= 10.8f),
-            _flatMap ? 0f : GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f);
+            _flatMap ? 0f : CityHorizon());
         if (NewShellVisibleArmyIds is { } visibleArmies)
             ApplyNewShellArmyVisibility(visibleArmies);
     }
@@ -412,7 +418,7 @@ public sealed partial class GlobePresentation
 
     private readonly Dictionary<int, Vector3> _previousArmyPositions = new();
 
-    private void ReconcileArmyMarkers(Simulation.Campaign campaign)
+    private void ReconcileArmyMarkers(Simulation.Campaign campaign, int? computedFingerprint = null)
     {
         if (!MilitaryMarkersEnabled || !IsInstanceValid(_armyRoot) || _divisionTexture is null) return;
 
@@ -472,6 +478,12 @@ public sealed partial class GlobePresentation
                     marker.LayoutInitialized = false;
                     marker.LayoutOffset = Vector2.Zero;
                     marker.MotionSettled = false;
+                    marker.CachedGeoLat = 0f;
+                    marker.CachedGeoLon = 0f;
+                    marker.CachedGeoValid = false;
+                    marker.CachedIsMoving = false;
+                    marker.HasPendingArrivalGlide = false;
+                    marker.CachedNodeName = "";
                     _armyMarkerPool.Push(marker);
                 }
                 else
@@ -524,7 +536,12 @@ public sealed partial class GlobePresentation
                     marker.Node.GetParent()?.RemoveChild(marker.Node);
                     _armyRoot.AddChild(marker.Node);
                 }
-                marker.Node.Name = $"DivisionStack_{nation.Tag}_{lead.ProvinceId}_{lead.Id}";
+                var desiredName = $"DivisionStack_{nation.Tag}_{lead.ProvinceId}_{lead.Id}";
+                if (!string.Equals(marker.CachedNodeName, desiredName, StringComparison.Ordinal))
+                {
+                    marker.CachedNodeName = desiredName;
+                    marker.Node.Name = desiredName;
+                }
 
                 var textureChanged = marker.NationId != nation.Id ||
                     marker.FlagVisualId != NationalFlagVisualId(nation) ||
@@ -542,14 +559,28 @@ public sealed partial class GlobePresentation
             if (marker.Node is null) continue;
 
             var location = ArmyPresentationLocation(marker.Stack);
-            var position = ArmyMarkerPosition(marker);
+            marker.CachedGeoLat = location.Latitude;
+            marker.CachedGeoLon = location.Longitude;
+            marker.CachedGeoValid = true;
+            marker.CachedIsMoving = HasMovingArmy(marker);
+            var position = ArmyMarkerPositionFromCachedGeo(marker);
             marker.TargetPosition = position;
             if (!marker.MotionSettled)
             {
                 // A new province bucket starts at the formation's last drawn position
-                // when available. An unrelated node from the pool starts at the new target.
-                marker.DisplayPosition = _previousArmyPositions.TryGetValue(lead.Id, out var previous)
-                    && previous != Vector3.Zero ? previous : position;
+                // when available so transitions between provinces glide smoothly instead of jumping.
+                if (_previousArmyPositions.TryGetValue(lead.Id, out var previous) &&
+                    previous != Vector3.Zero &&
+                    previous.DistanceSquaredTo(position) > 1e-8f)
+                {
+                    marker.DisplayPosition = previous;
+                    marker.HasPendingArrivalGlide = true;
+                }
+                else
+                {
+                    marker.DisplayPosition = position;
+                    marker.HasPendingArrivalGlide = false;
+                }
                 marker.Node.Position = marker.DisplayPosition;
                 marker.MotionSettled = true;
                 InvalidateFlatCounterDensity();
@@ -613,7 +644,7 @@ public sealed partial class GlobePresentation
         // reused counters before rendering, including the overlays that ignore depth.
         RefreshArmyMarkerVisibility();
 
-        _armyStructureFingerprint = ArmyStructureFingerprint(campaign);
+        _armyStructureFingerprint = computedFingerprint ?? ArmyStructureFingerprint(campaign);
     }
 
     private readonly HashSet<Node3D> _coveredCounters = new();
@@ -674,13 +705,15 @@ public sealed partial class GlobePresentation
 
         {
             var initialPos = ArmyMarkerPosition(marker);
+            var stackName = $"DivisionStack_{nation.Tag}_{lead.ProvinceId}_{lead.Id}";
             var node = new Node3D
             {
-                Name = $"DivisionStack_{nation.Tag}_{lead.ProvinceId}_{lead.Id}",
+                Name = stackName,
                 Position = initialPos
             };
             _armyRoot.AddChild(node);
             marker.Node = node;
+            marker.CachedNodeName = stackName;
             marker.TargetPosition = initialPos;
             marker.DisplayPosition = initialPos;
             marker.NationId = nation.Id;
@@ -767,15 +800,21 @@ public sealed partial class GlobePresentation
         var latitude = 0f;
         var sin = 0f;
         var cos = 0f;
+        var valid = 0;
         for (var index = 0; index < stack.Count; index++)
         {
             var division = stack[index];
+            if (!GlobeLineSanity.IsValidGeo(division.Latitude, division.Longitude) ||
+                (division.Latitude == 0f && division.Longitude == 0f))
+                continue;
             latitude += division.Latitude;
             var radians = Mathf.DegToRad(division.Longitude);
             sin += MathF.Sin(radians);
             cos += MathF.Cos(radians);
+            valid++;
         }
-        return (latitude / stack.Count, Mathf.RadToDeg(MathF.Atan2(sin, cos)));
+        if (valid == 0) return (0f, 0f);
+        return (latitude / valid, Mathf.RadToDeg(MathF.Atan2(sin, cos)));
     }
 
     private void SyncArmyMarkers()
@@ -794,19 +833,36 @@ public sealed partial class GlobePresentation
         // with the world paused and nothing moving. The fingerprint answers the only
         // question that matters here - did any counter's identity, place or size change -
         // and the expensive pass is skipped when it did not.
-        if (ArmyStructureFingerprint(_campaign) == _armyStructureFingerprint)
+        var fp = ArmyStructureFingerprint(_campaign);
+        if (fp == _armyStructureFingerprint)
         {
             SyncArmyMarkerReadouts();
             return;
         }
-        ReconcileArmyMarkers(_campaign);
+        ReconcileArmyMarkers(_campaign, fp);
     }
 
     private void SyncArmyMarkerReadouts()
     {
         foreach (var marker in _armyStacks.Values)
         {
-            if (marker.Node is null || !IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
+            if (marker.Node is null || !IsInstanceValid(marker.Node)) continue;
+            // Refresh cached motion/geo under the read lock so off-lock motion interpolation
+            // never races live Army.Route mutations on the background worker.
+            if (marker.Stack.Count > 0)
+            {
+                var moving = HasMovingArmy(marker);
+                marker.CachedIsMoving = moving;
+                if (moving || !marker.CachedGeoValid)
+                {
+                    var location = ArmyPresentationLocation(marker.Stack);
+                    marker.CachedGeoLat = location.Latitude;
+                    marker.CachedGeoLon = location.Longitude;
+                    marker.CachedGeoValid = true;
+                    marker.TargetPosition = ArmyMarkerPositionFromCachedGeo(marker);
+                }
+            }
+            if (!marker.Node.Visible) continue;
             if (marker.Plate is not null && !marker.Plate.Visible) continue;
             var stack = marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack;
             if (stack.Count == 0) continue;

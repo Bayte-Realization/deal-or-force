@@ -48,6 +48,7 @@ public partial class DealOrForceGame
         new("Campaign", "Ledger", "A record of any country in the world, read-only.", OpenLedger),
         new("Campaign", "Wars", "Every war the world is in, its score and its cost.", OpenWarLedger),
         new("Campaign", "Conflicts", "Standoffs, proxy wars, disputes and organisations.", OpenConflictsScreen),
+        new("Campaign", "Landless movements", "Stateless movements, sponsors, and armed pressure across the world.", ToggleMovementPanel),
 
         new("Government", "State affairs", "Budget, taxes, ministries and what needs a signature.", () => OpenScreen("State Affairs")),
         new("Government", "Laws", "What is on the statute book, and what could be.", () => OpenScreen("Laws")),

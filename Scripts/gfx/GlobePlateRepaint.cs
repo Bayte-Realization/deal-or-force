@@ -27,7 +27,10 @@ namespace DealOrForce;
 /// </summary>
 public sealed partial class GlobePresentation
 {
-    private const double PlateRepaintSeconds = 2.0;
+    private const double PlateRepaintSeconds = 0.75;
+    private const double FrontierRepaintSeconds = 2.5;
+    private const double FastSimPlateRepaintSeconds = 2.5;
+    private const double FastSimFrontierRepaintSeconds = 10.0;
     private const double MobilePlateRepaintSeconds = 6.5;
 
     private ImageTexture _plateTexture;
@@ -36,6 +39,8 @@ public sealed partial class GlobePresentation
     /// <summary>The owners the plate on screen was painted from, and those of the one being painted.</summary>
     private ushort[] _plateShownOwners;
     private ushort[] _plateWorkOwners;
+    private byte[] _platePixelScratch;
+    private byte[] _frontierPixelScratch;
     private Image _pendingPlateUpload;
     private ushort[] _pendingPlateOwners;
 
@@ -48,6 +53,7 @@ public sealed partial class GlobePresentation
     /// <summary>The authored holder of every raster cell, kept for the frontier field's repaints.</summary>
     private ushort[] _frontierAuthored;
     private ulong _plateRequestedMsec;
+    private ulong _frontierRequestedMsec;
     private bool _platePending;
 
     /// <summary>The opening plate has been uploaded: remember what it was painted from.</summary>
@@ -81,7 +87,10 @@ public sealed partial class GlobePresentation
             return;
         }
         var now = Time.GetTicksMsec();
-        var cooldownMs = (Platform.PlatformProfile.Current?.IsTouchPrimary == true ? MobilePlateRepaintSeconds : PlateRepaintSeconds) * 1000.0;
+        var fastForward = _campaign is { IsPaused: false, Speed: >= 4 };
+        var desktopPlateSeconds = fastForward ? FastSimPlateRepaintSeconds : PlateRepaintSeconds;
+        var desktopFrontierSeconds = fastForward ? FastSimFrontierRepaintSeconds : FrontierRepaintSeconds;
+        var cooldownMs = (Platform.PlatformProfile.Current?.IsTouchPrimary == true ? MobilePlateRepaintSeconds : desktopPlateSeconds) * 1000.0;
         if (_plateRequestedMsec > 0 && now - _plateRequestedMsec < cooldownMs) return;
         _plateRequestedMsec = now;
         _platePending = false;
@@ -96,16 +105,21 @@ public sealed partial class GlobePresentation
         var shades = Simulation.MapBorderStyles.PlateShades();
         // The picture and its mipmaps are made on the worker too: the main thread only uploads.
         // Skip heavy 5760x2880 FrontierField repaints during active war on touch/mobile GPUs
-        // (close-up borders and UploadPlateCatchUp stay exact without 22 MB mipmap uploads).
-        var frontierAuthored = FrontierFieldWanted() && Platform.PlatformProfile.Current?.IsTouchPrimary != true
-            ? _frontierAuthored : null;
+        // (close-up borders and UploadPlateCatchUp stay exact without 22 MB mipmap uploads),
+        // and throttle desktop FrontierField rebuilds to 2.5s (10s at Speed 4/5) while keeping
+        // fast 0.75s (2.5s at Speed 4/5) PoliticalPlate updates with reusable LOH pixel buffers.
+        var wantFrontierNow = FrontierFieldWanted() && Platform.PlatformProfile.Current?.IsTouchPrimary != true &&
+                              (_frontierRequestedMsec == 0 || now - _frontierRequestedMsec >= desktopFrontierSeconds * 1000.0);
+        if (wantFrontierNow) _frontierRequestedMsec = now;
+        var frontierAuthored = wantFrontierNow ? _frontierAuthored : null;
         _plateWork = Task.Run(() =>
         {
-            var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8,
-                Simulation.PoliticalPlate.Paint(source, owners, authoredOwners, colors, shades));
+            var platePixels = Simulation.PoliticalPlate.PaintInto(
+                source, owners, authoredOwners, colors, shades, ref _platePixelScratch);
+            var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8, platePixels);
             image.GenerateMipmaps();
             var frontier = frontierAuthored is null ? null
-                : FrontierImage(frontierAuthored, topology, owners, authoredOwners);
+                : FrontierImageInto(frontierAuthored, topology, owners, authoredOwners, ref _frontierPixelScratch);
             return (image, frontier);
         });
     }
@@ -118,12 +132,19 @@ public sealed partial class GlobePresentation
     private static Image FrontierImage(ushort[] authored, Simulation.ProvinceTopology topology,
         ushort[] owners, ushort[] authoredOwners)
     {
+        byte[] scratch = null;
+        return FrontierImageInto(authored, topology, owners, authoredOwners, ref scratch);
+    }
+
+    private static Image FrontierImageInto(ushort[] authored, Simulation.ProvinceTopology topology,
+        ushort[] owners, ushort[] authoredOwners, ref byte[] scratch)
+    {
         if (authored is null || topology?.CellToProvince is null) return null;
         var width = topology.Width;
         var height = topology.Height;
         if (authored.Length < width * height || topology.CellToProvince.Length < width * height) return null;
-        var image = Image.CreateFromData(width, height, false, Image.Format.R8,
-            Simulation.FrontierField.Build(authored, topology.CellToProvince, width, height, owners, authoredOwners));
+        var bytes = Simulation.FrontierField.BuildInto(authored, topology.CellToProvince, width, height, owners, authoredOwners, ref scratch);
+        var image = Image.CreateFromData(width, height, false, Image.Format.R8, bytes);
         image.GenerateMipmaps();
         return image;
     }
@@ -166,12 +187,19 @@ public sealed partial class GlobePresentation
         if (_pendingPlateUpload is { } pendingPlate)
         {
             _pendingPlateUpload = null;
-            if (_plateTexture is not null) _plateTexture.Update(pendingPlate);
-            _plateShownOwners = _pendingPlateOwners;
-            _pendingPlateOwners = null;
-            // The plate has caught up: the stopgap table has nothing left to say about
-            // the provinces this repaint covered.
-            UploadPlateCatchUp();
+            try
+            {
+                if (_plateTexture is not null) _plateTexture.Update(pendingPlate);
+                _plateShownOwners = _pendingPlateOwners;
+                _pendingPlateOwners = null;
+                // The plate has caught up: the stopgap table has nothing left to say about
+                // the provinces this repaint covered.
+                UploadPlateCatchUp();
+            }
+            finally
+            {
+                pendingPlate.Dispose();
+            }
             return true;
         }
         if (_plateWork is { IsCompleted: true } done)
@@ -180,26 +208,41 @@ public sealed partial class GlobePresentation
             var uploaded = false;
             if (done.IsCompletedSuccessfully && done.Result.Plate is { } image)
             {
+                var frontier = done.Result.Frontier;
                 _plateWorkStartedStale = false;
-                if (done.Result.Frontier is not null)
+                if (frontier is not null)
                 {
                     // Stagger FrontierField GPU upload (Frame N) and Plate GPU upload (Frame N+1) across
                     // separate frames so a single frame never uploads 32 MB of mipmapped textures at once.
                     _pendingPlateUpload = image;
                     _pendingPlateOwners = _plateWorkOwners;
-                    ApplyFrontier(done.Result.Frontier);
+                    try { ApplyFrontier(frontier); }
+                    finally { frontier.Dispose(); }
                     uploaded = true;
                 }
                 else
                 {
-                    if (_plateTexture is not null) _plateTexture.Update(image);
-                    _plateShownOwners = _plateWorkOwners;
-                    UploadPlateCatchUp();
+                    try
+                    {
+                        if (_plateTexture is not null) _plateTexture.Update(image);
+                        _plateShownOwners = _plateWorkOwners;
+                        UploadPlateCatchUp();
+                    }
+                    finally
+                    {
+                        image.Dispose();
+                    }
                     uploaded = true;
                 }
             }
             else
             {
+                // Dispose any orphaned Images if the task completed with partial output or canceled.
+                if (done.IsCompletedSuccessfully)
+                {
+                    done.Result.Plate?.Dispose();
+                    done.Result.Frontier?.Dispose();
+                }
                 // Preserve colour staleness if the background worker threw before committing.
                 _plateColoursStale |= _plateWorkStartedStale;
                 _plateWorkStartedStale = false;

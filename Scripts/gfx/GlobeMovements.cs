@@ -88,6 +88,7 @@ public sealed partial class GlobePresentation
         private Texture2D _ring;
         private Texture2D _disc;
         private Texture2D _mark;
+        private ulong _lastCameraSyncProcessFrame = ulong.MaxValue;
 
         private sealed class Marker
         {
@@ -102,6 +103,7 @@ public sealed partial class GlobePresentation
             /// <summary>Where its row stands: the first headquarters of the row.</summary>
             public float Latitude;
             public float Longitude;
+            public bool IsStanding = true;
         }
 
         public MovementLayer(GlobePresentation globe) => _globe = globe;
@@ -124,7 +126,11 @@ public sealed partial class GlobePresentation
             if (!campaign.TryEnterRead(0, requestWindowOnMiss: _revision < 0 || !ReferenceEquals(campaign, _campaign) || _sinceLastMovementSync >= 0.25))
             {
                 // Keep cached medallion transforms responsive at 60 FPS while DoF-Sim is mid-tick.
-                UpdateCachedMarkerTransforms(camera);
+                if (_lastCameraSyncProcessFrame != Engine.GetProcessFrames())
+                {
+                    _lastCameraSyncProcessFrame = Engine.GetProcessFrames();
+                    UpdateCachedMarkerTransforms(camera);
+                }
                 return;
             }
             _sinceLastMovementSync = 0;
@@ -146,30 +152,15 @@ public sealed partial class GlobePresentation
                     if (!IsInstanceValid(marker.Node)) continue;
                     var state = marker.Nation.Movement;
                     // A headquarters out on the street, or one that is no more, is nowhere on the map.
-                    var shown = Standing(state) && _globe.ViewDistance <= MedallionDistance;
-                    if (shown)
-                        UpdateSingleMarkerTransform(marker, camera, ref shown);
+                    marker.IsStanding = Standing(state);
+                    var shown = marker.IsStanding && _globe.ViewDistance <= MedallionDistance;
+                    if (shown) UpdateSingleMarkerTransform(marker, camera, ref shown);
                     if (marker.Node.Visible != shown) marker.Node.Visible = shown;
                 }
+                _lastCameraSyncProcessFrame = Engine.GetProcessFrames();
                 Spread(camera);
             }
-            finally
-            {
-                campaign.ExitRead();
-            }
-        }
-
-        private void UpdateCachedMarkerTransforms(Camera3D camera)
-        {
-            foreach (var marker in _markers)
-            {
-                if (!IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
-                var shown = _globe.ViewDistance <= MedallionDistance;
-                if (shown)
-                    UpdateSingleMarkerTransform(marker, camera, ref shown);
-                if (!shown && marker.Node.Visible) marker.Node.Visible = false;
-            }
-            Spread(camera);
+            finally { campaign.ExitRead(); }
         }
 
         private void UpdateSingleMarkerTransform(Marker marker, Camera3D camera, ref bool shown)
@@ -182,7 +173,14 @@ public sealed partial class GlobePresentation
                 GlobePresentation.SurfaceMarkerRadius * 1.002f);
             // On the globe, only the side that faces the camera.
             if (!_globe._flatMap && IsInstanceValid(camera))
-                shown = marker.Node.Position.Normalized().Dot(camera.GlobalPosition.Normalized()) > 0.05f;
+            {
+                var worldPos = IsInsideTree() ? ToGlobal(marker.Node.Position) : marker.Node.Position;
+                shown = !Simulation.MapOverlaySyncRules.IsBeyondGlobeHorizon(
+                            GlobePresentation.ToNum(marker.Node.Position.Normalized()),
+                            GlobePresentation.ToNum(camera.GlobalPosition.Normalized()),
+                            _globe.CityHorizon()) &&
+                        !camera.IsPositionBehind(worldPos);
+            }
         }
 
         // A beaten rising gone underground has no office anyone could point to: its fighters are

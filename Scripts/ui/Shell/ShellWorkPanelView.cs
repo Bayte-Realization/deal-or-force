@@ -258,6 +258,11 @@ internal sealed class ShellWorkPanelView
     public void OpenCountry(Nation nation)
     {
         if (nation is null) return;
+        if (nation.Movement is { Landless: true })
+        {
+            _ctx.OpenObservedMovement?.Invoke(nation.Id);
+            return;
+        }
         if (_mode == DossierMode.Region) _ctx.ClearRegionSelection?.Invoke();
         _mode = DossierMode.Country;
         if (_targetNationId != nation.Id) _activeTab = 0;
@@ -356,12 +361,13 @@ internal sealed class ShellWorkPanelView
         UpdatePinButtonState();
 
         var staffMask = 0;
-        if (_mode == DossierMode.Country && world.Player?.Id == _targetNationId)
+        var player = world.Player;
+        if (_mode == DossierMode.Country && player is not null && player.Id == _targetNationId)
             for (var i = 0; i < DealOrForceGame.StaffPortfolios.Length; i++)
-                if (Delegation.Holds(world.Player, DealOrForceGame.StaffPortfolios[i].Portfolio))
+                if (Delegation.Holds(player, DealOrForceGame.StaffPortfolios[i].Portfolio))
                     staffMask |= 1 << i;
         var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId >= 0 ? snap : null;
-        var inboxCount = _mode == DossierMode.Country && world.Player?.Id == _targetNationId
+        var inboxCount = _mode == DossierMode.Country && player is not null && player.Id == _targetNationId
             ? (hs is not null ? hs.IncomingDiplomaticCount : (_ctx.GetIncomingDiplomaticCount?.Invoke() ?? 0)) : 0;
         var observerMode = _ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
         var compactFlag = _profile?.Compact == true ? 1 : 0;
@@ -397,7 +403,8 @@ internal sealed class ShellWorkPanelView
 
     private void PopulateCountry(Campaign world, Nation nation)
     {
-        var isOwn = world.Player?.Id == nation.Id;
+        var observerMode = ObserverUiRules.IsObserving(world, _ctx.IsObserverMode?.Invoke() ?? false);
+        var isOwn = !observerMode && world.Player?.Id == nation.Id;
         ShowFlagEmblem(nation.Tag);
         _titleLabel.Text = nation.DisplayName;
         var ruler = Rulers.HeadOfState(world, nation);
@@ -454,7 +461,8 @@ internal sealed class ShellWorkPanelView
     private void PopulateRegion(Campaign world, Nation owner, ScenarioState state)
     {
         ShowRoundCategoryEmblem("icon_region");
-        var isOwn = owner is not null && world.Player?.Id == owner.Id;
+        var observerMode = ObserverUiRules.IsObserving(world, _ctx.IsObserverMode?.Invoke() ?? false);
+        var isOwn = owner is not null && !observerMode && world.Player?.Id == owner.Id;
 
         _titleLabel.Text = state.DisplayName;
         var provCount = CountStateProvinces(world, state.MapIndex);
@@ -481,7 +489,7 @@ internal sealed class ShellWorkPanelView
             _ctx, _bodyRows, _feedbackLabel, world, owner, state, _targetProvinceId, provCount, _activeTab, isOwn,
             () => { _lastBuildSig = ""; Refresh(priority: true); });
 
-        if (isOwn)
+        if (isOwn && !observerMode)
         {
             QueueFooterAction(Loc.Get("Economy"), false, () => { Close(); _ctx.OpenScreen?.Invoke("Economy"); });
             QueueFooterAction(Loc.Get("shell.btn_recruit"), true, () => { _ctx.OpenRecruitment?.Invoke(); });
@@ -490,7 +498,10 @@ internal sealed class ShellWorkPanelView
         {
             var capturedOwner = owner;
             QueueFooterAction(Loc.Get("Country"), false, () => OpenCountry(capturedOwner));
-            QueueFooterAction(Loc.Get("Diplomacy"), true, () => { Close(); _ctx.OpenDiplomacyFor?.Invoke(capturedOwner); });
+            if (observerMode)
+                QueueFooterAction(Loc.Get("Economy"), true, () => { Close(); _ctx.OpenScreen?.Invoke("Economy"); });
+            else
+                QueueFooterAction(Loc.Get("Diplomacy"), true, () => { Close(); _ctx.OpenDiplomacyFor?.Invoke(capturedOwner); });
         }
         BuildFooterButtons();
     }

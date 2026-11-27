@@ -273,24 +273,51 @@ public partial class DealOrForceGame
         var observing = _observerMode || _campaign.ObserverMode;
         if (!observing)
         {
+            _pauseObserverButton.Disabled = false;
             _pauseObserverButton.Text = Loc.Get("shell.obs.pause_enter");
             _pauseObserverButton.TooltipText = Ui.Tip(Loc.Get("shell.obs.pause_world_tip"));
             return;
         }
         if (_campaign.HumanSeats.Count == 0 && _observerWatched is { } watched)
         {
+            _pauseObserverButton.Disabled = false;
             _pauseObserverButton.Text = Loc.Format("shell.obs.pause_take_fmt", watched.DisplayName);
             _pauseObserverButton.TooltipText = Ui.Tip(Loc.Format("shell.obs.pause_take_tip_fmt", watched.DisplayName));
             return;
         }
+        if (_campaign.HumanSeats.Count == 0 && _observerWatched is null)
+        {
+            _pauseObserverButton.Disabled = true;
+            _pauseObserverButton.Text = Loc.Get("obs.ui.pause.watching_world");
+            _pauseObserverButton.TooltipText = Ui.Tip(Loc.Get("shell.obs.badge_tip_world"));
+            return;
+        }
+        _pauseObserverButton.Disabled = false;
         _pauseObserverButton.Text = Loc.Get("shell.obs.pause_leave");
         _pauseObserverButton.TooltipText = Ui.Tip(Loc.Get("shell.obs.pause_leave_tip"));
     }
 
     private void UpdatePauseLiveCard()
     {
-        if (_campaign?.Player is not { } player || _pauseLiveCard is null) return;
+        if (_campaign is null || _pauseLiveCard is null) return;
         var observing = _observerMode || _campaign.ObserverMode;
+        if (_campaign.Player is not { } player)
+        {
+            var worldIcon = SpriteCatalog.TextureOf("icon_world", "res://game/gfx/interface/icons/icon_world.png");
+            _pauseFlagRect.Texture = ResourceLoader.Exists(worldIcon) ? GD.Load<Texture2D>(worldIcon) : null;
+            _pauseNationName.Text = Loc.Get("shell.obs.badge_world");
+            var summary = ObserverUiRules.ComputeWorldSummary(_campaign);
+            _pauseLeaderTitleName.Text = Loc.Format("obs.ui.pause.world_sub_fmt", summary.CountryCount, summary.LandlessMovementCount);
+            foreach (var ch in _pausePortraitHost.GetChildren()) ch.QueueFree();
+            _pauseDateLabel.Text = _campaign.Date.Display();
+            _pauseRankBadge.Text = "OBS";
+            _pauseWarBadge.Text = summary.OpenWarCount > 0
+                ? Loc.Format("shell.active_theatres_badge", summary.OpenWarCount)
+                : Loc.Get("shell.peace_status_badge");
+            _pauseWarBadge.AddThemeColorOverride("font_color",
+                summary.OpenWarCount > 0 ? MenuChromeTheme.Warning : MenuChromeTheme.PaperFaint);
+            return;
+        }
         _pauseFlagRect.Texture = FlagTextureFor(player.Tag);
         _pauseNationName.Text = observing
             ? $"{player.DisplayName} · {Loc.Get("shell.obs.live_card_tag")}"

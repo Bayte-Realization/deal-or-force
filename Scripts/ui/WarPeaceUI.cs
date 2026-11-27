@@ -34,7 +34,9 @@ public partial class DealOrForceGame
     /// single war; the war ledger names the war it is settling, which is why the fixed
     /// terms live there now rather than in a panel that could only ever mean this one.
     /// </summary>
-    private StrategicWar PlayerWar() => _campaign.Wars.FirstOrDefault(war => !war.Ended && war.Involves(_campaign.Player.Id));
+    private StrategicWar PlayerWar() => _campaign?.Player is { } player
+        ? _campaign.Wars.FirstOrDefault(war => !war.Ended && war.Involves(player.Id))
+        : null;
 
     private void ProposePeace(PeaceTerms terms) => ProposePeace(PlayerWar(), terms);
 
@@ -47,9 +49,9 @@ public partial class DealOrForceGame
     /// </summary>
     private void ProposePeace(StrategicWar war, PeaceTerms terms)
     {
-        if (war is null) return;
+        if (war is null || _campaign?.Player is not { } player || _observerMode) return;
         var wasEnded = war.Ended;
-        _campaign.Commands.Enqueue(new ProposePeaceCommand { IssuerId = _campaign.Player.Id, WarId = war.Id, Terms = terms });
+        _campaign.Commands.Enqueue(new ProposePeaceCommand { IssuerId = player.Id, WarId = war.Id, Terms = terms });
         _campaign.Commands.ApplyAll(_campaign);
         if (!wasEnded && war.Ended) PlayStrategicCue("peace_signed");
         if (war.Ended) ShowWarLedgerList();

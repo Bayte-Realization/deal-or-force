@@ -664,6 +664,8 @@ public static class LongCampaign
         c.DormantRelations.Clear();
         foreach (var entry in kept) c.DormantRelations.Add(entry.Key, entry.Value);
         kept.Clear();
+        if (report.RelationsDropped + report.EmptyRelationsDropped >= 128 || c.DormantRelations.Count == 0)
+            c.DormantRelations.TrimExcess();
         // Whoever keeps relations by country keeps none of the dropped ones.
         MovementAi.ForgetRelationIndex(c);
         if (allied) c.NoteAllianceChange();
@@ -745,7 +747,7 @@ public static class LongCampaign
             {
                 if (audience.PublicImages.Remove(toRemove[ki])) report.ImagesDropped++;
             }
-            if (audience.PublicImages.Count == 0) audience.PublicImages.TrimExcess();
+            if (audience.PublicImages.Count == 0 || toRemove.Count >= 16) audience.PublicImages.TrimExcess();
         }
         toRemove.Clear();
         activeCoalitions.Clear();

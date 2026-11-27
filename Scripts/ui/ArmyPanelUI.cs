@@ -440,9 +440,11 @@ public partial class DealOrForceGame
 
     private void RefreshArmyPanel()
     {
-        if (_armyPanel is null || _campaign?.Player is null) return;
-        _selectedArmies.RemoveAll(army => !ArmyInteraction.CanSelect(_campaign, army));
-        if (!ArmyInteraction.CanSelect(_campaign, _selectedArmy))
+        if (_armyPanel is null || _campaign is null) return;
+        var player = _campaign.Player;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        _selectedArmies.RemoveAll(army => army is null || (observing ? !_campaign.Armies.Contains(army) : !ArmyInteraction.CanSelect(_campaign, army)));
+        if (_selectedArmy is not null && (observing ? !_campaign.Armies.Contains(_selectedArmy) : !ArmyInteraction.CanSelect(_campaign, _selectedArmy)))
         {
             _selectedArmy = _selectedArmies.FirstOrDefault();
             _globe.SelectArmies(_selectedArmies.Select(army => army.Id));
@@ -455,7 +457,7 @@ public partial class DealOrForceGame
         _armyRosterHint.Visible = !readingDoctrine;
         _armyPanelCount.Visible = !readingDoctrine;
         _armyReadinessStrip.Visible = divisions.Count > 0 && !readingDoctrine;
-        if (divisions.Count == 0 && (_armyCommandTabs is null || _armyCommandTabs.CurrentTab != _armyDoctrineTab))
+        if (divisions.Count == 0 && (player is null || _armyCommandTabs is null || _armyCommandTabs.CurrentTab != _armyDoctrineTab))
         {
             SetArmyPanelVisible(false);
             return;
@@ -464,27 +466,32 @@ public partial class DealOrForceGame
 
         SetArmyPanelVisible(true);
 
-        var doctrineState = DoctrinePresentation(_campaign.Player);
-        if (_armyDoctrineRows is not null && (_armyDoctrineDay != _campaign.ElapsedDays || _armyDoctrineState != doctrineState))
+        var doctrineNation = player ?? (divisions.Count > 0 ? _campaign.NationById(divisions[0].NationId) : null)
+            ?? ObserverUiRules.DefaultObservedNation(_campaign);
+        if (doctrineNation is not null)
         {
-            _armyDoctrineDay = _campaign.ElapsedDays;
-            _armyDoctrineState = doctrineState;
-            ClearPolicyRows(_armyDoctrineRows);
-            ShowDoctrineWorkspace(_campaign.Player, _armyDoctrineRows);
+            var doctrineState = DoctrinePresentation(doctrineNation);
+            if (_armyDoctrineRows is not null && (_armyDoctrineDay != _campaign.ElapsedDays || _armyDoctrineState != doctrineState))
+            {
+                _armyDoctrineDay = _campaign.ElapsedDays;
+                _armyDoctrineState = doctrineState;
+                ClearPolicyRows(_armyDoctrineRows);
+                ShowDoctrineWorkspace(doctrineNation, _armyDoctrineRows);
+            }
         }
 
         _armyComposition.Visible = divisions.Count > 0 && !readingDoctrine;
         if (divisions.Count == 0)
         {
             _armyPanelTitle.Text = Tr("DOCTRINES");
-            _armyPanelSubtitle.Text = _campaign.Player.DisplayName;
+            _armyPanelSubtitle.Text = doctrineNation?.DisplayName ?? "";
             _armyPanelCount.Text = Simulation.Loc.Format("{0:N0} selected", 0);
             _armyAssaultReadiness.Visible = false;
             _armyMergeHqButton.Disabled = true;
             return;
         }
         var owner = _campaign.NationById(divisions[0].NationId);
-        var mine = owner == _campaign.Player;
+        var mine = !observing && player is not null && owner == player;
         var canMergeHq = mine && divisions.Count >= 2;
         _armyMergeHqButton.Disabled = !canMergeHq;
         _armyMergeHqButton.TooltipText = Ui.Tip(Tr(canMergeHq ? "shell.ws.army.merge_hq_tip" : "shell.ws.army.merge_hq_refusal"));

@@ -156,6 +156,19 @@ public sealed partial class GlobePresentation
             return;
         }
 
+        if (!IsInsideTree() || !IsInstanceValid(_camera) || !_camera.IsInsideTree())
+        {
+            minLat = -90f;
+            maxLat = 90f;
+            minLon = -180f;
+            maxLon = 180f;
+            fullLongitude = true;
+            latBucket = 0;
+            lonBucket = 0;
+            spanBucket = 0;
+            return;
+        }
+
         var camLocalPos = rootBasis.Inverse() * _camera.GlobalPosition;
         var dist = MathF.Max(GlobeRadius + 0.01f, camLocalPos.Length());
         var camNormal = camLocalPos / dist;
@@ -321,7 +334,7 @@ public sealed partial class GlobePresentation
         public float TargetAlpha = 1f;
         public Color BaseFill = Colors.White;
         public Color BaseOutline = Colors.Black;
-        public Vector3 AnchorNormal = Vector3.Up;
+        public Vector3 AnchorNormal = Vector3.Zero;
         public string CachedNodeName = "";
         public string CachedText = "";
         public Font CachedFont;
@@ -364,8 +377,14 @@ public sealed partial class GlobePresentation
     /// Every capital star, with the city beside it (-1 for none within the distance a star hides
     /// a dot at) and whose star it is. Rebuilt when the stars are.
     /// </summary>
-    private readonly List<(Node3D Marker, Vector3 Normal, int City, Nation Nation)> _starNames = new();
-    private (int Revision, int Count, ulong First) _starNamesBuilt = (-1, -1, 0);
+    private readonly List<(Node3D Marker, Vector3 Normal, int City, Nation Nation, string CapitalName)> _starNames = new();
+    private (int Revision, int Count, ulong First, int LocRevision, string Language) _starNamesBuilt = (-1, -1, 0, -1, "");
+    private bool NeedsStarNamesRefresh()
+    {
+        var first = _capitalMarkers.Count > 0 && IsInstanceValid(_capitalMarkers[0].Node)
+            ? _capitalMarkers[0].Node.GetInstanceId() : 0ul;
+        return (_capitalRevision, _capitalMarkers.Count, first, Loc.Revision, Loc.Language ?? "") != _starNamesBuilt;
+    }
     /// <summary>Each star's place on the screen this placement, in <see cref="_starNames"/> order.</summary>
     private readonly List<Vector2?> _starScreens = new();
     /// <summary>The stars drawn this placement and the city each stands on, which names keep off.</summary>
@@ -418,7 +437,7 @@ public sealed partial class GlobePresentation
         }
         _cityAnchorMap = null;
         _cityPosRelief = -1f;
-        _starNamesBuilt = (-1, -1, 0);
+        _starNamesBuilt = (-1, -1, 0, -1, "");
         _settlementCountedFor = default;
         RebuildCitySpatialIndex();
         InvalidateCities();
@@ -500,9 +519,9 @@ public sealed partial class GlobePresentation
         _ => _cities.Count
     };
 
-    private void EnsureCityAnchorsForMap()
+    private void EnsureCityAnchorsForMap(bool allowCampaignRead = true)
     {
-        var map = _campaign?.ProvinceMap;
+        var map = _provinceTopology ?? (allowCampaignRead ? _campaign?.ProvinceMap : null);
         if (map is null || (ReferenceEquals(map, _cityAnchorMap) && _cityAnchors.Length == _cities.Count)) return;
         _cityAnchorMap = map;
         _cityAnchors = new CityCatalog.MapAnchor[_cities.Count];
@@ -514,7 +533,7 @@ public sealed partial class GlobePresentation
             _cityNormals[index] = SurfacePoint(anchor.Latitude, anchor.Longitude, 1f).Normalized();
         }
         _cityPosRelief = -1f;
-        _starNamesBuilt = (-1, -1, 0);
+        _starNamesBuilt = (-1, -1, 0, -1, "");
         RebuildCitySpatialIndex();
         InvalidateCities();
     }
@@ -540,12 +559,17 @@ public sealed partial class GlobePresentation
             }
     }
 
-    private void UpdateCityLabels(double delta)
+    private void UpdateCityLabels(double delta, CampaignRenderSnapshot snap = null, bool allowCampaignRead = true)
     {
-        if (!IsInstanceValid(_cityRoot) || !IsInstanceValid(_camera)) return;
+        if (!IsInsideTree() || !IsInstanceValid(_cityRoot) || !_cityRoot.IsInsideTree() ||
+            !IsInstanceValid(_camera) || !_camera.IsInsideTree()) return;
+        var frame = Engine.GetProcessFrames();
+        if (_cityLastProcessFrame == frame && !(allowCampaignRead && (_cityDirty || _cityAnchorMap is null || NeedsStarNamesRefresh())))
+            return;
+        _cityLastProcessFrame = frame;
         if (!Simulation.WorldLayers.On("city_labels")) { if (_cityRoot.Visible) _cityRoot.Visible = false; return; }
         AdoptCities();
-        EnsureCityAnchorsForMap();
+        EnsureCityAnchorsForMap(allowCampaignRead);
         var wanted = QualityCityLabels && CityLabelsEnabled && _mapApplied && _cities.Count > 0 &&
                      ViewDistance <= CityTierDistance(0);
         if (_cityRoot.Visible != wanted) _cityRoot.Visible = wanted;
@@ -562,9 +586,17 @@ public sealed partial class GlobePresentation
             }
             return;
         }
-        if (_mapLookAtlas && _cityHasActiveFades) StepCityPinFades((float)delta);
+        if (_mapLookAtlas && _cityHasActiveFades && _cityLastFadeFrame != frame)
+        {
+            _cityLastFadeFrame = frame;
+            StepCityPinFades((float)delta);
+        }
 
-        _cityClock += delta;
+        if (_cityLastClockFrame != frame)
+        {
+            _cityLastClockFrame = frame;
+            _cityClock += delta;
+        }
         var viewport = ViewportSize();
         SyncFlatCityPinScale(viewport);
         var cameraTransform = _camera.GlobalTransform;
@@ -573,7 +605,6 @@ public sealed partial class GlobePresentation
                     Mathf.Abs(_camera.Size - _citySeenSize) > 0.0001f;
         var language = Loc.Language;
         if (language != _citySeenLanguage) { _citySeenLanguage = language; InvalidateCities(); }
-        // Fixed-size pins on the globe, pixel-scaled ones on the flat map: a switch redoes them all.
         var projectionSwitched = _citySeenFlat != _flatMap;
         if (projectionSwitched)
         {
@@ -582,24 +613,31 @@ public sealed partial class GlobePresentation
             _fadingPinSnapshots.Clear();
             _cityHasActiveFades = false;
         }
-        if (!_cityDirty && _citySeenFlat == _flatMap && _citySeenViewport == viewport)
+        var angleRad = 0f;
+        var zoomRatio = 0f;
+        var effectiveAngleRad = 0f;
+        if (_citySeenFlat == _flatMap && _citySeenViewport == viewport)
         {
             if (_flatMap && _citySeenSize > 0f)
             {
                 var shift = new Vector2(cameraTransform.Origin.X - _citySeenCamera.Origin.X,
                     cameraTransform.Origin.Y - _citySeenCamera.Origin.Y).Length();
-                var ratio = _camera.Size / _citySeenSize;
-                if (shift < _camera.Size * 0.02f && ratio > 0.98f && ratio < 1.02f) return;
+                zoomRatio = MathF.Abs(_camera.Size - _citySeenSize) / _citySeenSize;
+                if (!_cityDirty && shift < _camera.Size * 0.02f && zoomRatio <= 0.02f) return;
+                if (shift >= _camera.Size * 0.15f) effectiveAngleRad = MapOverlaySyncRules.RapidSweepAngleRad;
             }
             else if (!_flatMap && _citySeenDistance > 0f)
             {
                 var prevDir = _citySeenCamera.Origin.Normalized();
                 var curDir = cameraTransform.Origin.Normalized();
-                var angleRad = prevDir.LengthSquared() > 0.5f && curDir.LengthSquared() > 0.5f
+                var originAngle = prevDir.LengthSquared() > 0.5f && curDir.LengthSquared() > 0.5f
                     ? MathF.Acos(Math.Clamp(prevDir.Dot(curDir), -1f, 1f))
                     : float.MaxValue;
-                var zoomRatio = MathF.Abs(_distance - _citySeenDistance) / _citySeenDistance;
-                if (angleRad <= 0.02f && zoomRatio <= 0.02f)
+                var lookDot = Math.Clamp(_citySeenCamera.Basis.Z.Dot(cameraTransform.Basis.Z), -1f, 1f);
+                angleRad = MathF.Max(originAngle, MathF.Acos(lookDot));
+                effectiveAngleRad = angleRad;
+                zoomRatio = MathF.Abs(_distance - _citySeenDistance) / _citySeenDistance;
+                if (!_cityDirty && angleRad <= 0.02f && zoomRatio <= 0.02f)
                 {
                     if (moved) HideCitiesPastHorizon();
                     return;
@@ -607,19 +645,17 @@ public sealed partial class GlobePresentation
             }
         }
         var cityTier = CurrentShaderQualityTier();
-        var movedInterval = cityTier >= 1.5f ? 0.25 : cityTier >= 0.5f ? 0.20 : 0.10;
+        var movedInterval = cityTier >= 1.5f ? 0.080 : cityTier >= 0.5f ? 0.055 : 0.033;
         var idleInterval = cityTier >= 1.5f ? 1.00 : cityTier >= 0.5f ? 0.80 : 0.50;
-        if (!_cityDirty && (!moved || _cityClock < movedInterval))
+        if (!moved)
         {
-            // Between placements the pins turn with the view, and a name carried over the limb
-            // would go on being drawn - in front of space or of the globe, since names are drawn
-            // above everything. Nothing but the horizon is redone here; that is cheap.
-            if (moved && !_flatMap) HideCitiesPastHorizon();
+            if (!_cityDirty || _cityClock < idleInterval) return;
+        }
+        else if (!MapOverlaySyncRules.ShouldRelayoutCitiesNow(effectiveAngleRad, zoomRatio, _cityClock, movedInterval, _cityDirty || projectionSwitched))
+        {
+            if (!_flatMap) HideCitiesPastHorizon();
             return;
         }
-        // When only _cityDirty was triggered (e.g. an army marched) and the camera hasn't moved,
-        // throttle city placement to at most twice a second instead of 10 times a second!
-        if (!moved && _cityClock < idleInterval) return;
         _cityClock = 0;
         _cityDirty = false;
         _citySeenCamera = cameraTransform;
@@ -627,12 +663,15 @@ public sealed partial class GlobePresentation
         _citySeenDistance = _distance;
         _citySeenViewport = viewport;
         _citySeenFlat = _flatMap;
-        using (SimProfiler.Measure("f:cities")) PlaceCities(viewport, !projectionSwitched);
+        SyncCityDestroyedCache(snap, allowCampaignRead);
+        var allowFadeSnapshots = !projectionSwitched && angleRad <= 0.06f && (_flatMap || !GlobeViewInMotion);
+        using (SimProfiler.Measure("f:cities")) PlaceCities(viewport, allowFadeSnapshots, snap, allowCampaignRead);
         _lastCityFlatZoom = _flatZoom;
         _lastCityFlatViewportY = viewport.Y;
         _lastCityFlatPixelScale = _camera.Size / Math.Max(1, viewport.Y);
         _lastCityCamPos = _camera.GlobalPosition;
         _lastCityDistance = _distance;
+        _lastCityCamBasis = cameraTransform.Basis;
     }
 
     private struct CityPassContext
@@ -661,6 +700,7 @@ public sealed partial class GlobePresentation
         public Color OutlineColor;
         public int Used;
         public bool StarsNamed;
+        public bool AllowFadeSnapshots;
     }
 
     private float CityTextWidth(Font font, int fontSize, string name)
@@ -681,8 +721,10 @@ public sealed partial class GlobePresentation
         return width;
     }
 
-    private void PlaceCities(Vector2I viewport, bool allowFadeSnapshots)
+    private void PlaceCities(Vector2I viewport, bool allowFadeSnapshots, CampaignRenderSnapshot snap = null, bool allowCampaignRead = true)
     {
+        if (!IsInsideTree() || !IsInstanceValid(_cityRoot) || !_cityRoot.IsInsideTree() ||
+            !IsInstanceValid(_camera) || !_camera.IsInsideTree()) return;
         EnsureCityPositionCache();
         var limit = Math.Clamp((int)InterfaceSkin.Metric(_flatMap ? "map.flat_city_label_limit" : "map.city_label_limit", _flatMap ? 90f : 140f), 0, 400);
         var tier = CurrentShaderQualityTier();
@@ -731,7 +773,7 @@ public sealed partial class GlobePresentation
         // Where every capital's star stands on the screen, before any name is set: a name is
         // never written across a star that is not its own. Santo Domingo, with no room to its
         // right, was set to its left straight over Port-au-Prince's.
-        RefreshStarNames();
+        RefreshStarNames(allowCampaignRead);
         _starMarks.Clear();
         _starScreens.Clear();
         _visibleStarCitiesScratch.Clear();
@@ -744,7 +786,7 @@ public sealed partial class GlobePresentation
                     _visibleCapitalNormalsScratch.Add(markerNormal);
         }
         var limb = SurfaceMarkerRadius / Math.Max(SurfaceMarkerRadius, _camera.GlobalPosition.Length());
-        foreach (var (marker, normal, city, _) in _starNames)
+        foreach (var (marker, normal, city, _, _) in _starNames)
         {
             var markerVisible = capRootVisible && IsInstanceValid(marker) && marker.Visible;
             if (markerVisible && city >= 0) _visibleStarCitiesScratch.Add(city);
@@ -780,7 +822,7 @@ public sealed partial class GlobePresentation
             CityColor = _mapLookAtlas ? AtlasColourCached("map.look_label_fill", ref _cachedCountryFillHex, ref _cachedCountryFillColor) : Ui.Colour("globe.city"),
             OutlineColor = _mapLookAtlas ? AtlasColourCached("map.look_label_outline", ref _cachedCountryOutlineHex, ref _cachedCountryOutlineColor) : Ui.Colour("globe.city_outline"),
             Used = 0,
-            StarsNamed = false
+            StarsNamed = false, AllowFadeSnapshots = allowFadeSnapshots
         };
 
         _fadingPinSnapshots.Clear();
@@ -854,13 +896,13 @@ public sealed partial class GlobePresentation
         else
         {
             PlaceOrderedAtlasCities(ref pass, candidates, limit, leading,
-                qMinLat, qMaxLat, qMinLon, qMaxLon, qFullLon, qLatB, qLonB, qSpanB);
+                qMinLat, qMaxLat, qMinLon, qMaxLon, qFullLon, qLatB, qLonB, qSpanB, snap, allowCampaignRead);
         }
 
         for (var index = pass.Used; index < _cityPins.Count; index++)
         {
             var unused = _cityPins[index];
-            unused.TargetKey = -1;
+            unused.TargetKey = -1; unused.AnchorNormal = Vector3.Zero;
             SetPinNodeVisible(unused, false);
         }
         _cityLayoutVersion++;
@@ -869,13 +911,11 @@ public sealed partial class GlobePresentation
     private void PlaceOrderedAtlasCities(
         ref CityPassContext pass, int candidates, int limit, int leading,
         float qMinLat, float qMaxLat, float qMinLon, float qMaxLon, bool qFullLon,
-        int qLatB, int qLonB, int qSpanB)
+        int qLatB, int qLonB, int qSpanB, CampaignRenderSnapshot snap, bool allowCampaignRead)
     {
-        var playerMapIndex = _campaign?.Player?.MapIndex ?? -1;
+        ResolveCitySnapshotContext(snap, allowCampaignRead, out var playerMapIndex, out var provinceOwners, out var mapRev);
         var selectedMapIndex = _highlightedNation;
-        var map = _campaign?.ProvinceMap;
-        var mapRev = _campaign?.MapRevision ?? -1;
-        var provinceOwners = map?.ProvinceToNation;
+        var map = _provinceTopology ?? (allowCampaignRead ? _campaign?.ProvinceMap : null);
         bool IsPriorityCity(int cityIndex)
         {
             if (provinceOwners is null || cityIndex < 0 || cityIndex >= _cityAnchors.Length) return false;
@@ -1040,13 +1080,22 @@ public sealed partial class GlobePresentation
 
     private void EmitFadeOutPins(ref CityPassContext pass)
     {
-        if (!_mapLookAtlas || _fadingPinSnapshots.Count == 0) return;
+        if (!_mapLookAtlas || !pass.AllowFadeSnapshots || _fadingPinSnapshots.Count == 0 || (!_flatMap && GlobeViewInMotion)) return;
         var emitted = 0;
         for (var i = 0; i < _fadingPinSnapshots.Count && emitted < 16; i++)
         {
             var snap = _fadingPinSnapshots[i];
             if (_placedPinKeys.Contains(snap.SlotKey)) continue;
-            if (!_flatMap && (pass.RootBasis * snap.AnchorNormal).Dot(pass.CameraNormal) < pass.Horizon) continue;
+            if (_flatMap)
+            {
+                if (MathF.Abs(snap.Position.X - _flatX) > FlatMapWidth * 0.5f ||
+                    _camera.IsPositionBehind(pass.RootTransform * snap.Position))
+                    continue;
+            }
+            else if (MapOverlaySyncRules.IsBeyondGlobeHorizon(
+                         ToNum(pass.RootBasis * snap.AnchorNormal), ToNum(pass.CameraNormal), pass.Horizon) ||
+                     _camera.IsPositionBehind(pass.RootTransform * snap.Position))
+                continue;
             var pin = CityPinAt(pass.Used++);
             emitted++;
             pin.City = snap.SlotKey;
@@ -1136,12 +1185,14 @@ public sealed partial class GlobePresentation
         pass.StarsNamed = true;
         for (var star = 0; star < _starNames.Count && pass.Used < pass.Limit; star++)
         {
-            var (marker, normal, city, nation) = _starNames[star];
+            var (marker, normal, city, _, capName) = _starNames[star];
             if (_starScreens[star] is not { } screen) continue;
             // The city the star stands on letters it, when that city is drawn at this zoom.
             if (city >= 0 && (city < pass.Candidates || IsCapitalNow(city))) continue;
-            if (!_flatMap && (pass.RootBasis * normal).Dot(pass.CameraNormal) < pass.Horizon) continue;
-            var name = StarCapitalName(nation);
+            if (!_flatMap && MapOverlaySyncRules.IsBeyondGlobeHorizon(
+                    ToNum(pass.RootBasis * normal), ToNum(pass.CameraNormal), pass.Horizon))
+                continue;
+            var name = capName;
             if (string.IsNullOrWhiteSpace(name) && city >= 0) name = _cities[city].DisplayName;
             if (string.IsNullOrWhiteSpace(name)) continue;
 
@@ -1181,8 +1232,10 @@ public sealed partial class GlobePresentation
         room = default;
         var city = _cities[index];
         var anchorAt = _cityAnchors[index];
-        if (TerrainGone(anchorAt.Latitude, anchorAt.Longitude)) return false;
-        if (!_flatMap && (pass.RootBasis * _cityNormals[index]).Dot(pass.CameraNormal) < pass.Horizon) return false;
+        if (CityPinDestroyed(anchorAt.Latitude, anchorAt.Longitude)) return false;
+        if (!_flatMap && MapOverlaySyncRules.IsBeyondGlobeHorizon(
+                ToNum(pass.RootBasis * _cityNormals[index]), ToNum(pass.CameraNormal), pass.Horizon))
+            return false;
         var local = CachedCityPosition(index);
         var world = pass.RootTransform * local;
         if (_camera.IsPositionBehind(world)) return false;
@@ -1218,7 +1271,7 @@ public sealed partial class GlobePresentation
         ApplyPinNodeTransform(pin, local, rot, scale);
         SetPinNamePixelSize(pin, pixel * tierPixels / pass.FontSize);
         var fill = capital ? pass.CapitalColor : pass.CityColor;
-        var fadeTail = _mapLookAtlas && side == 0 && _pinAlphas.TryGetValue(index, out var prevAlpha) && prevAlpha > 0.03f;
+        var fadeTail = _mapLookAtlas && pass.AllowFadeSnapshots && side == 0 && _pinAlphas.TryGetValue(index, out var prevAlpha) && prevAlpha > 0.03f;
         SetPinNameVisible(pin, side != 0 || fadeTail);
         if (side != 0) SetLabelSide(pin, side, labelMark, pass.FontSize, tierPixels);
         var dotPixelSize = pixel * dot / 32f;
@@ -1254,8 +1307,8 @@ public sealed partial class GlobePresentation
 
     private void ReserveSurfaceCard(Sprite3D plate, Vector2I viewport)
     {
-        if (!IsInstanceValid(plate) || !plate.Visible || plate.Texture is null || !plate.IsVisibleInTree() ||
-            _camera.IsPositionBehind(plate.GlobalPosition)) return;
+        if (!IsInstanceValid(plate) || !plate.IsInsideTree() || !plate.Visible || plate.Texture is null || !plate.IsVisibleInTree() ||
+            !IsInstanceValid(_camera) || !_camera.IsInsideTree() || _camera.IsPositionBehind(plate.GlobalPosition)) return;
         var bounds = plate.GetAabb();
         var min = new Vector2(float.MaxValue, float.MaxValue);
         var max = new Vector2(float.MinValue, float.MinValue);
@@ -1276,7 +1329,8 @@ public sealed partial class GlobePresentation
     private Vector2? StarOnScreen(Node3D marker, Vector3 normal, Vector2I viewport, Basis rootBasis,
         Vector3 cameraNormal, float limb)
     {
-        if (!IsInstanceValid(marker) || !marker.IsVisibleInTree()) return null;
+        if (!IsInstanceValid(marker) || !marker.IsInsideTree() || !marker.IsVisibleInTree() ||
+            !IsInstanceValid(_camera) || !_camera.IsInsideTree()) return null;
         if (!_flatMap && (rootBasis * normal).Dot(cameraNormal) < limb) return null;
         var world = marker.GlobalPosition;
         if (_camera.IsPositionBehind(world)) return null;
@@ -1523,47 +1577,11 @@ public sealed partial class GlobePresentation
     /// </summary>
     private float CityHorizon()
     {
-        return GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f;
+        var dist = IsInstanceValid(_camera) && _camera.IsInsideTree() ? _camera.GlobalPosition.Length() : _distance;
+        return MapOverlaySyncRules.GlobeHorizonCosine(GlobeRadius, dist, 0.014f);
     }
 
-    private void HideCitiesPastHorizon()
-    {
-        var camPos = _camera.GlobalPosition;
-        const float posTolSq = 0.0004f;
-        if (float.IsFinite(_lastCityCamPos.X) &&
-            camPos.DistanceSquaredTo(_lastCityCamPos) < posTolSq &&
-            MathF.Abs(_distance - _lastCityDistance) < 0.005f)
-            return;
-        _lastCityCamPos = camPos;
-        _lastCityDistance = _distance;
-
-        var cameraNormal = camPos.Normalized();
-        var rootBasis = _cityRoot.GlobalTransform.Basis;
-        var horizon = CityHorizon();
-        foreach (var pin in _cityPins)
-        {
-            if (!pin.CachedNodeVisible) continue;
-            Vector3 normal;
-            if (pin.City >= 0 && pin.City < _cityNormals.Length) normal = _cityNormals[pin.City];
-            else if (pin.City <= -10000) normal = pin.AnchorNormal;
-            else if (pin.Star is not null && -2 - pin.City < _starNames.Count && IsInstanceValid(pin.Star) &&
-                     pin.Star.IsVisibleInTree()) normal = _starNames[-2 - pin.City].Normal;
-            else
-            {
-                pin.Alpha = 0f;
-                pin.TargetAlpha = 0f;
-                SetPinNodeVisible(pin, false);
-                continue;
-            }
-            if ((rootBasis * normal).Dot(cameraNormal) < horizon)
-            {
-                pin.Alpha = 0f;
-                pin.TargetAlpha = 0f;
-                if (pin.TargetKey != -1) _pinAlphas.Remove(pin.TargetKey);
-                SetPinNodeVisible(pin, false);
-            }
-        }
-    }
+    private void HideCitiesPastHorizon() => CullCitiesPastHorizonImmediate();
 
     /// <summary>
     /// Which cities are capitals today, and which city each capital's star stands on: the city
@@ -1572,58 +1590,28 @@ public sealed partial class GlobePresentation
     /// the stars have been rebuilt - a new campaign, a capital moved or a country born - and then
     /// once over the list.
     /// </summary>
-    private void RefreshStarNames()
+    private void RefreshStarNames(bool allowCampaignRead = true)
     {
         var first = _capitalMarkers.Count > 0 && IsInstanceValid(_capitalMarkers[0].Node)
             ? _capitalMarkers[0].Node.GetInstanceId() : 0ul;
-        var key = (_capitalRevision, _capitalMarkers.Count, first);
+        var key = (_capitalRevision, _capitalMarkers.Count, first, Loc.Revision, Loc.Language ?? "");
         if (key == _starNamesBuilt) return;
-        _starNamesBuilt = key;
-        _starNames.Clear();
-        const float beside = 0.99995f;
-        if (_cityIsCapital.Length != _cities.Count) _cityIsCapital = new bool[_cities.Count];
-        else Array.Clear(_cityIsCapital);
-        _cityCapitals.Clear();
-        var capitals = new List<(Nation Nation, Vector3 Normal, int City)>();
-        if (_campaign is not null)
-            foreach (var nation in _campaign.Nations)
-            {
-                if (!CapitalCore.HasSeat(_campaign, nation)) continue;
-                var seat = CapitalCore.SeatCity(_campaign, nation) is { } city ? CityCatalog.IndexOf(city.Id) : -1;
-                if (seat >= _cities.Count) seat = -1;
-                if (seat >= 0 && !_cityIsCapital[seat])
-                {
-                    _cityIsCapital[seat] = true;
-                    _cityCapitals.Add(seat);
-                }
-                capitals.Add((nation, SurfacePoint(CapitalCore.EffectiveLatitude(_campaign, nation),
-                    CapitalCore.EffectiveLongitude(_campaign, nation), 1f).Normalized(), seat));
-            }
-        _cityCapitals.Sort();
-        foreach (var (marker, normal) in _capitalMarkers)
+        if (!allowCampaignRead && _campaign is not null)
         {
-            if (!IsInstanceValid(marker)) continue;
-            // Whose star: the one country whose capital is at that point. Not by the node's name,
-            // which the rebuild cannot keep - the old stars are still there, only queued to go.
-            Nation owner = null;
-            var standsOn = -1;
-            var ownerCloseness = 0.9999f;
-            foreach (var (nation, capitalNormal, seat) in capitals)
+            if (!_campaign.TryEnterRead(0, false)) return;
+            try
             {
-                var closeness = capitalNormal.Dot(normal);
-                if (closeness > ownerCloseness) { ownerCloseness = closeness; owner = nation; standsOn = seat; }
+                _starNamesBuilt = key;
+                RebuildStarNamesCore();
             }
-            if (standsOn < 0)
+            finally
             {
-                var nearestCloseness = beside;
-                for (var index = 0; index < _cityNormals.Length; index++)
-                {
-                    var closeness = _cityNormals[index].Dot(normal);
-                    if (closeness > nearestCloseness) { nearestCloseness = closeness; standsOn = index; }
-                }
+                _campaign.ExitRead();
             }
-            _starNames.Add((marker, normal, standsOn, owner));
+            return;
         }
+        _starNamesBuilt = key;
+        RebuildStarNamesCore();
     }
 
     /// <summary>Whether a city is some country's seat of government today.</summary>
@@ -1667,11 +1655,13 @@ public sealed partial class GlobePresentation
         _lastCityFlatZoom = -1f;
         _lastCityFlatPixelScale = -1f;
         _lastCityCamPos = new Vector3(float.NaN, float.NaN, float.NaN);
+        _lastCityCamBasis = Basis.Identity;
         _cityHasActiveFades = true;
         foreach (var pin in _cityPins)
         {
             pin.City = -1;
             pin.TargetKey = -1;
+            pin.AnchorNormal = Vector3.Zero;
             pin.CachedNamePixelSize = -1f;
             pin.CachedDotPixelSize = -1f;
             pin.CachedFixedSize = null;

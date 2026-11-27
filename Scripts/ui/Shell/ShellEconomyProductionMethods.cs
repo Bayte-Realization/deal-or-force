@@ -153,6 +153,7 @@ internal static class ShellEconomyProductionMethods
                 var capturedMethodId = method.Id;
                 btn.Pressed += () =>
                 {
+                    if (ObserverUiRules.IsObserving(ctx.World, ctx.IsObserverMode?.Invoke() ?? false)) return;
                     if (ctx.World?.Player is not { } player) return;
                     ctx.PlayCue?.Invoke("ui_select");
                     ctx.World.Commands.Enqueue(new SetProductionMethodCommand

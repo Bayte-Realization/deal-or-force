@@ -64,14 +64,14 @@ public sealed partial class GlobePresentation
     public bool CloudsShown
     {
         get => _cloudsShown;
-        set { if (_cloudsShown == value) return; _cloudsShown = value; UpdateWeather(0); }
+        set { if (_cloudsShown == value) return; _cloudsShown = value; WakeGlobeRendering(); UpdateWeather(0); }
     }
 
     /// <summary>The decorative mist only; province vision and the hidden-ground tint are unchanged.</summary>
     public bool MistShown
     {
         get => _mistShown;
-        set { if (_mistShown == value) return; _mistShown = value; UpdateWeather(0); }
+        set { if (_mistShown == value) return; _mistShown = value; WakeGlobeRendering(); UpdateWeather(0); }
     }
 
     /// <summary>How high the camera is, in the units the weather fades by (MapAmbience listens to it too).</summary>

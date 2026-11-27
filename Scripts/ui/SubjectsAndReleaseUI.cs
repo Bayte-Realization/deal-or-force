@@ -406,14 +406,18 @@ public partial class DealOrForceGame
 
     private void AddSubjectActionButton(Container parent, Nation subject, SubjectInteractionKind kind, string label, string help, bool primary = false)
     {
-        var can = SubjectInteractions.CanInteract(_campaign, _campaign.Player, subject, kind, out var refusal);
+        if (_campaign?.Player is not { } player) return;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        var refusal = "";
+        var can = !observing && SubjectInteractions.CanInteract(_campaign, player, subject, kind, out refusal);
         var btn = ActionButton(Tr(label), () =>
         {
-            if (SubjectInteractions.CanInteract(_campaign, _campaign.Player, subject, kind, out var why))
+            if (ObserverUiRules.IsObserving(_campaign, _observerMode)) return;
+            if (SubjectInteractions.CanInteract(_campaign, player, subject, kind, out var why))
             {
                 _campaign.Commands.Enqueue(new SubjectInteractionCommand
                 {
-                    IssuerId = _campaign.Player.Id,
+                    IssuerId = player.Id,
                     SubjectId = subject.Id,
                     Kind = kind
                 });
@@ -426,7 +430,8 @@ public partial class DealOrForceGame
             else _subjectsModalFeedback.Text = why;
         }, 0, 32, primary);
         btn.Disabled = !can;
-        btn.TooltipText = Ui.Tip(Tr(help) + (can || refusal.Length == 0 ? "" : "\n\n" + refusal));
+        btn.TooltipText = Ui.Tip(Tr(help) + (observing ? "\n\n" + Tr("Observer mode cannot issue diplomatic orders.")
+            : (can || refusal.Length == 0 ? "" : "\n\n" + refusal)));
         parent.AddChild(btn);
     }
 

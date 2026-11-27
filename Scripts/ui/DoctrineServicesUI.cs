@@ -66,7 +66,7 @@ public partial class DealOrForceGame
             _doctrineService = current.Slot;
             _doctrineLastServiceBook[current.Slot] = current.Id;
         }
-        var player = _campaign?.Player;
+        var player = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
         if (player is not null) TacticalDoctrines.EnsureShelves(player);
 
         foreach (var (slot, button) in _doctrineServiceButtons)

@@ -89,6 +89,7 @@ internal sealed class ShellContext
     public Func<Nation> GetObservedNation { get; set; }
     public Func<bool> IsWatchingWorld { get; set; }
     public Func<string> GetObserverTransientNote { get; set; }
+    public Action<int> OpenObservedMovement { get; set; }
     public Action OpenGrandProjects { get; set; }
     public Func<bool> IsTouchMode { get; set; }
     public Func<TouchTapMode> GetTouchTapMode { get; set; }

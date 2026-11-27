@@ -467,9 +467,10 @@ public partial class DealOrForceGame
     private void DoctrineButton(Button button, Nation n, DoctrineBranch branch, DoctrineNode node,
         bool rush, bool known, bool learning, string label)
     {
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         button.Text = known ? Loc.Get("in force") : learning ? Loc.Get("learning") : label;
-        var refusal = TacticalDoctrines.Refusal(_campaign, n, branch.Id, node.Id, rush);
-        button.Disabled = known || learning || refusal.Length > 0;
+        var refusal = observing ? Tr("obs.ui.action.readonly") : TacticalDoctrines.Refusal(_campaign, n, branch.Id, node.Id, rush);
+        button.Disabled = observing || known || learning || refusal.Length > 0;
         button.TooltipText = Ui.Tip(refusal.Length > 0 ? refusal
             : rush
                 ? Loc.Get("War is when the next article is worth more than the money of waiting.")
@@ -598,7 +599,7 @@ public partial class DealOrForceGame
     {
         // Cards survive country/campaign switches. Resolve the issuer when clicked,
         // not from the country for which this retained control was first constructed.
-        if (_campaign?.Player is not { } player) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player) return;
         ApplyDoctrineCommand(new StudyDoctrineCommand
             { IssuerId = player.Id, BranchId = branchId, NodeId = nodeId, Rush = rush });
     }
@@ -621,7 +622,8 @@ public partial class DealOrForceGame
         if (_armyDoctrineRows is not null && _armyDoctrineRows.IsInsideTree())
         {
             ClearPolicyRows(_armyDoctrineRows);
-            ShowDoctrineWorkspace(_campaign.Player, _armyDoctrineRows);
+            if (ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true) is { } inspected)
+                ShowDoctrineWorkspace(inspected, _armyDoctrineRows);
         }
         else
         {
@@ -632,7 +634,9 @@ public partial class DealOrForceGame
 
     private void OpenArmyDoctrinePage()
     {
-        if (_armyCommandTabs is null || _armyDoctrineTab < 0 || _campaign?.Player is null) return;
+        if (_armyCommandTabs is null || _armyDoctrineTab < 0 ||
+            ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true) is null)
+            return;
         _sidePanel.Visible = false;
         _openScreen = "Military";
         _armyCommandTabs.CurrentTab = _armyDoctrineTab;

@@ -210,7 +210,8 @@ public partial class DealOrForceGame
         if (_selectedFleet is null || !IsInstanceValid(_fleetTitle)) return;
         var fleet = _selectedFleet;
         var owner = _campaign.NationById(fleet.NationId);
-        var mine = owner is not null && _campaign.Player is not null && owner.Id == _campaign.Player.Id;
+        var mine = !ObserverUiRules.IsObserving(_campaign, _observerMode) &&
+                   owner is not null && _campaign.Player is not null && owner.Id == _campaign.Player.Id;
 
         _fleetTitle.Text = _selectedFleets.Count > 1
             ? Simulation.Loc.Format("{0} and {1:N0} more", Loc.Get(fleet.Name), _selectedFleets.Count - 1)
@@ -310,7 +311,7 @@ public partial class DealOrForceGame
 
     private void OnAdmiraltyToggled(bool delegated)
     {
-        if (_campaign?.Player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetDelegationCommand
         {
             IssuerId = _campaign.Player.Id,
@@ -329,7 +330,7 @@ public partial class DealOrForceGame
 
     private void OrderHullsWithMode(int count, MobilisationMode mode)
     {
-        if (_selectedFleet is null || _campaign.Player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _selectedFleet is null || _campaign.Player is null) return;
         var order = new OrderHullsCommand
         {
             IssuerId = _campaign.Player.Id,
@@ -349,7 +350,7 @@ public partial class DealOrForceGame
 
     private void IssueFleetMission(FleetMission mission)
     {
-        if (_selectedFleet is null || _campaign.Player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _selectedFleet is null || _campaign.Player is null) return;
         if (_selectedFleet.NationId != _campaign.Player.Id) return;
         foreach (var fleet in OwnSelectedFleets())
             _campaign.Commands.Enqueue(new SetFleetOrderCommand
@@ -368,7 +369,7 @@ public partial class DealOrForceGame
     /// <summary>Send the selected fleet to a point on the globe, keeping its mission.</summary>
     private bool SendSelectedFleet(float latitude, float longitude, int provinceId = -1)
     {
-        if (_selectedFleet is null || _campaign.Player is null) return false;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _selectedFleet is null || _campaign.Player is null) return false;
         if (_selectedFleet.NationId != _campaign.Player.Id) return false;
         // A loaded fleet right-clicked at a shore is an invasion; an empty one is a move.
         // The player does not have to say which, because there is nothing else either could

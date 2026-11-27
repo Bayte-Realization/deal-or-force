@@ -1,0 +1,9 @@
+# Rust build outputs & native binary artifacts (built into tmp_logs/rust_target by Tools/build-native-kernels.ps1)
+/target/
+*.dll
+*.so
+*.dylib
+*.pdb
+*.lib
+*.exp
+*.d

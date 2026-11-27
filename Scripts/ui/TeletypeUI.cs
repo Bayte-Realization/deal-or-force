@@ -46,17 +46,18 @@ public partial class DealOrForceGame
     /// </summary>
     private void RefreshTeletype()
     {
-        if (_campaign?.Player is null)
+        if (_campaign is null)
         {
             HideTeletype();
             return;
         }
 
         // What was on the presses when this seat took over is the old edition, not news.
-        if (_teletypeWorld != _campaign || _teletypeSeat != _campaign.Player.Id)
+        var seatId = _campaign.Player?.Id ?? -1;
+        if (_teletypeWorld != _campaign || _teletypeSeat != seatId)
         {
             _teletypeWorld = _campaign;
-            _teletypeSeat = _campaign.Player.Id;
+            _teletypeSeat = seatId;
             _teletypeSeen = _campaign.Chronicle.Entries.Count > 0
                 ? _campaign.Chronicle.Entries[^1].Sequence
                 : 0;
@@ -153,6 +154,7 @@ public partial class DealOrForceGame
     /// </summary>
     private string TeletypeMarketLine()
     {
+        if (_campaign?.Player is null) return "";
         var movers = _campaign.Player.Market.Values
             .Select(quote => (Quote: quote,
                 Move: quote.Price / MathF.Max(0.01f, CommodityCatalog.Get(quote.Commodity).BasePrice) - 1f))

@@ -184,6 +184,8 @@ public sealed partial class GlobePresentation
         // wearing the first one's borders.
         _controlRevision = -1;
         _frontRevision = -1;
+        _frontWarRevision = -1;
+        _lastCombatSyncHours = -1;
         RefreshProvinceControllers();
         SourceEarthData.ReleaseDecodedGrids();
     }
@@ -221,7 +223,8 @@ public sealed partial class GlobePresentation
         var buildFrontier = FrontierFieldWanted();
         var reducedMap = ReducedMap;
         var lowMemoryMobile = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
-        var compactRivers = lowMemoryMobile || Array.IndexOf(OS.GetCmdlineUserArgs(), "--verify-compact-rivers") >= 0;
+        var halfResGpuMaps = ShouldUseHalfResMobileMapTextures(Platform.PlatformProfile.Current);
+        var compactRivers = lowMemoryMobile || halfResGpuMaps || Array.IndexOf(OS.GetCmdlineUserArgs(), "--verify-compact-rivers") >= 0;
         var cacheDir = Path.Combine(GamePaths.Root, "cache");
         var shippedCache = Simulation.GameDataLoader.FindDataFile("cache", Simulation.MapBootCache.FileName);
         var shippedHydrologyCache = Simulation.GameDataLoader.FindDataFile("cache", Simulation.MapBootCache.HydrologyFileName);
@@ -234,7 +237,8 @@ public sealed partial class GlobePresentation
             {
                 _mapWorkerStage = stage;
                 _mapWorkerProgress = progress;
-            }));
+            },
+            halfResGpuMaps));
     }
 
     public override void _Ready()
@@ -308,6 +312,7 @@ public sealed partial class GlobePresentation
             RenderScale = MobileEffectiveRenderScale(initialRenderShare);
         else if (MathF.Abs(initialRenderShare - 1f) > 0.001f)
             RenderScale = initialRenderShare;
+        ResetTurboSimObservationState();
 
         var world = new Node3D { Name = "GlobeWorld" };
         _viewport.AddChild(world);
@@ -420,6 +425,7 @@ public sealed partial class GlobePresentation
         if (isTouchPrimary)
             effectiveScale = MobileEffectiveRenderScale(effectiveScale);
         RenderScale = effectiveScale;
+        WakeGlobeRendering();
         SetMapSmoothing(_quality.MapSmoothing, remember: false);
         var sunShadows = _quality.SunShadows && !isTouchPrimary;
         if (IsInstanceValid(_daySun))
@@ -455,10 +461,24 @@ public sealed partial class GlobePresentation
 
     public void SetViewportRenderingPaused(bool paused)
     {
+        if (_externalViewportPaused == paused && IsInstanceValid(_viewport))
+        {
+            if (paused && _viewport.RenderTargetUpdateMode != SubViewport.UpdateMode.Disabled)
+                _viewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled;
+            return;
+        }
+        _externalViewportPaused = paused;
         if (!IsInstanceValid(_viewport)) return;
-        var target = paused ? SubViewport.UpdateMode.Disabled : SubViewport.UpdateMode.Always;
-        if (_viewport.RenderTargetUpdateMode != target)
-            _viewport.RenderTargetUpdateMode = target;
+        if (paused)
+        {
+            _turboThrottlingActive = false;
+            _turboRedrawAccumSeconds = 0.0;
+            _turboWakePending = false;
+            if (_viewport.RenderTargetUpdateMode != SubViewport.UpdateMode.Disabled)
+                _viewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled;
+            return;
+        }
+        WakeGlobeRendering();
     }
 
 
@@ -557,14 +577,274 @@ public sealed partial class GlobePresentation
             : Viewport.Msaa.Msaa2X;
     }
 
-    private float MobileEffectiveRenderScale(float requestedScale)
+    internal const float MobileRenderScaleFloor = 0.50f;
+    internal const float MobileMediumRenderScaleCeiling = 0.95f;
+    internal const float MobileMediumDefaultHighDpiScale = 0.85f;
+    internal const float MobileLowRenderScaleCeiling = 0.82f;
+    internal const int HighDpiPhoneWidthThresholdPx = 2000;
+    internal const double TurboSimRedrawIntervalSeconds = 1.0 / 18.0;
+
+    internal enum TurboViewportDirective
     {
-        // Cap MobileLow at 0.82f and MobileMedium at 0.95f to cut mobile fillrate pressure
-        // while allowing FrameRateGovernor and player render_scale settings to step down toward 0.65f.
-        var tier = CurrentShaderQualityTier();
-        var ceiling = tier >= 1.5f ? 0.82f : (tier >= 0.5f ? 0.95f : 1.0f);
-        return Math.Clamp(requestedScale, 0.65f, ceiling);
+        Disabled = 0,
+        Once = 1,
+        Always = 2
     }
+
+    internal readonly record struct TurboSimInputs(
+        bool ExternallyPaused,
+        bool PlatformEligible,
+        bool MapApplied,
+        bool FastSimActive,
+        bool TouchActive,
+        bool CameraInMotion,
+        bool CameraTransformDirty,
+        bool BoxSelecting);
+
+    private bool _externalViewportPaused;
+    private bool _turboThrottlingActive;
+    private bool _turboWakePending;
+    private double _turboRedrawAccumSeconds;
+    private ulong _turboLastWakeProcessFrame = ulong.MaxValue;
+    private ulong _turboLastCadenceProcessFrame = ulong.MaxValue;
+
+    private bool _turboObsPaused;
+    private int _turboObsSpeed;
+    private bool _turboObsFlatMap;
+    private float _turboObsYaw;
+    private float _turboObsPitch;
+    private float _turboObsDistance;
+    private float _turboObsTargetDistance;
+    private float _turboObsFlatX;
+    private float _turboObsFlatY;
+    private float _turboObsFlatZoom;
+    private float _turboObsTargetFlatX;
+    private float _turboObsTargetFlatY;
+    private float _turboObsTargetFlatZoom;
+    private int _turboObsHighlightedNation = -1;
+    private int _turboObsSelectedRegionLive = int.MinValue;
+    private int _turboObsSelectedRegionRev = int.MinValue;
+
+    internal double _turboThrottledSkyDelta;
+    internal double _turboThrottledWeatherDelta;
+    internal double _turboThrottledTradeDelta;
+    internal double _turboThrottledPulseDelta;
+    internal float _turboThrottledArmyDelta;
+
+    internal static float ComputeMobileEffectiveRenderScale(
+        float requestedScale, float shaderQualityTier, int screenWidthPx, bool hasCustomRenderScale)
+    {
+        // Cap MobileLow at 0.82f and MobileMedium at 0.95f (defaulting high-DPI phones >= 2000px wide
+        // to 0.85f (~1741x803 on 2048px-capped MobileMedium phones to keep borders crisp without double-scaling),
+        // while allowing FrameRateGovernor and player render_scale settings to step down to 0.50f.
+        var ceiling = shaderQualityTier >= 1.5f
+            ? MobileLowRenderScaleCeiling
+            : (shaderQualityTier >= 0.5f
+                ? (!hasCustomRenderScale && screenWidthPx >= HighDpiPhoneWidthThresholdPx
+                    ? MobileMediumDefaultHighDpiScale
+                    : MobileMediumRenderScaleCeiling)
+                : 1.0f);
+        return Math.Clamp(requestedScale, MobileRenderScaleFloor, ceiling);
+    }
+
+    internal static bool ShouldUseHalfResMobileMapTextures(Platform.PlatformProfile profile) =>
+        profile?.GraphicsQualityTier is Platform.PlatformGraphicsTier.MobileMedium
+            or Platform.PlatformGraphicsTier.MobileLow;
+
+    internal static bool ShouldThrottleTurboSim(in TurboSimInputs input) =>
+        !input.ExternallyPaused &&
+        input.PlatformEligible &&
+        input.MapApplied &&
+        input.FastSimActive &&
+        !input.TouchActive &&
+        !input.CameraInMotion &&
+        !input.CameraTransformDirty &&
+        !input.BoxSelecting;
+
+    internal static TurboViewportDirective StepTurboSimCadence(
+        ref double accumSeconds, ref bool wakeImmediate, double deltaSeconds,
+        in TurboSimInputs input, double intervalSeconds = TurboSimRedrawIntervalSeconds)
+    {
+        if (input.ExternallyPaused)
+        {
+            accumSeconds = 0.0;
+            wakeImmediate = false;
+            return TurboViewportDirective.Disabled;
+        }
+        if (!ShouldThrottleTurboSim(in input))
+        {
+            accumSeconds = 0.0;
+            wakeImmediate = false;
+            return TurboViewportDirective.Always;
+        }
+        if (wakeImmediate)
+        {
+            wakeImmediate = false;
+            accumSeconds = 0.0;
+            return TurboViewportDirective.Once;
+        }
+        var dt = double.IsFinite(deltaSeconds) && deltaSeconds > 0.0 ? deltaSeconds : 0.0;
+        var interval = double.IsFinite(intervalSeconds) && intervalSeconds > 0.0
+            ? intervalSeconds
+            : TurboSimRedrawIntervalSeconds;
+        accumSeconds += dt;
+        if (accumSeconds < interval)
+            return TurboViewportDirective.Disabled;
+        accumSeconds %= interval;
+        return TurboViewportDirective.Once;
+    }
+
+    private static bool IsTurboSimEligiblePlatform()
+    {
+        var active = Platform.PlatformProfile.Current;
+        if (active?.IsTouchPrimary == true || active?.IsMobile == true ||
+            OS.HasFeature("mobile") || OS.GetName() is "Android" or "iOS")
+            return true;
+        return Simulation.PlayerSettings.Bool("turbo_sim_globe", false) ||
+               string.Equals(System.Environment.GetEnvironmentVariable("DOF_TURBO_SIM"), "1", StringComparison.Ordinal);
+    }
+
+    private void ResetTurboSimObservationState()
+    {
+        _turboObsYaw = _yaw;
+        _turboObsPitch = _pitch;
+        _turboObsDistance = _distance;
+        _turboObsTargetDistance = _targetDistance;
+        _turboObsFlatMap = _flatMap;
+        _turboObsFlatX = _flatX;
+        _turboObsFlatY = _flatY;
+        _turboObsFlatZoom = _flatZoom;
+        _turboObsTargetFlatX = _targetFlatX;
+        _turboObsTargetFlatY = _targetFlatY;
+        _turboObsTargetFlatZoom = _targetFlatZoom;
+        _turboObsHighlightedNation = _highlightedNation;
+        _turboObsSelectedRegionLive = _lastSelectedRegionLive;
+        _turboObsSelectedRegionRev = _lastSelectedRegionRevision;
+    }
+
+    /// <summary>
+    /// Wakes the 3D globe SubViewport immediately on Frame 0 so touch events, zoom/pan,
+    /// pause/speed changes, focus shifts, and selection changes draw without Turbo Sim lag.
+    /// </summary>
+    public void WakeGlobeRendering()
+    {
+        _turboRedrawAccumSeconds = 0.0;
+        if (!IsInstanceValid(_viewport) || _externalViewportPaused) return;
+        var frame = Engine.GetProcessFrames();
+        _turboLastWakeProcessFrame = frame;
+        if (_turboLastCadenceProcessFrame != frame)
+            _turboWakePending = true;
+        if (_viewport.RenderTargetUpdateMode == SubViewport.UpdateMode.Disabled)
+            _viewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Once;
+    }
+
+    internal void ObservePreCameraTurboWakeState(bool isPaused, int speed)
+    {
+        var changed =
+            _cameraTransformDirty ||
+            isPaused != _turboObsPaused ||
+            speed != _turboObsSpeed ||
+            _flatMap != _turboObsFlatMap ||
+            MathF.Abs(_yaw - _turboObsYaw) > 1e-5f ||
+            MathF.Abs(_pitch - _turboObsPitch) > 1e-5f ||
+            MathF.Abs(_distance - _turboObsDistance) > 1e-4f ||
+            MathF.Abs(_targetDistance - _turboObsTargetDistance) > 1e-4f ||
+            MathF.Abs(_flatX - _turboObsFlatX) > 1e-5f ||
+            MathF.Abs(_flatY - _turboObsFlatY) > 1e-5f ||
+            MathF.Abs(_flatZoom - _turboObsFlatZoom) > 1e-4f ||
+            MathF.Abs(_targetFlatX - _turboObsTargetFlatX) > 1e-5f ||
+            MathF.Abs(_targetFlatY - _turboObsTargetFlatY) > 1e-5f ||
+            MathF.Abs(_targetFlatZoom - _turboObsTargetFlatZoom) > 1e-4f ||
+            _highlightedNation != _turboObsHighlightedNation ||
+            _lastSelectedRegionLive != _turboObsSelectedRegionLive ||
+            _lastSelectedRegionRevision != _turboObsSelectedRegionRev;
+
+        if (changed) WakeGlobeRendering();
+
+        _turboObsPaused = isPaused;
+        _turboObsSpeed = speed;
+    }
+
+    internal bool UpdateViewportRenderCadence(double delta, bool fastSimActive)
+    {
+        _turboObsFlatMap = _flatMap;
+        _turboObsYaw = _yaw;
+        _turboObsPitch = _pitch;
+        _turboObsDistance = _distance;
+        _turboObsTargetDistance = _targetDistance;
+        _turboObsFlatX = _flatX;
+        _turboObsFlatY = _flatY;
+        _turboObsFlatZoom = _flatZoom;
+        _turboObsTargetFlatX = _targetFlatX;
+        _turboObsTargetFlatY = _targetFlatY;
+        _turboObsTargetFlatZoom = _targetFlatZoom;
+        _turboObsHighlightedNation = _highlightedNation;
+        _turboObsSelectedRegionLive = _lastSelectedRegionLive;
+        _turboObsSelectedRegionRev = _lastSelectedRegionRevision;
+
+        if (!IsInstanceValid(_viewport)) return false;
+
+        var frame = Engine.GetProcessFrames();
+        _turboLastCadenceProcessFrame = frame;
+
+        if (_cameraTransformDirty) _turboWakePending = true;
+
+        var inputs = new TurboSimInputs(
+            ExternallyPaused: _externalViewportPaused,
+            PlatformEligible: IsTurboSimEligiblePlatform(),
+            MapApplied: _mapApplied,
+            FastSimActive: fastSimActive,
+            TouchActive: _touchAdapter?.IsTouchActive == true || _gesture.IsPressed,
+            CameraInMotion: GlobeViewInMotion || FlatViewInMotion || _isActivelyPanning,
+            CameraTransformDirty: _cameraTransformDirty,
+            BoxSelecting: _boxSelecting);
+
+        var directive = StepTurboSimCadence(ref _turboRedrawAccumSeconds, ref _turboWakePending, delta, in inputs);
+        _turboThrottlingActive = ShouldThrottleTurboSim(in inputs);
+        if (_turboThrottlingActive && _turboLastWakeProcessFrame == frame && directive == TurboViewportDirective.Disabled)
+            directive = TurboViewportDirective.Once;
+
+        var targetMode = directive switch
+        {
+            TurboViewportDirective.Always => SubViewport.UpdateMode.Always,
+            TurboViewportDirective.Once => SubViewport.UpdateMode.Once,
+            _ => SubViewport.UpdateMode.Disabled
+        };
+
+        if (_viewport.RenderTargetUpdateMode != targetMode)
+            _viewport.RenderTargetUpdateMode = targetMode;
+
+        return directive != TurboViewportDirective.Disabled;
+    }
+
+    private int CurrentMobileScreenWidthPx()
+    {
+        var maxW = 0;
+        try
+        {
+            if (IsInstanceValid(GetWindow()))
+                maxW = Math.Max(maxW, Math.Max(GetWindow().Size.X, GetWindow().Size.Y));
+        }
+        catch { }
+        try
+        {
+            var screen = DisplayServer.ScreenGetSize();
+            maxW = Math.Max(maxW, Math.Max(screen.X, screen.Y));
+        }
+        catch { }
+        if (maxW <= 0 && IsInstanceValid(_viewport))
+            maxW = Math.Max(_viewport.Size.X, _viewport.Size.Y);
+        if (maxW <= 0)
+            maxW = (int)MathF.Round(Math.Max(Size.X, Size.Y));
+        return maxW;
+    }
+
+    private float MobileEffectiveRenderScale(float requestedScale) =>
+        ComputeMobileEffectiveRenderScale(
+            requestedScale,
+            CurrentShaderQualityTier(),
+            CurrentMobileScreenWidthPx(),
+            Simulation.PlayerSettings.Has("render_scale"));
 
     public float RenderScale
     {

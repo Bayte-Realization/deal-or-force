@@ -20,6 +20,18 @@ internal static class HotkeyMap
         var raw = NormalizeKeyName(resolvedPhysicalLetter);
         if (raw.Length == 0) return false;
 
+        if (key.ShiftPressed)
+        {
+            if (!key.CtrlPressed && !key.MetaPressed && !key.AltPressed && !textFocused &&
+                !(ctx.IsFreeCameraMode?.Invoke() ?? false) && !(ctx.IsAnyModalOpen?.Invoke() ?? false) &&
+                resolvedPhysicalLetter == Key.O)
+            {
+                ctx.OpenObservedMovement?.Invoke(-1);
+                return true;
+            }
+            return false;
+        }
+
         if (!ShellHotkeys.TryResolve(
                 raw,
                 key.CtrlPressed || key.MetaPressed,

@@ -319,7 +319,7 @@ internal sealed class GrandProjectsView
     {
         if ((_ctx.IsObserverMode?.Invoke() ?? false) && _ctx.GetSelectedNation?.Invoke() is { } selected)
             return selected;
-        return world.Player ?? _ctx.GetSelectedNation?.Invoke();
+        return ObserverUiRules.ResolveInspectedNation(world, _ctx.GetSelectedNation?.Invoke(), preferLanded: true);
     }
 
     private int _lastSigHash;

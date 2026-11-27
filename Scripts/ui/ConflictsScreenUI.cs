@@ -159,7 +159,7 @@ public partial class DealOrForceGame
     /// <summary>Redraw on a new day, or now when something was changed from the page.</summary>
     private void RefreshConflictsScreen(bool force = false)
     {
-        if (_conflictsLayer is not { Visible: true } || _campaign?.Player is null) return;
+        if (_conflictsLayer is not { Visible: true } || _campaign is null) return;
         if (!force && InterfaceInteractionGuard.Busy(_conflictsLayer)) return;
         if (!force && _conflictsBuiltDay == _campaign.ElapsedDays) return;
         _conflictsBuiltDay = _campaign.ElapsedDays;
@@ -372,13 +372,14 @@ public partial class DealOrForceGame
             _conflictsPage.AddChild(Title(Simulation.Loc.Format("{0} days ago · {1}", _campaign.ElapsedDays - line.Day, line.Text), 13, Ui.Colour("text.body")));
 
         var player = _campaign.Player;
-        if (player.Id == a.Id || player.Id == b.Id)
+        if (player is not null && (player.Id == a.Id || player.Id == b.Id))
         {
             var other = player.Id == a.Id ? b : a;
             _conflictsPage.AddChild(Caption("WHAT YOU CAN DO"));
-            var block = Escalation.TalksBlock(_campaign, player, other);
+            var block = _observerMode ? Tr("Observer mode cannot issue diplomatic orders.") : Escalation.TalksBlock(_campaign, player, other);
             var talks = ActionButton(Simulation.Loc.Format("Hold talks ({0})", Fmt.Money(Escalation.TalksPrice(_campaign, player))), () =>
             {
+                if (_observerMode) return;
                 Submit(new HoldTalksCommand { IssuerId = player.Id, TargetId = other.Id });
                 _conflictsFeedback.Text = Tr("Talks opened. They take tension off every week while they last.");
                 RefreshConflictsScreen(force: true);
@@ -389,7 +390,7 @@ public partial class DealOrForceGame
             var diplomacy = ActionButton("Open diplomacy", () => { _selectedNation = other; CloseConflictsScreen(); OpenDiplomacyScreen(); }, 0, 34);
             _conflictsPage.AddChild(diplomacy);
         }
-        else AddThirdPartyCrisisActions(a, b);
+        else if (player is not null && !_observerMode) AddThirdPartyCrisisActions(a, b);
     }
 
     private void ShowWarPage(StrategicWar war)
@@ -443,7 +444,7 @@ public partial class DealOrForceGame
         }
 
         var player = _campaign.Player;
-        if (war.Involves(player.Id)) return;
+        if (player is null || _observerMode || war.Involves(player.Id)) return;
         _conflictsPage.AddChild(Caption("BACK A SIDE"));
         _conflictsPage.AddChild(Title("Arm one side without going to war: a weekly cost, part of it money for them and the rest weapons for their divisions. The side you arm against will not forget it.",
             13, Ui.Colour("text.body_soft")));

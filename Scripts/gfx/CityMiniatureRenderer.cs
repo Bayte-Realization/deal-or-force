@@ -191,7 +191,13 @@ public sealed class CityMiniatureRenderer
     private void PollOrStartWorker(in FrameInput input)
     {
         var map = input.Campaign.ProvinceMap;
-        var rev = input.Campaign.MapRevision;
+        // Key city/port/capital miniature batches on structural changes (destruction, capital moves,
+        // yearly urban growth) rather than MapRevision, which mutates dozens of times per second
+        // during wars without moving cities.
+        var rev = HashCode.Combine(
+            input.Campaign.DestroyedProvinces.Count,
+            input.Campaign.CapitalRevision,
+            input.Campaign.ElapsedDays / 365);
         var reliefKey = input.ReliefKey;
         if (_buildTask is { IsCompleted: true })
         {

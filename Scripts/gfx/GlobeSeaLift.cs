@@ -73,7 +73,9 @@ public sealed partial class GlobePresentation
             any = true;
             fingerprint = HashCode.Combine(fingerprint, lift.Id, lift.Stage, lift.ArmyIds.Count);
             if (FindFleetById(_campaign.Fleets, lift.FleetId) is { } fleet)
-                fingerprint = HashCode.Combine(fingerprint, Mathf.RoundToInt(fleet.Latitude * 4f), Mathf.RoundToInt(fleet.Longitude * 4f));
+                fingerprint = HashCode.Combine(fingerprint,
+                    Mathf.RoundToInt(GlobeLineSanity.FiniteOr(fleet.Latitude, 0f) * 4f),
+                    Mathf.RoundToInt(GlobeLineSanity.FiniteOr(fleet.Longitude, 0f) * 4f));
             foreach (var id in lift.ArmyIds)
                 if (FindArmyById(_campaign.Armies, id) is { } army)
                     fingerprint = HashCode.Combine(fingerprint, army.ProvinceId, army.Route.Count, army.EmbarkedFleetId);
@@ -106,7 +108,8 @@ public sealed partial class GlobePresentation
 
     private bool DrawSeaLift(SeaLiftOrder lift)
     {
-        var map = _campaign.ProvinceMap;
+        var map = _campaign?.ProvinceMap;
+        if (map is null) return false;
         var fleet = FindFleetById(_campaign.Fleets, lift.FleetId);
         var drew = false;
 
@@ -114,48 +117,58 @@ public sealed partial class GlobePresentation
         if (lift.Stage == 0)
             foreach (var id in lift.ArmyIds)
             {
-                if (FindArmyById(_campaign.Armies, id) is not { } army || army.ProvinceId <= 0 ||
+                if (FindArmyById(_campaign.Armies, id) is not { } army ||
+                    !GlobeLineSanity.TryValidateProvinceId(army.ProvinceId, map.ProvinceCount, map.ProvinceCenterCell) ||
                     army.ProvinceId == lift.PortProvinceId) continue;
+                if (!TryResolveArmyGeoPoint(army, SurfaceLineRadius, out var startPt)) continue;
                 _routePoints.Clear();
-                _routePoints.Add(PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius));
+                _routePoints.Add(startPt);
                 var road = army.PlannedRoute.Count > 0 ? army.PlannedRoute : army.Route;
                 foreach (var province in road)
-                {
-                    var centre = map.CenterOf(province);
-                    AddRoutePoint(PresentationPoint(centre.Latitude, centre.Longitude, SurfaceLineRadius));
-                }
-                if (road.Count == 0 || road[^1] != lift.PortProvinceId)
-                {
-                    var port = map.CenterOf(lift.PortProvinceId);
-                    AddRoutePoint(PresentationPoint(port.Latitude, port.Longitude, SurfaceLineRadius));
-                }
+                    if (TryPlanPoint(province, out var pt)) AddRoutePoint(pt);
+                if ((road.Count == 0 || road[^1] != lift.PortProvinceId) &&
+                    TryPlanPoint(lift.PortProvinceId, out var portPt))
+                    AddRoutePoint(portPt);
                 if (_routePoints.Count >= 2) drew |= DrawRibbon(_seaLiftBatch, 0, 0f);
             }
 
         // The passage: from the quay while they gather, from the fleet itself once it sails.
         float fromLatitude, fromLongitude;
-        if (lift.Stage >= 1 && fleet is not null) { fromLatitude = fleet.Latitude; fromLongitude = fleet.Longitude; }
-        else if (!SeaLanes.TryHarbourPoint(map, lift.PortProvinceId, out fromLatitude, out fromLongitude)) return drew;
+        if (lift.Stage >= 1 && fleet is not null && GlobeLineSanity.IsValidGeo(fleet.Latitude, fleet.Longitude))
+        {
+            fromLatitude = fleet.Latitude;
+            fromLongitude = fleet.Longitude;
+        }
+        else if (!SeaLanes.TryHarbourPoint(map, lift.PortProvinceId, out fromLatitude, out fromLongitude) ||
+                 !GlobeLineSanity.IsValidGeo(fromLatitude, fromLongitude))
+        {
+            return drew;
+        }
+
         if (SeaLanes.TryHarbourPoint(map, lift.LandingProvinceId, out var toLatitude, out var toLongitude) &&
-            SeaLanes.Plan(_campaign, lift.NationId, fromLatitude, fromLongitude, toLatitude, toLongitude, _seaLiftCourse, out _))
+            GlobeLineSanity.IsValidGeo(toLatitude, toLongitude) &&
+            SeaLanes.Plan(_campaign, lift.NationId, fromLatitude, fromLongitude, toLatitude, toLongitude, _seaLiftCourse, out _) &&
+            TryPresentationPoint(fromLatitude, fromLongitude, SurfaceLineRadius, out var passageStart))
         {
             _routePoints.Clear();
-            _routePoints.Add(PresentationPoint(fromLatitude, fromLongitude, SurfaceLineRadius));
+            _routePoints.Add(passageStart);
             for (var i = 0; i + 1 < _seaLiftCourse.Count; i += 2)
-                AddRoutePoint(PresentationPoint(_seaLiftCourse[i], _seaLiftCourse[i + 1], SurfaceLineRadius));
-            var beach = map.CenterOf(lift.LandingProvinceId);
-            AddRoutePoint(PresentationPoint(beach.Latitude, beach.Longitude, SurfaceLineRadius));
+            {
+                if (TryPresentationPoint(_seaLiftCourse[i], _seaLiftCourse[i + 1], SurfaceLineRadius, out var coursePt))
+                    AddRoutePoint(coursePt);
+            }
+            if (TryPlanPoint(lift.LandingProvinceId, out var beachPt)) AddRoutePoint(beachPt);
             if (_routePoints.Count >= 2) drew |= DrawRibbon(_seaLiftBatch, 1, 0f);
         }
 
         // And on from the beach to where they were sent.
-        if (lift.TargetProvinceId > 0 && lift.TargetProvinceId != lift.LandingProvinceId)
+        if (lift.TargetProvinceId != lift.LandingProvinceId &&
+            TryPlanPoint(lift.LandingProvinceId, out var landingPt) &&
+            TryPlanPoint(lift.TargetProvinceId, out var targetPt))
         {
-            var beach = map.CenterOf(lift.LandingProvinceId);
-            var target = map.CenterOf(lift.TargetProvinceId);
             _routePoints.Clear();
-            _routePoints.Add(PresentationPoint(beach.Latitude, beach.Longitude, SurfaceLineRadius));
-            AddRoutePoint(PresentationPoint(target.Latitude, target.Longitude, SurfaceLineRadius));
+            _routePoints.Add(landingPt);
+            AddRoutePoint(targetPt);
             if (_routePoints.Count >= 2) drew |= DrawRibbon(_seaLiftBatch, 0, 0f);
         }
         return drew;

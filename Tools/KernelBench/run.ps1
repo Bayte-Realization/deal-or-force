@@ -11,7 +11,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Save,
     [int]$Samples = 41,
-    [int]$Warmup = 10
+    [int]$Warmup = 10,
+    [switch]$DofKernels
 )
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
@@ -21,6 +22,8 @@ if (Test-Path (Join-Path $localRust 'cargo\bin\cargo.exe')) {
     $env:RUSTUP_HOME = Join-Path $localRust 'rustup'
     $env:CARGO_HOME = Join-Path $localRust 'cargo'
     $env:PATH = (Join-Path $localRust 'cargo\bin') + ';' + $env:PATH
+} elseif (Test-Path (Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe')) {
+    $env:PATH = (Join-Path $env:USERPROFILE '.cargo\bin') + ';' + $env:PATH
 }
 $manifest = 'Tools\KernelBench\native\Cargo.toml'
 $env:RUSTFLAGS = ''
@@ -32,5 +35,13 @@ dotnet build Tools\KernelBench\KernelBench.csproj -c Release --artifacts-path tm
 $bin = 'tmp_logs\kb_build\bin\KernelBench\release'
 Copy-Item tmp_logs\kb_rust\v1\release\household_kernel.dll (Join-Path $bin 'household_kernel_v1.dll') -Force
 Copy-Item tmp_logs\kb_rust\v3\release\household_kernel.dll (Join-Path $bin 'household_kernel_v3.dll') -Force
-dotnet (Join-Path $bin 'KernelBench.dll') $Save --samples $Samples --warmup $Warmup
+$stagedDofDll = Join-Path $root 'tmp_logs\native_kernels\win-x64\dof_kernels.dll'
+if (Test-Path $stagedDofDll) {
+    Copy-Item $stagedDofDll (Join-Path $bin 'dof_kernels.dll') -Force
+}
+if ($DofKernels) {
+    dotnet (Join-Path $bin 'KernelBench.dll') $Save --samples $Samples --warmup $Warmup --dof-kernels
+} else {
+    dotnet (Join-Path $bin 'KernelBench.dll') $Save --samples $Samples --warmup $Warmup
+}
 exit $LASTEXITCODE

@@ -45,6 +45,7 @@ internal sealed class ShellEconomyWorkspaceView
 
     private Label _debtSummaryLabel;
     private Button _repayAllBtn;
+    private Button _zeroBtn;
     private readonly Button[] _repayQuarterBtns = new Button[4];
     private Label _repayAmountField;
     private Label _repayPreviewLabel;
@@ -380,6 +381,7 @@ internal sealed class ShellEconomyWorkspaceView
 
     private void StepRate(BudgetLine line, float delta)
     {
+        if (ObserverUiRules.IsObserving(_ctx.World, _ctx.IsObserverMode?.Invoke() ?? false)) return;
         if (_ctx.World?.Player is not { } n) return;
         OnRateChanged(line.Id, Math.Clamp(BudgetCore.RateOf(n, line) + delta, line.Minimum, line.Maximum));
     }
@@ -389,7 +391,8 @@ internal sealed class ShellEconomyWorkspaceView
 
     private void OnRateChanged(string lineId, float value)
     {
-        if (_syncingSliders || _ctx.World?.Player is not { } n) return;
+        if (_syncingSliders || ObserverUiRules.IsObserving(_ctx.World, _ctx.IsObserverMode?.Invoke() ?? false)) return;
+        if (_ctx.World?.Player is not { } n) return;
         _ctx.World.Commands.Enqueue(new SetPolicyRateCommand { IssuerId = n.Id, LineId = lineId, Value = value });
         _ctx.World.Commands.ApplyAll(_ctx.World);
         Refresh();
@@ -415,7 +418,8 @@ internal sealed class ShellEconomyWorkspaceView
         rightCol.AddChild(dblRule);
 
         _balanceMeter = new Control { CustomMinimumSize = new Vector2(0, 10) };
-        _balanceMeter.Draw += () => ShellEconomyCharts.DrawBalanceMeter(_balanceMeter, _ctx.World?.Player);
+        _balanceMeter.Draw += () => ShellEconomyCharts.DrawBalanceMeter(_balanceMeter,
+            ObserverUiRules.ResolveInspectedNation(_ctx.World, _ctx.GetSelectedNation?.Invoke(), preferLanded: true));
         rightCol.AddChild(_balanceMeter);
 
         _forecastNoteLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
@@ -496,14 +500,17 @@ internal sealed class ShellEconomyWorkspaceView
 
         var zeroBtn = CreateFooterButton(Loc.Get("shell.balance_to_zero"), primary: true, () =>
         {
+            if (ObserverUiRules.IsObserving(_ctx.World, _ctx.IsObserverMode?.Invoke() ?? false)) return;
             _ctx.ExecuteZeroBudget?.Invoke(Input.IsKeyPressed(Key.Shift));
             Refresh();
             _ctx.RefreshAll?.Invoke();
         });
+        _zeroBtn = zeroBtn;
         zeroBtn.GuiInput += ev =>
         {
             if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right })
             {
+                if (ObserverUiRules.IsObserving(_ctx.World, _ctx.IsObserverMode?.Invoke() ?? false)) return;
                 _ctx.PlayCue?.Invoke("ui_select");
                 _ctx.ExecuteZeroBudget?.Invoke(true);
                 Refresh();
@@ -589,8 +596,9 @@ internal sealed class ShellEconomyWorkspaceView
 
     public void Refresh()
     {
-        if (!IsVisible || _ctx.World?.Player is not { } n) return;
-        var world = _ctx.World;
+        var observer = ObserverUiRules.IsObserving(_ctx.World, _ctx.IsObserverMode?.Invoke() ?? false);
+        var n = ObserverUiRules.ResolveInspectedNation(_ctx.World, _ctx.GetSelectedNation?.Invoke(), preferLanded: true);
+        if (!IsVisible || _ctx.World is not { } world || n is null) return;
         var atWar = false;
         if (_ctx.HudSnapshot is { Version: > 0 } hs && hs.PlayerId == n.Id)
             atWar = hs.OpenPlayerWars.Length > 0;
@@ -616,7 +624,6 @@ internal sealed class ShellEconomyWorkspaceView
             else gpActive++;
         }
         var sheet = SovereignBalanceSheet.Read(world, n);
-        var observer = _ctx.IsObserverMode?.Invoke() ?? false;
         var lang = Loc.Language;
 
         var ecoHc = new HashCode();
@@ -643,11 +650,16 @@ internal sealed class ShellEconomyWorkspaceView
         var expTotal = 0f;
         _expSharesScratch.Clear();
 
+        var isObsNow = ObserverUiRules.IsObserving(_ctx.World, _ctx.IsObserverMode?.Invoke() ?? false);
+        if (_zeroBtn is not null) _zeroBtn.Disabled = isObsNow;
         foreach (var (id, node) in _lineNodes)
         {
             var rate = BudgetCore.RateOf(n, node.Line);
             if (rate > node.Slider.MaxValue) node.Slider.MaxValue = rate;
             node.Slider.SetValueNoSignal(rate);
+            node.Slider.Editable = !isObsNow;
+            foreach (var child in node.QuickBar.GetChildren())
+                if (child is Button qb) qb.Disabled = isObsNow;
 
             var amt = BudgetCore.Amount(n, node.Line, weeklyOut, atWar);
             node.RateLabel.Text = $"{(rate * 100f):0.#}%";
@@ -714,6 +726,7 @@ internal sealed class ShellEconomyWorkspaceView
 
     private void ExecuteQuickDebtRepay()
     {
+        if (ObserverUiRules.IsObserving(_ctx.World, _ctx.IsObserverMode?.Invoke() ?? false)) return;
         if (_ctx.World?.Player is not { } n) return;
         var sheet = SovereignBalanceSheet.Read(_ctx.World, n);
         var maxRepay = MathF.Max(0f, MathF.Min(sheet.Cash, sheet.Principal));

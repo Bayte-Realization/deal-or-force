@@ -96,8 +96,9 @@ internal static class ShellRegionKpiCardsView
         var (controller, occupiedProvs) = InspectRegionControl(world, owner, state);
         var arrangement = controller is not null ? LandArrangementSystem.Covering(world, state.MapIndex, controller.Id) : null;
         var leased = arrangement is { Kind: LandArrangementSystem.Lease };
+        var canSeeAllArmies = ObserverUiRules.IsObserving(world, ctx.IsObserverMode?.Invoke() ?? world.ObserverMode);
         var visDivs = world.Armies
-            .Where(a => a.StateMapIndex == state.MapIndex && CampaignIntel.PlayerCanSeeArmy(world, a))
+            .Where(a => a.StateMapIndex == state.MapIndex && (canSeeAllArmies || CampaignIntel.PlayerCanSeeArmy(world, a)))
             .Sum(a => a.Divisions);
         var ctrlTip = owner is not null ? Loc.Format("shell.ws.reg.owner_tip_fmt", owner.DisplayName) : "";
         if (controller is not null)
@@ -199,8 +200,9 @@ internal static class ShellRegionKpiCardsView
 
     public static void AddGarrisonList(ShellContext ctx, VBoxContainer bodyRows, Campaign world, ScenarioState state)
     {
+        var canSeeAllArmies = ObserverUiRules.IsObserving(world, ctx.IsObserverMode?.Invoke() ?? world.ObserverMode);
         var armies = world.Armies
-            .Where(a => a.StateMapIndex == state.MapIndex && CampaignIntel.PlayerCanSeeArmy(world, a))
+            .Where(a => a.StateMapIndex == state.MapIndex && (canSeeAllArmies || CampaignIntel.PlayerCanSeeArmy(world, a)))
             .OrderByDescending(a => a.Divisions)
             .Take(6)
             .ToArray();

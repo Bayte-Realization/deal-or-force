@@ -131,10 +131,12 @@ public partial class DealOrForceGame
         PlayStrategicCue(shortOf ? "event_alert" : "ui_select");
     }
 
+    private Nation InspectedEconomyWorkbenchNation() =>
+        ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+
     private void RefreshEconomyDesk()
     {
-        if (_economyDesk is null || _campaign?.Player is null) return;
-        var player = _campaign.Player;
+        if (_economyDesk is null || InspectedEconomyWorkbenchNation() is not { } player) return;
         var settled = _campaign.ElapsedDays >= _campaign.Defines.EconomyTickDays || player.Budget.HasEntries;
         SetDeskCaption(_deskWeek, Simulation.Loc.Format("Week {0}", settled ? SignedMoney(player.WeeklyBalance) : "—"));
         SetDeskCaption(_deskTreasury, Simulation.Loc.Format("Treasury {0}", Fmt.Money(player.Treasury)));
@@ -180,7 +182,7 @@ public partial class DealOrForceGame
 
     private void RefreshEconomyWorkbench()
     {
-        var player = _campaign.Player;
+        if (InspectedEconomyWorkbenchNation() is not { } player) return;
         RefreshEconomyDesk();
         _marketStatus.Text = Simulation.Loc.Format("Market access {0:P0} · trade {1}", player.MarketAccess, SignedMoney(player.WeeklyTradeBalance));
         _updatingConstructionRegion = true;
@@ -196,10 +198,9 @@ public partial class DealOrForceGame
 
     private void RefreshBuildingCatalog()
     {
-        if (_campaign?.Player is null || _buildingCatalogRows is null) return;
+        if (InspectedEconomyWorkbenchNation() is not { } player || _buildingCatalogRows is null) return;
         RefreshConstructionQueue();
         ClearRuntimeChildren(_buildingCatalogRows);
-        var player = _campaign.Player;
         var hasRegion = _selectedState is not null && _selectedState.NationMapIndex == player.MapIndex
             && !LakeRegions.IsWaterState(_selectedState);
         // What a building would do is a question about a place - what lies under it, whether it
@@ -267,10 +268,11 @@ public partial class DealOrForceGame
             Tip(gist, outlookTip);
             rows.AddChild(gist);
 
+            var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
             var remove = ActionButton("−", () => DemolishBuilding(captured), 36, 32);
             remove.Name = "Demolish" + kind;
-            remove.Disabled = standing <= 0;
-            Tip(remove, standing <= 0
+            remove.Disabled = observing || standing <= 0;
+            Tip(remove, observing ? Tr("obs.ui.action.readonly") : standing <= 0
                 ? Tr("Nothing of this kind is standing in the selected region.")
                 : Simulation.Loc.Format(
                     "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.",
@@ -278,21 +280,21 @@ public partial class DealOrForceGame
                     Fmt.Money(ConstructionCost.Of(_campaign, player, kind) * _campaign.Defines.DemolitionRefund)));
             line.AddChild(remove);
 
-            var refusal = ConstructionAdmission.Refusal(_campaign, player, hasRegion ? _selectedState : null, kind);
+            var refusal = observing ? Tr("obs.ui.action.readonly") : ConstructionAdmission.Refusal(_campaign, player, hasRegion ? _selectedState : null, kind);
             var place = ActionButton("On map", () => BeginConstructionPlacement(captured), 76, 32);
             place.Name = "PlaceBuilding" + BuildingCatalog.IdOf(kind);
-            place.Disabled = BuildingRules.Refusal(_campaign, player, kind).Length > 0 || !_campaign.FeatureEnabled("construction");
-            Tip(place, place.Disabled ? BuildingRules.Refusal(_campaign, player, kind)
+            place.Disabled = observing || BuildingRules.Refusal(_campaign, player, kind).Length > 0 || !_campaign.FeatureEnabled("construction");
+            Tip(place, observing ? Tr("obs.ui.action.readonly") : place.Disabled ? BuildingRules.Refusal(_campaign, player, kind)
                 : Tr("Choose this building, then click the map to place a regional construction project."));
             line.AddChild(place);
             var add = ActionButton("+", () => QueueBuilding(captured), 36, 32);
             add.Name = "Build" + kind;
             // Mirror admission, not the full project price: the economy pays it over time.
-            add.Disabled = refusal.Length > 0;
+            add.Disabled = observing || refusal.Length > 0;
             EverywhereButtonHelper.Attach(add, null, () => ExecuteEverywhereConstructionAction(captured, 1), () =>
             {
                 if (refusal.Length > 0) return refusal;
-                var plan = Simulation.Controls.QuickAmountRules.PlanEverywhereConstruction(_campaign, _campaign.Player, null, captured, 1);
+                var plan = Simulation.Controls.QuickAmountRules.PlanEverywhereConstruction(_campaign, player, null, captured, 1);
                 var baseTip = Simulation.Loc.Format("Queue in {0}", _selectedState.DisplayName) + "\n\n" + outlookTip;
                 if (plan.Items.Count == 0) return baseTip;
                 var every = Simulation.Loc.Format(
@@ -309,11 +311,11 @@ public partial class DealOrForceGame
                 for (var n = 0; n < 3; n++) QueueBuilding(captured);
             }, 40, 32);
             batch3.Name = "Build3_" + kind;
-            batch3.Disabled = refusal.Length > 0;
+            batch3.Disabled = observing || refusal.Length > 0;
             EverywhereButtonHelper.Attach(batch3, null, () => ExecuteEverywhereConstructionAction(captured, 3), () =>
             {
                 if (refusal.Length > 0) return refusal;
-                var plan = Simulation.Controls.QuickAmountRules.PlanEverywhereConstruction(_campaign, _campaign.Player, null, captured, 3);
+                var plan = Simulation.Controls.QuickAmountRules.PlanEverywhereConstruction(_campaign, player, null, captured, 3);
                 if (plan.Items.Count == 0) return plan.Refusal;
                 return Simulation.Loc.Format(
                     Simulation.Controls.ControlSchemeRules.RmbEverywhereEnabled
@@ -329,10 +331,11 @@ public partial class DealOrForceGame
 
     private void RefreshConstructionQueue()
     {
-        if (_constructionQueueRows is null) return;
+        if (_constructionQueueRows is null || InspectedEconomyWorkbenchNation() is not { } player) return;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         ClearRuntimeChildren(_constructionQueueRows);
         // Each site with what it did today and a queue-aware start and finish (ConstructionQueue).
-        var queue = ConstructionQueue.Schedule(_campaign, _campaign.Player);
+        var queue = ConstructionQueue.Schedule(_campaign, player);
         _constructionQueueRows.GetParent<Control>().Visible = queue.Count > 0;
         foreach (var estimate in queue)
         {
@@ -353,7 +356,8 @@ public partial class DealOrForceGame
             var id = project.Id;
             var cancel = ActionButton("Cancel", () => CancelConstruction(id), 92, 28);
             cancel.Name = "CancelConstruction" + id;
-            cancel.TooltipText = Ui.Tip(Simulation.Loc.Format(
+            cancel.Disabled = observing;
+            cancel.TooltipText = Ui.Tip(observing ? Tr("obs.ui.action.readonly") : Simulation.Loc.Format(
                 "Cancel only this project. Spent: {0} (not refunded). Remaining: {1} (will not be charged).",
                 Fmt.Money(project.Paid), Fmt.Money(Math.Max(0, project.Cost - project.Paid))));
             row.AddChild(cancel);
@@ -378,9 +382,9 @@ public partial class DealOrForceGame
 
     private void RefreshMarketTable()
     {
-        if (_campaign?.Player is null || _marketTableRows is null) return;
+        if (InspectedEconomyWorkbenchNation() is not { } player || _marketTableRows is null) return;
         ClearRuntimeChildren(_marketTableRows);
-        var quotes = _campaign.Player.Market.Values
+        var quotes = player.Market.Values
             .Where(quote => !_shortagesOnly.ButtonPressed || quote.IsShortage)
             .Where(quote => Tr(CommodityCatalog.Get(quote.Commodity).Name).Contains(_marketSearch.Text.Trim(), StringComparison.OrdinalIgnoreCase))
             .OrderBy(quote => quote.Satisfaction).ThenBy(quote => quote.Commodity).ToArray();

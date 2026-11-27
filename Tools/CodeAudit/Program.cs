@@ -71,7 +71,14 @@ static class AuditCompilation
                 if (n.Equals("DealOrForce.dll", StringComparison.OrdinalIgnoreCase) ||
                     n.StartsWith("GodotSharpEditor", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!seenDlls.Add(n)) continue;
-                try { refs.Add(MetadataReference.CreateFromFile(d)); } catch { }
+                try
+                {
+                    using var fs = File.OpenRead(d);
+                    using var pe = new System.Reflection.PortableExecutable.PEReader(fs);
+                    if (!pe.HasMetadata) continue;
+                    refs.Add(MetadataReference.CreateFromFile(d));
+                }
+                catch { }
             }
         }
         return refs;
@@ -121,7 +128,12 @@ static class CodeAuditRunner
         var comp = CSharpCompilation.Create("Audit", trees, refs, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, nullableContextOptions: NullableContextOptions.Enable));
         var diags = comp.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
         Log($"compile errors: {diags.Count}");
-        File.WriteAllLines(Path.Combine(outDir, "compile_errors.txt"), diags.GroupBy(d => d.Id).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} x{g.Count()}  e.g. {g.First().GetMessage()} @ {Rel(g.First().Location.SourceTree?.FilePath ?? "")}"));
+        File.WriteAllLines(Path.Combine(outDir, "compile_errors.txt"), diags.GroupBy(d => d.Id).OrderByDescending(g => g.Count()).Select(g =>
+        {
+            var fp = g.First().Location.SourceTree?.FilePath;
+            var where = string.IsNullOrEmpty(fp) ? "<assembly>" : Rel(fp);
+            return $"{g.Key} x{g.Count()}  e.g. {g.First().GetMessage()} @ {where}";
+        }));
 
         var fileRows = new List<string> { "file,lines,types,methods,maxMethodLines,maxCyclomatic" };
         var perFileMetrics = new SortedDictionary<string, FileBaseline>(StringComparer.Ordinal);

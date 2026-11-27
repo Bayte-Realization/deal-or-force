@@ -321,25 +321,115 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private Simulation.Campaign _campaign;
     private bool _mapApplied;
     public bool IsMapPresentationReady => _mapApplied;
+    public bool IsTurboSimThrottling => _turboThrottlingActive;
     private bool? _cachedFlatMapBorder;
     private float _cachedDetailMix = -1f;
     private float _cachedProvinceDetail = -1f;
     private int _cachedFogViewerParam = -999;
     private double _pendingWorldDelta;
     private double _sinceLastFencedSync;
+    private double _labelRefreshTimer;
     private string _cachedHoverTooltip = "";
     private bool _lastCounterScaleFlatMap;
     private float _lastCounterScaleDistance = -1f;
     private float _lastCounterScaleFlatZoom = -1f;
+    private ulong _fencedTimersAccumFrame = ulong.MaxValue;
+    private ulong _lastFencedSyncFrame = ulong.MaxValue;
+    private ulong _cameraAdvancedFrame = ulong.MaxValue;
+    private Simulation.Campaign _syncedCampaign;
+    private int _frontWarRevision = -1;
+    private long _lastCombatSyncHours = -1;
+
+    private void ResetRevisionTrackingIfCampaignChanged(Simulation.Campaign campaign)
+    {
+        if (ReferenceEquals(_syncedCampaign, campaign)) return;
+        _syncedCampaign = campaign;
+        _controlRevision = -1;
+        _frontRevision = -1;
+        _frontWarRevision = -1;
+        _lastCombatSyncHours = -1;
+    }
+
+    internal bool NeedsFencedSync(bool fastSim)
+    {
+        if (_campaign is null) return false;
+        ResetRevisionTrackingIfCampaignChanged(_campaign);
+        var isMobileOrTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
+                              Platform.PlatformProfile.Current?.IsMobile == true;
+        var snap = CurrentRenderSnapshot();
+        var mapBehind = snap is { Version: > 0 } &&
+                        (snap.MapRevision > _controlRevision || snap.MapRevision > _frontRevision || snap.WarRevision > _frontWarRevision);
+        var hoursBehind = snap is { Version: > 0 } && snap.ElapsedHours > _lastCombatSyncHours;
+        var syncCap = isMobileOrTouch
+            ? (fastSim ? 0.16 : 0.045)
+            : (fastSim ? 0.033 : 0.016);
+        return !_mapApplied || _controlRevision < 0 || _routeFingerprint == int.MinValue ||
+               mapBehind || (!isMobileOrTouch && hoursBehind) || _sinceLastFencedSync >= syncCap;
+    }
+
+    internal bool NeedsUrgentFencedSync(bool fastSim)
+    {
+        if (_campaign is null) return false;
+        ResetRevisionTrackingIfCampaignChanged(_campaign);
+        var isMobileOrTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
+                              Platform.PlatformProfile.Current?.IsMobile == true;
+        var snap = CurrentRenderSnapshot();
+        var mapBehind = snap is { Version: > 0 } &&
+                        (snap.MapRevision > _controlRevision || snap.MapRevision > _frontRevision || snap.WarRevision > _frontWarRevision);
+        var hoursBehind = snap is { Version: > 0 } && snap.ElapsedHours > _lastCombatSyncHours;
+        var syncCap = isMobileOrTouch
+            ? (fastSim ? 0.16 : 0.045)
+            : (fastSim ? 0.033 : 0.016);
+        return !_mapApplied || _controlRevision < 0 || _routeFingerprint == int.MinValue ||
+               (!isMobileOrTouch && (mapBehind || (hoursBehind && _sinceLastFencedSync >= 0.033))) ||
+               _sinceLastFencedSync >= syncCap;
+    }
+
+    internal void SyncWorldVisualsUnderReadLock(Simulation.Campaign fencedCampaign, double delta)
+    {
+        if (fencedCampaign is null || !ReferenceEquals(fencedCampaign, _campaign)) return;
+        var frame = Engine.GetProcessFrames();
+        if (_lastFencedSyncFrame == frame) return;
+        AdvanceCameraForFrame(delta);
+        AccumulateFencedSyncTimers(delta);
+        var snap = CurrentRenderSnapshot();
+        var fastSim = snap is { Version: > 0 }
+            ? snap is { IsPaused: false, Speed: >= 4 }
+            : fencedCampaign is { IsPaused: false, Speed: >= 4 };
+        SyncFencedWorldVisuals(snap, fencedCampaign, fastSim);
+        _lastFencedSyncFrame = frame;
+    }
+
+    private void AccumulateFencedSyncTimers(double delta)
+    {
+        var frame = Engine.GetProcessFrames();
+        if (_fencedTimersAccumFrame == frame) return;
+        _fencedTimersAccumFrame = frame;
+        _pendingWorldDelta += delta;
+        _sinceLastFencedSync += delta;
+        _visualClock += delta;
+        for (var p = 0; p < 4; p++) _visualPhaseAccum[p] += delta;
+        _militaryVisualAccumulator += delta;
+        _routeVisualAccumulator += delta;
+        _controllerUploadTimer += delta;
+    }
 
     private bool TryBeginFrameRead(bool fastSim, out Simulation.Campaign campaign)
     {
         campaign = _campaign;
         if (campaign is null) return true;
+        ResetRevisionTrackingIfCampaignChanged(campaign);
         var isMobileOrTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
                               Platform.PlatformProfile.Current?.IsMobile == true;
+        var snap = CurrentRenderSnapshot();
+        var mapBehind = snap is { Version: > 0 } &&
+                        (snap.MapRevision > _controlRevision || snap.MapRevision > _frontRevision || snap.WarRevision > _frontWarRevision);
+        var syncCap = isMobileOrTouch
+            ? (fastSim ? 0.16 : 0.045)
+            : (fastSim ? 0.033 : 0.016);
         var wantWindow = !_mapApplied || _controlRevision < 0 || _routeFingerprint == int.MinValue ||
-                         _sinceLastFencedSync >= (fastSim ? (isMobileOrTouch ? 0.16 : 0.11) : 0.045);
+                         (!isMobileOrTouch && mapBehind && _sinceLastFencedSync >= 0.033) ||
+                         _sinceLastFencedSync >= syncCap;
         return campaign.TryEnterRead(0, wantWindow);
     }
 
@@ -393,13 +483,28 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public event Action EmptyMapClicked;
     public event Action<GlobePick> AltProvinceSplitCommanded;
 
-    public override void _Process(double delta)
+    partial void SyncCameraLockedMapOverlays(double delta, Simulation.CampaignRenderSnapshot snap);
+
+    private bool _turboRenderThisFrame = true;
+
+    public override void _Input(InputEvent @event)
     {
+        if (@event is InputEventScreenTouch or InputEventScreenDrag or InputEventMagnifyGesture or InputEventPanGesture or InputEventMouseButton)
+            WakeGlobeRendering();
+    }
+
+    internal void AdvanceCameraForFrame(double delta)
+    {
+        if (!IsInsideTree()) return;
+        var frame = Engine.GetProcessFrames();
+        if (_cameraAdvancedFrame == frame) return;
+        _cameraAdvancedFrame = frame;
+
         var snap = CurrentRenderSnapshot();
-        var fastSim = snap is { Version: > 0 }
-            ? snap is { IsPaused: false, Speed: >= 4 }
-            : _campaign is { IsPaused: false, Speed: >= 4 };
-        UpdateSky(delta);
+        var isPaused = snap is { Version: > 0 } ? snap.IsPaused : (_campaign?.IsPaused ?? false);
+        var speed = snap is { Version: > 0 } ? snap.Speed : (_campaign?.Speed ?? 1);
+
+        ObservePreCameraTurboWakeState(isPaused, speed);
         UpdateCrossoverProjection();
         var inputBlocked = LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked;
         TickTouchCamera(delta, inputBlocked);
@@ -416,8 +521,27 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // will be rendered this frame, including wrapping at the date line.
         if (_flatMap) UpdateFlatWorldPositions();
         RetryMapSelection(inputBlocked);
+    }
 
+    public override void _Process(double delta)
+    {
+        var snap = CurrentRenderSnapshot();
+        var fastSim = snap is { Version: > 0 }
+            ? snap is { IsPaused: false, Speed: >= 4 }
+            : _campaign is { IsPaused: false, Speed: >= 4 };
+
+        AdvanceCameraForFrame(delta);
+
+        _turboRenderThisFrame = UpdateViewportRenderCadence(delta, fastSim);
+        _turboThrottledSkyDelta += delta;
+        if (_turboRenderThisFrame)
+        {
+            var skyDelta = Math.Min(_turboThrottledSkyDelta, 0.25);
+            _turboThrottledSkyDelta = 0.0;
+            UpdateSky(skyDelta);
+        }
         UpdateShaderZoomAndSurfaceState(delta);
+        SyncCameraLockedMapOverlays(delta, snap);
 
         // Smooth counter scaling directly on camera distance/zoom changes instead of stepping at 120-180ms visual phases.
         if (_mapApplied &&
@@ -433,25 +557,30 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
         // Counters glide every frame, on the visual cadence nothing else about them runs at.
         // This is the one thing in the frame loop that has to be continuous for the map to
-        // read as a place rather than a flipbook.
+        // read as a place rather than a flipbook. On 3D Turbo Sim throttled frames, accumulate
+        // army delta until the 3D SubViewport redraws; flat 2D counters draw at full 60 Hz.
         if (MilitaryMarkersEnabled && _mapApplied)
-            using (Simulation.SimProfiler.Measure("f:army motion")) UpdateArmyMarkerMotion((float)delta);
+        {
+            _turboThrottledArmyDelta += (float)delta;
+            if (_turboRenderThisFrame || _flatMap)
+            {
+                var armyDelta = MathF.Min(_turboThrottledArmyDelta, 0.25f);
+                _turboThrottledArmyDelta = 0f;
+                using (Simulation.SimProfiler.Measure("f:army motion")) UpdateArmyMarkerMotion(armyDelta);
+            }
+        }
 
         // Accumulate wall time outside the read fence so frames skipped while DoF-Sim is mid-tick
         // catch up cleanly on the very next step-boundary read window without stalling 60 FPS.
-        _pendingWorldDelta += delta;
-        _sinceLastFencedSync += delta;
-        _visualClock += delta;
-        for (var p = 0; p < 4; p++) _visualPhaseAccum[p] += delta;
-        _militaryVisualAccumulator += delta;
-        _routeVisualAccumulator += delta;
-        _controllerUploadTimer += delta;
+        AccumulateFencedSyncTimers(delta);
 
-        if (TryBeginFrameRead(fastSim, out var fencedCampaign))
+        var processFrame = Engine.GetProcessFrames();
+        if (_lastFencedSyncFrame != processFrame && TryBeginFrameRead(fastSim, out var fencedCampaign))
         {
             try
             {
                 SyncFencedWorldVisuals(snap, fencedCampaign, fastSim);
+                _lastFencedSyncFrame = processFrame;
             }
             finally
             {
@@ -548,11 +677,26 @@ public sealed partial class GlobePresentation : SubViewportContainer
             UpdateFogVisibility();
         var syncDelta = Math.Min(_pendingWorldDelta, 0.25);
         _pendingWorldDelta = 0.0;
-        UpdateWeather(syncDelta);
+        _labelRefreshTimer += syncDelta;
+        if (heavyGpuUploadedThisFrame)
+            WakeGlobeRendering();
         // A frozen world's ships stand where the ice caught them, and its news does not pulse.
         var worldDelta = Simulation.WorldCurses.Frozen(fencedCampaign) ? 0.0 : syncDelta;
-        UpdateTradeTraffic(worldDelta);
-        UpdateEventPulses(worldDelta);
+        _turboThrottledWeatherDelta += syncDelta;
+        _turboThrottledTradeDelta += worldDelta;
+        _turboThrottledPulseDelta += worldDelta;
+        if (_turboRenderThisFrame || heavyGpuUploadedThisFrame)
+        {
+            var weatherDt = Math.Min(_turboThrottledWeatherDelta, 0.25);
+            var tradeDt = Math.Min(_turboThrottledTradeDelta, 0.25);
+            var pulseDt = Math.Min(_turboThrottledPulseDelta, 0.25);
+            _turboThrottledWeatherDelta = 0.0;
+            _turboThrottledTradeDelta = 0.0;
+            _turboThrottledPulseDelta = 0.0;
+            UpdateWeather(weatherDt);
+            UpdateTradeTraffic(tradeDt);
+            UpdateEventPulses(pulseDt);
+        }
         UpdateNuclearBlasts();
         KeepAllowedProjection();
         // A capital that moved - by choice, or because its region was ceded - moves its marker.
@@ -579,20 +723,79 @@ public sealed partial class GlobePresentation : SubViewportContainer
             StepStaggeredVisualPhase(phase, visualStep);
         }
 
+        var controllerUploadedThisFrame = false;
+        var mapChanged = _mapApplied && fencedCampaign is not null && _controlRevision != fencedCampaign.MapRevision;
+        var warChanged = _mapApplied && fencedCampaign is not null && _frontWarRevision != fencedCampaign.WarRevision;
+        // Mobile/touch at uncapped Speed 5: keep 220ms owner/controller plate cadence; desktop
+        // updates immediately on MapRevision or WarRevision changes without deferring behind plate uploads.
+        var uploadInterval = isMobileOrTouch
+            ? (speed5Running && _peacePreview.Count == 0 && _lastMapModeDay > -100 ? 0.22 : 0.0)
+            : 0.0;
+        var gpuGateOk = !isMobileOrTouch || !heavyGpuUploadedThisFrame;
+        var uploadDue = _controlRevision < 0 || (gpuGateOk && (uploadInterval <= 0.0 || _controllerUploadTimer >= uploadInterval));
+        if (_mapApplied && fencedCampaign is not null && (mapChanged || warChanged) && uploadDue)
+        {
+            _controllerUploadTimer = 0;
+            if (mapChanged)
+            {
+                controllerUploadedThisFrame = true;
+                using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
+            }
+            if (_controlRevision == fencedCampaign.MapRevision || warChanged)
+            {
+                using (Simulation.SimProfiler.Measure("f:front preview")) BuildFrontPreviewCore();
+                _frontRevision = fencedCampaign.MapRevision;
+                _frontWarRevision = fencedCampaign.WarRevision;
+                _frontPreviewDeferred = false;
+            }
+        }
+        if (_frontPreviewDeferred && gpuGateOk && _mapApplied && fencedCampaign is not null)
+        {
+            _frontPreviewDeferred = false;
+            using (Simulation.SimProfiler.Measure("f:front preview")) BuildFrontPreviewCore();
+            _frontRevision = fencedCampaign.MapRevision;
+            _frontWarRevision = fencedCampaign.WarRevision;
+        }
+        if (IsInstanceValid(_frontPreview))
+        {
+            var showFront = MilitaryMarkersEnabled && _frontMesh.GetSurfaceCount() > 0;
+            if (_frontPreview.Visible != showFront) _frontPreview.Visible = showFront;
+        }
+
         var armySyncInterval = isPausedNow
             ? 0.0
-            : (isMobileOrTouch && speed5Running ? 0.25 : speed5Running ? 0.15 : fastSim ? 0.12 : 0.10);
-        if (MilitaryMarkersEnabled && _mapApplied && fencedCampaign is not null && _militaryVisualAccumulator >= armySyncInterval)
+            : (isMobileOrTouch
+                ? (speed5Running ? 0.25 : fastSim ? 0.12 : 0.10)
+                : 0.033);
+        var routeSelectionDirty = _routeFingerprint == int.MinValue;
+        var routeInterval = isPausedNow ? 0.0 : (isMobileOrTouch && speed5Running ? 0.30 : isTouchPrimary ? 0.22 : 0.033);
+        var desktopTopologyMoved = !isMobileOrTouch && (controllerUploadedThisFrame || warChanged);
+        var hoursChanged = fencedCampaign is not null && fencedCampaign.ElapsedHours != _lastCombatSyncHours;
+        var combatDueDesktop = !isMobileOrTouch &&
+            (desktopTopologyMoved || isPausedNow ||
+             (hoursChanged && _militaryVisualAccumulator >= armySyncInterval) ||
+             _militaryVisualAccumulator >= armySyncInterval);
+        var armyDue = isMobileOrTouch ? _militaryVisualAccumulator >= armySyncInterval : combatDueDesktop;
+        if (MilitaryMarkersEnabled && _mapApplied && fencedCampaign is not null && armyDue)
         {
             _militaryVisualAccumulator = 0;
+            _lastCombatSyncHours = fencedCampaign.ElapsedHours;
             using (Simulation.SimProfiler.Measure("f:army sync")) SyncArmyMarkers();
-            using (Simulation.SimProfiler.Measure("f:army look")) UpdateMilitaryPresentation();
+            using (Simulation.SimProfiler.Measure("f:army look")) UpdateMilitaryPresentation(forceNow: desktopTopologyMoved);
+            if (desktopTopologyMoved)
+            {
+                RefreshArmyMarkerVisibility();
+                InvalidateFlatCounterDensity();
+            }
+            WakeGlobeRendering();
+        }
+        else if (MilitaryMarkersEnabled && _mapApplied && fencedCampaign is not null && desktopTopologyMoved)
+        {
+            _lastCombatSyncHours = fencedCampaign.ElapsedHours;
         }
         if (IsInstanceValid(_battleRoot) && _battleRoot.Visible != MilitaryMarkersEnabled)
             _battleRoot.Visible = MilitaryMarkersEnabled;
-        var routeSelectionDirty = _routeFingerprint == int.MinValue;
-        var routeInterval = isPausedNow ? 0.0 : (isMobileOrTouch && speed5Running ? 0.30 : isTouchPrimary ? 0.22 : 0.125);
-        var routeDue = routeSelectionDirty || _routeVisualAccumulator >= routeInterval;
+        var routeDue = routeSelectionDirty || desktopTopologyMoved || _routeVisualAccumulator >= routeInterval;
         if (routeDue)
         {
             _routeVisualAccumulator = 0;
@@ -600,34 +803,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:sealift")) UpdateSeaLiftPreview();
             using (Simulation.SimProfiler.Measure("f:supply lines")) UpdateSupplyLines();
             using (Simulation.SimProfiler.Measure("f:strait crossings")) UpdateStraitCrossings();
+            WakeGlobeRendering();
         }
-        var controllerUploadedThisFrame = false;
-        // Mobile/touch at uncapped Speed 5: the owner/controller plate is the heaviest routine upload,
-        // so it repaints at most every 220 ms. Paused, speed < 5, map-mode invalidations and
-        // peace previews flush on the very next frame instead of waiting on the timer.
-        var uploadInterval = isMobileOrTouch
-            ? (speed5Running && _peacePreview.Count == 0 && _lastMapModeDay > -100 ? 0.22 : 0.0)
-            : (fastSim ? 0.14 : 0.0);
-        var uploadDue = _controlRevision < 0 || (!heavyGpuUploadedThisFrame && (uploadInterval <= 0.0 || _controllerUploadTimer >= uploadInterval));
-        if (_mapApplied && fencedCampaign is not null && _controlRevision != fencedCampaign.MapRevision && uploadDue)
-        {
-            _controllerUploadTimer = 0;
-            controllerUploadedThisFrame = true;
-            using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
-        }
+        var labelInterval = isMobileOrTouch ? 0.45 : 0.25;
         if (_mapApplied && fencedCampaign is not null &&
-            (_labelTask is not null || (!controllerUploadedThisFrame && !heavyGpuUploadedThisFrame && _labelRevision != fencedCampaign.MapRevision && uploadDue)))
+            (_labelTask is not null || (gpuGateOk && _labelRevision != fencedCampaign.MapRevision &&
+                                        (_labelRefreshTimer >= labelInterval || isPausedNow))))
+        {
+            if (_labelTask is null) _labelRefreshTimer = 0.0;
             using (Simulation.SimProfiler.Measure("f:label place")) RefreshCountryLabelPlacement();
-        if (_frontPreviewDeferred && !controllerUploadedThisFrame && !heavyGpuUploadedThisFrame && _mapApplied && fencedCampaign is not null)
-        {
-            _frontPreviewDeferred = false;
-            using (Simulation.SimProfiler.Measure("f:front preview")) BuildFrontPreview();
-            _frontRevision = fencedCampaign.MapRevision;
-        }
-        if (IsInstanceValid(_frontPreview))
-        {
-            var showFront = MilitaryMarkersEnabled && _frontMesh.GetSurfaceCount() > 0;
-            if (_frontPreview.Visible != showFront) _frontPreview.Visible = showFront;
         }
         if (RegionIconsWanted || _badgePendingRedraw || AnyRegionBadgeActive())
             KeepRegionIcons(syncDelta);
@@ -714,16 +898,20 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 _globeMaterial.SetShaderParameter("political_map", _plateTexture);
                 PlateApplied(result.PlateSource, result.PlateOwners);
                 result.PoliticalPixels = null;
-                _frontierAuthored = result.FrontierAuthored;
+                _frontierAuthored = FrontierFieldWanted() && Platform.PlatformProfile.Current?.IsTouchPrimary != true
+                    ? result.FrontierAuthored : null;
+                result.FrontierAuthored = null;
                 ApplyFrontier(result.Frontier);
+                result.Frontier?.Dispose();
                 result.Frontier = null;
+                WakeGlobeRendering();
                 break;
             }
             case 1:
             {
                 if (_packedLookups is null)
                 {
-                    using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.RegionIds);
+                    using var img = Image.CreateFromData(result.GpuMapWidth, result.GpuMapHeight, false, Image.Format.Rg8, result.RegionIds);
                     UploadMapImage("region_ids", img);
                     result.RegionIds = null;
                 }
@@ -733,7 +921,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             {
                 if (_packedLookups is null)
                 {
-                    using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.ProvinceIds);
+                    using var img = Image.CreateFromData(result.GpuMapWidth, result.GpuMapHeight, false, Image.Format.Rg8, result.ProvinceIds);
                     UploadMapImage("province_ids", img);
                     result.ProvinceIds = null;
                 }
@@ -743,9 +931,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
             {
                 if (_packedLookups is not null && result.RegionIds is not null && result.ProvinceIds is not null)
                 {
-                    using var regionImg = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.RegionIds);
-                    using var provinceImg = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.ProvinceIds);
-                    using var nationImg = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.NationIds);
+                    using var regionImg = Image.CreateFromData(result.GpuMapWidth, result.GpuMapHeight, false, Image.Format.Rg8, result.RegionIds);
+                    using var provinceImg = Image.CreateFromData(result.GpuMapWidth, result.GpuMapHeight, false, Image.Format.Rg8, result.ProvinceIds);
+                    using var nationImg = Image.CreateFromData(result.GpuMapWidth, result.GpuMapHeight, false, Image.Format.Rg8, result.NationIds);
                     UploadPackedIds(regionImg, provinceImg, nationImg);
                     result.RegionIds = null;
                     result.ProvinceIds = null;
@@ -753,10 +941,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 }
                 else
                 {
-                    using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.NationIds);
+                    using var img = Image.CreateFromData(result.GpuMapWidth, result.GpuMapHeight, false, Image.Format.Rg8, result.NationIds);
                     UploadMapImage("nation_ids", img);
                     result.NationIds = null;
                 }
+                WakeGlobeRendering();
                 break;
             }
             case 4:
@@ -770,8 +959,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     result.RiverCentrePixels = null;
                     break;
                 }
-                // R8 lake SDF saves 47.5 MiB VRAM vs RGB8 at 5760x2880 (rivers draw from river_centre_map).
-                using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.R8, result.HydrologyPixels);
+                // R8 lake SDF saves 47.5 MiB VRAM vs RGB8 at 5760x2880 (and mobile uploads at 2880x1440).
+                using var img = Image.CreateFromData(result.GpuHydrologyWidth, result.GpuHydrologyHeight, false, Image.Format.R8, result.HydrologyPixels);
                 _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(img));
                 result.HydrologyPixels = null;
                 if (result.RiverCentrePixels is { } centre)
@@ -780,9 +969,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
                         false, Image.Format.Rgba8, centre);
                     _globeMaterial.SetShaderParameter("river_centre_map", ImageTexture.CreateFromImage(lines));
                     _globeMaterial.SetShaderParameter("river_atlas_header_rows", result.RiverAtlasHeaderRows);
-                    _globeMaterial.SetShaderParameter("river_source_size", new Vector2(MapWidth, MapHeight));
+                    var riverSourceW = result.RiverAtlasHeaderRows > 0 ? MapWidth : result.RiverTextureWidth;
+                    var riverSourceH = result.RiverAtlasHeaderRows > 0 ? MapHeight : result.RiverTextureHeight;
+                    _globeMaterial.SetShaderParameter("river_source_size", new Vector2(riverSourceW, riverSourceH));
                     result.RiverCentrePixels = null;
                 }
+                WakeGlobeRendering();
                 break;
             }
             case 5:
@@ -867,7 +1059,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 }
                 else
                 {
-                    GC.Collect(1, GCCollectionMode.Optimized, blocking: false);
+                    try { GC.Collect(2, GCCollectionMode.Forced, blocking: true); }
+                    catch { GC.Collect(); }
                 }
                 gcWatch.Stop();
                 var uploadMs = _mapUploadStartTicks > 0
@@ -975,6 +1168,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private void RefreshProvinceControllersCore()
     {
         if (_campaign?.ProvinceMap is null || _campaign.ProvinceController is null || _globeMaterial is null) return;
+        WakeGlobeRendering();
         EnsureNationIndex();
         var topology = _campaign.ProvinceMap;
         var pixels = _controlPixels ??= new byte[256 * 256 * 4];
@@ -1049,8 +1243,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // itself is free when the plate already shows today's owners.
         RequestPlateRepaint(topology);
         _controlRevision = _campaign.MapRevision;
-        // Defer front mesh & border target rebuild to the next frame so a single day's
-        // map revision doesn't combine 4 texture uploads with front geometry rebuilds.
+        // Standalone callers schedule a front refresh; SyncFencedWorldVisuals rebuilds atomically and clears this.
         _frontPreviewDeferred = true;
     }
 
@@ -1068,7 +1261,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         string shippedCachePath,
         string shippedHydrologyCachePath,
         string shippedPoliticalRasterCachePath,
-        Action<string, int> reportProgress)
+        Action<string, int> reportProgress,
+        bool halfResGpuMaps = false)
     {
         var totalWatch = System.Diagnostics.Stopwatch.StartNew();
         var stageWatch = new System.Diagnostics.Stopwatch();
@@ -1506,12 +1700,41 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (provinces.ProvinceCount > ushort.MaxValue)
             throw new InvalidOperationException($"Province count {provinces.ProvinceCount} exceeds the 16-bit map contract.");
 
+        var riverAtlas = compactRivers ? HydrologySurfaceData.PackRiverCentreline(riverCentrePixels, MapWidth, MapHeight) : null;
+        var riverPixelsOut = riverAtlas?.Pixels ?? riverCentrePixels;
+        var riverWidthOut = riverAtlas?.Width ?? MapWidth;
+        var riverHeightOut = riverAtlas?.Height ?? MapHeight;
+        var riverHeaderRows = riverAtlas?.HeaderRows ?? 0;
+
+        var gpuMapWidth = MapWidth;
+        var gpuMapHeight = MapHeight;
+        var gpuHydrologyWidth = MapWidth;
+        var gpuHydrologyHeight = MapHeight;
+        if (halfResGpuMaps)
+        {
+            DownsampleMobileGpuIdLayersHalfRes(
+                regionIds, provinceIds, nationIds, MapWidth, MapHeight,
+                out regionIds, out provinceIds, out nationIds,
+                out gpuMapWidth, out gpuMapHeight);
+            if (!reducedMap && hydrologyPixels is not null)
+            {
+                hydrologyPixels = DownsampleMobileHydrologyHalfRes(
+                    hydrologyPixels, MapWidth, MapHeight,
+                    out gpuHydrologyWidth, out gpuHydrologyHeight);
+            }
+            if (!reducedMap && riverAtlas is null && riverPixelsOut is not null &&
+                riverWidthOut == MapWidth && riverHeightOut == MapHeight)
+            {
+                riverPixelsOut = DownsampleMobileRiverCentreHalfRes(
+                    riverPixelsOut, riverWidthOut, riverHeightOut,
+                    out riverWidthOut, out riverHeightOut);
+            }
+        }
+
         GD.Print($"[dof-boot] map_worker total_ms={totalWatch.Elapsed.TotalMilliseconds:F0} cache_hit={cacheHit} hydro_cache={hydroCacheHit} raster_cache={rasterCacheHit} " +
                  $"cache_io_ms={cacheIoMs:F0} topology_ms={topoMs:F0} hydrology_ms={hydroMs:F0} anchors_ms={anchorMs:F0} " +
-                 $"pixel_loop_ms={pixelMs:F0} plate_ms={plateMs:F0} reduced={reducedMap} mobile={lowMemoryMobile} ({cacheReason})");
-
-        var riverAtlas = compactRivers ? HydrologySurfaceData.PackRiverCentreline(riverCentrePixels, MapWidth, MapHeight) : null;
-        GD.Print($"[dof-boot] river_texture_bytes={riverAtlas?.Pixels.Length ?? riverCentrePixels?.Length ?? 0} compact={riverAtlas.HasValue}");
+                 $"pixel_loop_ms={pixelMs:F0} plate_ms={plateMs:F0} reduced={reducedMap} mobile={lowMemoryMobile} half_res_gpu={halfResGpuMaps} gpu_map={gpuMapWidth}x{gpuMapHeight} ({cacheReason})");
+        GD.Print($"[dof-boot] river_texture_bytes={riverPixelsOut?.Length ?? 0} compact={riverAtlas.HasValue}");
 
         return new MapBuildResult
         {
@@ -1523,11 +1746,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
             RegionIds = regionIds,
             ProvinceIds = provinceIds,
             NationIds = nationIds,
+            GpuMapWidth = gpuMapWidth,
+            GpuMapHeight = gpuMapHeight,
             HydrologyPixels = hydrologyPixels,
-            RiverCentrePixels = riverAtlas?.Pixels ?? riverCentrePixels,
-            RiverTextureWidth = riverAtlas?.Width ?? MapWidth,
-            RiverTextureHeight = riverAtlas?.Height ?? MapHeight,
-            RiverAtlasHeaderRows = riverAtlas?.HeaderRows ?? 0,
+            GpuHydrologyWidth = gpuHydrologyWidth,
+            GpuHydrologyHeight = gpuHydrologyHeight,
+            RiverCentrePixels = riverPixelsOut,
+            RiverTextureWidth = riverWidthOut,
+            RiverTextureHeight = riverHeightOut,
+            RiverAtlasHeaderRows = riverHeaderRows,
             Provinces = provinces,
             LabelAnchors = labelAnchors,
             RegionAnchors = regionAnchors,
@@ -1651,7 +1878,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
         public byte[] RegionIds;
         public byte[] ProvinceIds;
         public byte[] NationIds;
+        public int GpuMapWidth = MapWidth;
+        public int GpuMapHeight = MapHeight;
         public byte[] HydrologyPixels;
+        public int GpuHydrologyWidth = MapWidth;
+        public int GpuHydrologyHeight = MapHeight;
         public byte[] RiverCentrePixels;
         public int RiverTextureWidth, RiverTextureHeight, RiverAtlasHeaderRows;
         public Simulation.ProvinceTopology Provinces;
@@ -1661,6 +1892,200 @@ public sealed partial class GlobePresentation : SubViewportContainer
         public bool ProvinceRasterLoaded;
         public string ProvinceSource = "";
         public string HydrologySource = "";
+    }
+
+    internal static void DownsampleMobileGpuIdLayersHalfRes(
+        byte[] regionIds,
+        byte[] provinceIds,
+        byte[] nationIds,
+        int sourceWidth,
+        int sourceHeight,
+        out byte[] halfRegionIds,
+        out byte[] halfProvinceIds,
+        out byte[] halfNationIds,
+        out int halfWidth,
+        out int halfHeight)
+    {
+        if (sourceWidth < 2 || sourceHeight < 2)
+        {
+            halfWidth = sourceWidth;
+            halfHeight = sourceHeight;
+            halfRegionIds = regionIds;
+            halfProvinceIds = provinceIds;
+            halfNationIds = nationIds;
+            return;
+        }
+
+        halfWidth = sourceWidth / 2;
+        halfHeight = sourceHeight / 2;
+        var expectedSourceBytes = sourceWidth * sourceHeight * 2;
+        var halfBytes = halfWidth * halfHeight * 2;
+        var hasRegion = regionIds is not null && regionIds.Length == expectedSourceBytes;
+        var hasProvince = provinceIds is not null && provinceIds.Length == expectedSourceBytes;
+        var hasNation = nationIds is not null && nationIds.Length == expectedSourceBytes;
+
+        halfRegionIds = hasRegion ? new byte[halfBytes] : null;
+        halfProvinceIds = hasProvince ? new byte[halfBytes] : null;
+        halfNationIds = hasNation ? new byte[halfBytes] : null;
+        var driver = hasProvince ? provinceIds : (hasNation ? nationIds : regionIds);
+        if (driver is null) return;
+
+        var outRegion = halfRegionIds;
+        var outProvince = halfProvinceIds;
+        var outNation = halfNationIds;
+        var dstW = halfWidth;
+        var srcW = sourceWidth;
+
+        Parallel.For(0, halfHeight, hy =>
+        {
+            var sy0 = hy * 2;
+            var sy1 = sy0 + 1;
+            var row0 = sy0 * srcW;
+            var row1 = sy1 * srcW;
+            var dstRow = hy * dstW;
+            for (var hx = 0; hx < dstW; hx++)
+            {
+                var sx0 = hx * 2;
+                var sx1 = sx0 + 1;
+                var i00 = (row0 + sx0) * 2;
+                var i10 = (row0 + sx1) * 2;
+                var i01 = (row1 + sx0) * 2;
+                var i11 = (row1 + sx1) * 2;
+
+                var a = (ushort)(driver[i00] | (driver[i00 + 1] << 8));
+                var b = (ushort)(driver[i10] | (driver[i10 + 1] << 8));
+                var c = (ushort)(driver[i01] | (driver[i01 + 1] << 8));
+                var d = (ushort)(driver[i11] | (driver[i11 + 1] << 8));
+
+                int chosen;
+                if (a == b && a == c && a == d)
+                {
+                    chosen = i00;
+                }
+                else
+                {
+                    chosen = PickWinningQuadOffset(a, b, c, d, i00, i10, i01, i11, (hx ^ hy) & 1);
+                }
+
+                var dstOff = (dstRow + hx) * 2;
+                if (outRegion is not null)
+                {
+                    outRegion[dstOff] = regionIds[chosen];
+                    outRegion[dstOff + 1] = regionIds[chosen + 1];
+                }
+                if (outProvince is not null)
+                {
+                    outProvince[dstOff] = provinceIds[chosen];
+                    outProvince[dstOff + 1] = provinceIds[chosen + 1];
+                }
+                if (outNation is not null)
+                {
+                    outNation[dstOff] = nationIds[chosen];
+                    outNation[dstOff + 1] = nationIds[chosen + 1];
+                }
+            }
+        });
+    }
+
+    private static int PickWinningQuadOffset(
+        ushort a, ushort b, ushort c, ushort d,
+        int i00, int i10, int i01, int i11, int checker)
+    {
+        var c0 = 1 + (a == b ? 1 : 0) + (a == c ? 1 : 0) + (a == d ? 1 : 0);
+        var c1 = 1 + (b == a ? 1 : 0) + (b == c ? 1 : 0) + (b == d ? 1 : 0);
+        var c2 = 1 + (c == a ? 1 : 0) + (c == b ? 1 : 0) + (c == d ? 1 : 0);
+        var c3 = 1 + (d == a ? 1 : 0) + (d == b ? 1 : 0) + (d == c ? 1 : 0);
+
+        // Score ties favor non-zero land/province IDs over ocean (0) on 2-vs-2 borders, and
+        // alternate checkerboard diagonals so borders stay symmetric without directional drift.
+        static int Score(int count, ushort id, bool preferredParity) =>
+            (count << 3) + (id != 0 ? 4 : 0) + (preferredParity ? 1 : 0);
+
+        var bestOff = i00;
+        var bestScore = Score(c0, a, checker == 0);
+        var s1 = Score(c1, b, checker == 1);
+        if (s1 > bestScore) { bestScore = s1; bestOff = i10; }
+        var s2 = Score(c2, c, checker == 1);
+        if (s2 > bestScore) { bestScore = s2; bestOff = i01; }
+        var s3 = Score(c3, d, checker == 0);
+        if (s3 > bestScore) bestOff = i11;
+        return bestOff;
+    }
+
+    internal static byte[] DownsampleMobileHydrologyHalfRes(
+        byte[] source, int sourceWidth, int sourceHeight, out int halfWidth, out int halfHeight)
+    {
+        if (source is null || sourceWidth < 2 || sourceHeight < 2 || source.Length != sourceWidth * sourceHeight)
+        {
+            halfWidth = sourceWidth;
+            halfHeight = sourceHeight;
+            return source;
+        }
+
+        halfWidth = sourceWidth / 2;
+        halfHeight = sourceHeight / 2;
+        var dst = new byte[halfWidth * halfHeight];
+        var dstW = halfWidth;
+        var srcW = sourceWidth;
+
+        Parallel.For(0, halfHeight, hy =>
+        {
+            var sy0 = hy * 2;
+            var row0 = sy0 * srcW;
+            var row1 = (sy0 + 1) * srcW;
+            var dstRow = hy * dstW;
+            for (var hx = 0; hx < dstW; hx++)
+            {
+                var sx0 = hx * 2;
+                var sum = source[row0 + sx0] + source[row0 + sx0 + 1] + source[row1 + sx0] + source[row1 + sx0 + 1];
+                dst[dstRow + hx] = (byte)((sum + 2) >> 2);
+            }
+        });
+        return dst;
+    }
+
+    internal static byte[] DownsampleMobileRiverCentreHalfRes(
+        byte[] source, int sourceWidth, int sourceHeight, out int halfWidth, out int halfHeight)
+    {
+        if (source is null || sourceWidth < 2 || sourceHeight < 2 || source.Length != sourceWidth * sourceHeight * 4)
+        {
+            halfWidth = sourceWidth;
+            halfHeight = sourceHeight;
+            return source;
+        }
+
+        halfWidth = sourceWidth / 2;
+        halfHeight = sourceHeight / 2;
+        var dst = new byte[halfWidth * halfHeight * 4];
+        var dstW = halfWidth;
+        var srcW = sourceWidth;
+
+        Parallel.For(0, halfHeight, hy =>
+        {
+            var sy0 = hy * 2;
+            var row0 = sy0 * srcW;
+            var row1 = (sy0 + 1) * srcW;
+            var dstRow = hy * dstW;
+            for (var hx = 0; hx < dstW; hx++)
+            {
+                var sx0 = hx * 2;
+                var i00 = (row0 + sx0) * 4;
+                var i10 = (row0 + sx0 + 1) * 4;
+                var i01 = (row1 + sx0) * 4;
+                var i11 = (row1 + sx0 + 1) * 4;
+                var chosen = i00;
+                var bestImp = source[i00 + 2];
+                if (source[i10 + 2] > bestImp) { bestImp = source[i10 + 2]; chosen = i10; }
+                if (source[i01 + 2] > bestImp) { bestImp = source[i01 + 2]; chosen = i01; }
+                if (source[i11 + 2] > bestImp) chosen = i11;
+                var dstOff = (dstRow + hx) * 4;
+                dst[dstOff] = source[chosen];
+                dst[dstOff + 1] = source[chosen + 1];
+                dst[dstOff + 2] = source[chosen + 2];
+                dst[dstOff + 3] = source[chosen + 3];
+            }
+        });
+        return dst;
     }
 
 

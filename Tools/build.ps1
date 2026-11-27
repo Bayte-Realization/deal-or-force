@@ -228,6 +228,7 @@ Copy-Item -LiteralPath (Join-Path $project 'Tools\prepare_export_project.gd') -D
 # not failure, so the preference steps aside for exactly this one call.
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
+$exportExitCode = -1
 try {
     & $Godot --headless --path $stage --script res://Tools/prepare_export_project.gd -- (Join-Path $project 'project.godot') (Join-Path $stage 'project.godot') 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Unable to serialize the isolated export configuration.' }
@@ -239,7 +240,14 @@ try {
 }
 finally {
     $ErrorActionPreference = $previousPreference
-    Write-Host "  isolated export project retained at $stage" -ForegroundColor DarkGray
+    if ($exportExitCode -eq 0) {
+        $checkedStage = Assert-BuildChild $stage
+        cmd /c ("rd /s /q `"{0}`"" -f $checkedStage) 2>$null
+        if (Test-Path -LiteralPath $checkedStage) { Remove-Item -LiteralPath $checkedStage -Recurse -Force -ErrorAction SilentlyContinue }
+        Write-Host "  isolated export staging removed" -ForegroundColor DarkGray
+    } else {
+        Write-Host "  isolated export project retained at $stage" -ForegroundColor DarkGray
+    }
 }
 }
 else {
@@ -330,6 +338,14 @@ if ($dataDirectory) {
         $null = Assert-BuildChild $dataMods
         Remove-Item -LiteralPath $dataMods -Recurse -Force
         Write-Host "  the second copy of mods removed" -ForegroundColor DarkGray
+    }
+    $nativeKernelDll = @(
+        (Join-Path $project 'tmp_logs\native_kernels\win-x64\dof_kernels.dll'),
+        (Join-Path $project 'tmp_logs\rust_target\x86_64-pc-windows-msvc\release\dof_kernels.dll')
+    ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    if ($nativeKernelDll) {
+        Copy-Item -LiteralPath $nativeKernelDll -Destination (Join-Path $dataDirectory.FullName 'dof_kernels.dll') -Force
+        Write-Host "  native SIMD kernel bundled: dof_kernels.dll" -ForegroundColor DarkGray
     }
 }
 

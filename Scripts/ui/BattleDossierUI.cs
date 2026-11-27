@@ -62,21 +62,25 @@ public partial class DealOrForceGame
     {
         if (_battleDetailControls is not { Visible: true } || !_sidePanel.Visible) return;
         var battle = SelectedBattle();
-        if (battle is null || !CampaignIntel.PlayerCanSeeBattle(_campaign, battle))
+        if (battle is null || !ObserverUiRules.CanSeeBattleAsViewer(_campaign, _observerMode, battle))
         {
             _battleDetailControls.Visible = false;
             _sideBody.Text = Tr("Battle report is no longer available.");
             return;
         }
+        var viewer = _campaign.Player;
+        var viewerId = viewer?.Id ?? -1;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         var hash = HashCode.Combine(battle.Id, battle.Rounds.Count, battle.Ended,
             battle.AttackerLosses, battle.DefenderLosses, _campaign.ElapsedDays, Loc.Language);
         hash = HashCode.Combine(hash, battle.Attackers.Count, battle.Defenders.Count,
-            _campaign.ElapsedHours, _campaign.Player.Id, _campaign.Player.IsHuman, (int)battle.LastPhase, battle.LastAttackDirections);
+            _campaign.ElapsedHours, viewerId, viewer?.IsHuman ?? false, (int)battle.LastPhase, battle.LastAttackDirections);
         var commandEnabled = !_campaign.Defines.FeatureCommands.TryGetValue(nameof(WithdrawArmyFromBattleCommand), out var feature) ||
             string.IsNullOrWhiteSpace(feature) || _campaign.FeatureEnabled(feature);
         hash = HashCode.Combine(hash, _campaign.MapRevision, _campaign.WarRevision,
             GetWindow().Size, SettingsCatalog.Number("interface_scale"), _battleRosterExpanded, commandEnabled,
             BattlePixelScale());
+        hash = HashCode.Combine(hash, observing);
         if (hash == _battleDossierFingerprint) return;
         _battleDossierFingerprint = hash;
 
@@ -99,10 +103,10 @@ public partial class DealOrForceGame
         var attacker = _campaign.NationById(battle.AttackerId);
         var defender = _campaign.NationById(battle.DefenderId);
         var armies = _campaign.Armies.ToDictionary(army => army.Id);
-        var ownAttack = battle.Attackers.Any(id => armies.TryGetValue(id, out var unit) && unit.NationId == _campaign.Player.Id);
-        var ownDefence = battle.Defenders.Any(id => armies.TryGetValue(id, out var unit) && unit.NationId == _campaign.Player.Id);
-        var detailed = !_campaign.Player.IsHuman || battle.AttackerId == _campaign.Player.Id ||
-                       battle.DefenderId == _campaign.Player.Id || ownAttack || ownDefence;
+        var ownAttack = viewerId > 0 && battle.Attackers.Any(id => armies.TryGetValue(id, out var unit) && unit.NationId == viewerId);
+        var ownDefence = viewerId > 0 && battle.Defenders.Any(id => armies.TryGetValue(id, out var unit) && unit.NationId == viewerId);
+        var detailed = viewer is null || !viewer.IsHuman || observing || battle.AttackerId == viewerId ||
+                       battle.DefenderId == viewerId || ownAttack || ownDefence;
 
         if (!detailed)
         {
@@ -122,7 +126,7 @@ public partial class DealOrForceGame
         }
 
         var assessment = BattleReadout.Assess(battle, _campaign.Defines.BattleBreakOrganisation);
-        var playerAttacks = !_campaign.Player.IsHuman || battle.AttackerId == _campaign.Player.Id || ownAttack;
+        var playerAttacks = viewer is null || !viewer.IsHuman || observing || battle.AttackerId == viewerId || ownAttack;
         var resisting = !battle.Ended && battle.Rounds.LastOrDefault()?.Note == PocketResistance.BattleNote;
         var share = assessment.ShareFor(playerAttacks);
         var tone = resisting ? "state.warning" : !assessment.Known ? "text.muted" : share > .55f ? "state.positive" :
@@ -161,7 +165,7 @@ public partial class DealOrForceGame
             var caption = BattleText(resisting
                 ? Tr("The last combat round continued despite spent organisation. Losses and supply still matter.")
                 : assessment.Known
-                ? Loc.Format(_campaign.Player.IsHuman ? "Our endurance balance: {0:P0}" : "Attacker endurance balance: {0:P0}", share)
+                ? Loc.Format((_campaign.Player?.IsHuman ?? false) && !observing ? "Our endurance balance: {0:P0}" : "Attacker endurance balance: {0:P0}", share)
                 : Tr("The first combat round has not resolved yet."),
                 12, "text.body_soft", tabular: true);
             caption.Name = "BattleAssessment";
@@ -469,13 +473,15 @@ public partial class DealOrForceGame
             header.AddChild(roleTag);
             card.AddChild(header);
 
-            if (!battle.Ended && army.NationId == _campaign.Player.Id && _campaign.Player.IsHuman)
+            var viewer = _campaign.Player;
+            var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+            if (!battle.Ended && !observing && viewer is not null && army.NationId == viewer.Id && viewer.IsHuman)
             {
                 var actions = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
                 actions.AddThemeConstantOverride("separation", 4);
                 card.AddChild(actions);
                 var armyId = army.Id;
-                var quote = BattleWithdrawalPreview.Read(_campaign, _campaign.Player.Id, army.Id);
+                var quote = BattleWithdrawalPreview.Read(_campaign, viewer.Id, army.Id);
                 var withdrawBtn = ActionButton(quote.Attacking ? "Stop attack" : "Retreat", () => WithdrawBattleFormation(armyId, 1f), 0, 22);
                 withdrawBtn.Name = "WithdrawFormation_" + army.Id;
                 withdrawBtn.TooltipText = Ui.Tip(WithdrawalTip(quote));
@@ -486,7 +492,7 @@ public partial class DealOrForceGame
                 {
                     var half = ActionButton("Withdraw half", () => WithdrawBattleFormation(armyId, .5f), 0, 22);
                     half.Name = "WithdrawHalf_" + army.Id;
-                    var halfQuote = BattleWithdrawalPreview.Read(_campaign, _campaign.Player.Id, army.Id, .5f);
+                    var halfQuote = BattleWithdrawalPreview.Read(_campaign, viewer.Id, army.Id, .5f);
                     half.TooltipText = Ui.Tip(WithdrawalTip(halfQuote));
                     half.Disabled = !halfQuote.Available;
                     half.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -501,7 +507,7 @@ public partial class DealOrForceGame
             bars.AddChild(BattleGauge(army.Organisation, "combat.organisation"));
             bars.AddChild(BattleGauge(army.Equipment, "combat.equipment"));
             bars.TooltipText = Ui.Tip(Loc.Format("Organisation {0:P0} · equipment {1:P0}", army.Organisation, army.Equipment) +
-                (army.NationId == _campaign.Player.Id ? "\n" + EquipmentLogistics.Description(_campaign, army) : ""));
+                (viewer is not null && army.NationId == viewer.Id ? "\n" + EquipmentLogistics.Description(_campaign, army) : ""));
             bars.MouseFilter = MouseFilterEnum.Stop;
 
             var numbers = BattleText(Loc.Format("Organisation {0:P0} · equipment {1:P0}",
@@ -544,9 +550,11 @@ public partial class DealOrForceGame
         if (!_battleRosterExpanded) return;
         var limit = Math.Clamp((int)InterfaceSkin.Metric("combat.roster_rows", 6), 1, 30);
         var shown = 0;
+        var viewer = _campaign.Player;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         foreach (var army in armies)
         {
-            if (!MilitaryConditionReadout.CanRead(_campaign, _campaign.Player.Id, army)) continue;
+            if (viewer is not null && !observing && !MilitaryConditionReadout.CanRead(_campaign, viewer.Id, army)) continue;
             if (shown++ >= limit) continue;
             column.AddChild(BattleText(army.Name, 11));
             var numbers = BattleText(Loc.Format("Organisation {0:P0} · equipment {1:P0}",
@@ -563,8 +571,9 @@ public partial class DealOrForceGame
     private void ApplyBattleWithdrawal(int armyId, float share)
     {
         var army = _campaign.Armies.Find(a => a.Id == armyId);
-        if (army is null || army.NationId != _campaign.Player.Id) return;
-        var command = new WithdrawArmyFromBattleCommand { IssuerId = _campaign.Player.Id, ArmyId = armyId, Share = share };
+        if (army is null || ObserverUiRules.IsObserving(_campaign, _observerMode) ||
+            _campaign?.Player is not { } player || army.NationId != player.Id) return;
+        var command = new WithdrawArmyFromBattleCommand { IssuerId = player.Id, ArmyId = armyId, Share = share };
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
         _battleWithdrawalFeedback = !command.Applied ? Tr("Order sent to the host. Awaiting confirmation.") :
@@ -617,16 +626,17 @@ public partial class DealOrForceGame
 
     private void AddBattleNavigation(LandBattle battle)
     {
-        if (!battle.Ended && _campaign.Player.IsHuman &&
-            _campaign.Armies.Any(army => army.BattleId == battle.Id && army.NationId == _campaign.Player.Id))
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        if (!battle.Ended && !observing && _campaign?.Player is { IsHuman: true } player &&
+            _campaign.Armies.Any(army => army.BattleId == battle.Id && army.NationId == player.Id))
         {
             var leave = ActionButton("Leave this battle", () =>
             {
                 var targets = _campaign.Armies.Where(army => army.BattleId == battle.Id &&
-                    army.NationId == _campaign.Player.Id).Select(army => army.Id).ToArray();
+                    army.NationId == player.Id).Select(army => army.Id).ToArray();
                 ConfirmLastDefenderWithdrawal(targets, 1f, () =>
                 {
-                    var commands = targets.Select(id => new WithdrawArmyFromBattleCommand { IssuerId = _campaign.Player.Id, ArmyId = id }).ToArray();
+                    var commands = targets.Select(id => new WithdrawArmyFromBattleCommand { IssuerId = player.Id, ArmyId = id }).ToArray();
                     foreach (var command in commands) _campaign.Commands.Enqueue(command);
                     _campaign.Commands.ApplyAll(_campaign);
                     _battleWithdrawalFeedback = commands.Any(command => !command.Applied)
@@ -639,7 +649,7 @@ public partial class DealOrForceGame
             }, 160, 30);
             leave.Name = "WithdrawBattleSide";
             var quotes = _campaign.Armies.Where(army => army.BattleId == battle.Id &&
-                army.NationId == _campaign.Player.Id).Select(army => BattleWithdrawalPreview.Read(_campaign, _campaign.Player.Id, army.Id)).ToArray();
+                army.NationId == player.Id).Select(army => BattleWithdrawalPreview.Read(_campaign, player.Id, army.Id)).ToArray();
             leave.Disabled = !quotes.Any(quote => quote.Available);
             leave.TooltipText = Ui.Tip(Tr("Withdraw our participants only. Defenders without a friendly retreat route remain in combat.") +
                 (leave.Disabled ? "\n" + Tr(quotes.FirstOrDefault().Refusal ?? "Not in battle") : ""));

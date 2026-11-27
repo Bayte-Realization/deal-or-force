@@ -26,6 +26,9 @@ public sealed partial class GlobePresentation
     private bool _motionScanFlat;
     private float _motionScanFlatX = float.NaN;
     private ulong _nextMotionScanMs;
+    private long _lastObservedSimHours = -1;
+    private ulong _lastObservedSimHoursMsec;
+    private float _simStepIntervalEma = 0.14f;
 
     // Geography is authoritative. Collision avoidance must never move a division
     // counter away from its province or merge it with a neighbouring province.
@@ -36,6 +39,17 @@ public sealed partial class GlobePresentation
         // province, but a small deterministic fan-out keeps two flags from occupying exactly
         // the same pixels. The offset is presentation only; click, province and save data
         // continue to use the army's real province.
+        if (_flatMap && marker.LayoutOffset != Vector2.Zero)
+            position += new Vector3(marker.LayoutOffset.X, -marker.LayoutOffset.Y, 0f) *
+                (_camera.Size / Math.Max(1f, Size.Y));
+        return position;
+    }
+
+    private Vector3 ArmyMarkerPositionFromCachedGeo(ArmyStackMarker marker)
+    {
+        var position = marker.CachedGeoValid
+            ? PresentationPoint(marker.CachedGeoLat, marker.CachedGeoLon, SurfaceMarkerRadius)
+            : ArmyPresentationPoint(marker.Stack);
         if (_flatMap && marker.LayoutOffset != Vector2.Zero)
             position += new Vector3(marker.LayoutOffset.X, -marker.LayoutOffset.Y, 0f) *
                 (_camera.Size / Math.Max(1f, Size.Y));
@@ -76,15 +90,18 @@ public sealed partial class GlobePresentation
     private void StepArmyMarkerMotion(ArmyStackMarker marker, float blend, bool isMoving)
     {
         var node = marker.Node;
+        var arrivalGlide = marker.HasPendingArrivalGlide;
         if (!marker.MotionSettled)
         {
             // A brand-new counter appears where it belongs. Nothing flies in from nowhere.
             marker.DisplayPosition = marker.TargetPosition;
             marker.MotionSettled = true;
+            marker.HasPendingArrivalGlide = false;
             node.Position = marker.DisplayPosition;
             return;
         }
-        if (isMoving) marker.TargetPosition = ArmyMarkerPosition(marker);
+        if ((isMoving || arrivalGlide || _flatMap) && marker.CachedGeoValid)
+            marker.TargetPosition = ArmyMarkerPositionFromCachedGeo(marker);
         if (_flatMap)
         {
             // Horizontal panning changes the nearest repeated sheet, including when
@@ -95,14 +112,23 @@ public sealed partial class GlobePresentation
                 node.Position = marker.DisplayPosition = new Vector3(rebasedX, marker.DisplayPosition.Y, marker.DisplayPosition.Z);
         }
         var remaining = marker.TargetPosition - marker.DisplayPosition;
-        if (remaining.LengthSquared() < 1e-10f) return;
+        if (remaining.LengthSquared() < 1e-10f)
+        {
+            marker.HasPendingArrivalGlide = false;
+            return;
+        }
         // A camera pan or zoom moves the target of a stationary counter every frame. That
         // is not the formation marching, and easing it would make the whole map swim.
-        if (!isMoving)
+        if (!isMoving && !arrivalGlide)
             node.Position = marker.DisplayPosition = marker.TargetPosition;
         else
         {
             marker.DisplayPosition += remaining * blend;
+            if ((marker.TargetPosition - marker.DisplayPosition).LengthSquared() < 1e-8f)
+            {
+                marker.DisplayPosition = marker.TargetPosition;
+                marker.HasPendingArrivalGlide = false;
+            }
             // On the globe the card lies on the surface, so the eased point is pushed back out
             // to the local terrain surface rather than cutting the chord through the planet.
             if (!_flatMap) marker.DisplayPosition = LocalSurfacePointFromNormal(marker.DisplayPosition, SurfaceMarkerRadius);
@@ -117,11 +143,30 @@ public sealed partial class GlobePresentation
     private void UpdateArmyMarkerMotion(float delta)
     {
         if (!IsInstanceValid(_armyRoot) || _armyStacks.Count == 0) return;
-        // Frame-rate independent ease: the same glide at 30fps and at 144fps. The constant is
-        // how much of the remaining distance is covered per 60th of a second.
-        var blend = Mathf.Clamp(1f - MathF.Exp(-delta * 6.5f), 0f, 1f);
         var now = Time.GetTicksMsec();
-        var hours = _campaign?.ElapsedHours ?? -1;
+        var snap = CurrentRenderSnapshot();
+        var speed = snap is { Version: > 0 }
+            ? (snap.IsPaused ? 1 : snap.Speed)
+            : (_campaign is { IsPaused: false } ? _campaign.Speed : 1);
+        var hours = snap is { Version: > 0 } ? snap.ElapsedHours : (_campaign?.ElapsedHours ?? -1);
+        if (hours != _lastObservedSimHours)
+        {
+            if (_lastObservedSimHours >= 0 && _lastObservedSimHoursMsec > 0 && now > _lastObservedSimHoursMsec)
+            {
+                var dtStep = Math.Clamp((now - _lastObservedSimHoursMsec) / 1000.0f, 0.05f, 0.35f);
+                _simStepIntervalEma = _simStepIntervalEma * 0.75f + dtStep * 0.25f;
+            }
+            _lastObservedSimHours = hours;
+            _lastObservedSimHoursMsec = now;
+        }
+        // Velocity-adaptive damping: stretch glide smoothly across the measured step interval
+        // so divisions glide silkily rather than sprinting and freezing on each tick.
+        var rate = speed >= 5
+            ? Math.Clamp(2.8f / MathF.Max(0.06f, _simStepIntervalEma), 8.0f, 18.0f)
+            : speed == 4 ? 14.0f : 6.5f;
+        var blend = Mathf.Clamp(1f - MathF.Exp(-delta * rate), 0f, 1f);
+        var isMobileOrTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
+                              Platform.PlatformProfile.Current?.IsMobile == true;
         var flatWrapDue = _flatMap && (!float.IsFinite(_motionScanFlatX) ||
             MathF.Abs(_flatX - _motionScanFlatX) >= (_isActivelyPanning ? 0.25f : 0.001f));
         if (_armyStacks.Count != _motionScanCount || _armyStructureFingerprint != _motionScanFp ||
@@ -129,16 +174,17 @@ public sealed partial class GlobePresentation
         {
             _motionScanCount = _armyStacks.Count; _motionScanFp = _armyStructureFingerprint;
             _motionScanFlat = _flatMap; _motionScanHours = hours; _motionScanFlatX = _flatX;
-            _nextMotionScanMs = now + (_isActivelyPanning ? 250UL : 160UL);
+            _nextMotionScanMs = now + (_isActivelyPanning ? 250UL : (isMobileOrTouch ? 160UL : 50UL));
             _motionActiveStacks.Clear();
             foreach (var marker in _armyStacks.Values)
             {
                 var node = marker.Node;
                 if (node is null || !IsInstanceValid(node) || !node.Visible) continue;
-                var moving = HasMovingArmy(marker);
+                var moving = marker.CachedIsMoving;
+                var glide = moving || marker.HasPendingArrivalGlide;
                 var unsettled = !marker.MotionSettled || (marker.TargetPosition - marker.DisplayPosition).LengthSquared() >= 1e-10f;
-                if (!moving && !unsettled && !_flatMap) continue;
-                if (moving || unsettled) _motionActiveStacks.Add(marker);
+                if (!glide && !unsettled && !_flatMap) continue;
+                if (glide || unsettled) _motionActiveStacks.Add(marker);
                 StepArmyMarkerMotion(marker, blend, moving);
             }
             return;
@@ -147,7 +193,7 @@ public sealed partial class GlobePresentation
         {
             var marker = _motionActiveStacks[i];
             if (marker.Node is null || !IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
-            StepArmyMarkerMotion(marker, blend, HasMovingArmy(marker));
+            StepArmyMarkerMotion(marker, blend, marker.CachedIsMoving);
         }
     }
 
@@ -224,21 +270,49 @@ public sealed partial class GlobePresentation
 
     private void DrawFlatCounterLeaders()
     {
-        if (!_flatMap || !MilitaryMarkersEnabled || !IsInstanceValid(_armyRoot)) return;
+        if (!_flatMap || !MilitaryMarkersEnabled || !IsInstanceValid(_armyRoot) ||
+            !IsInstanceValid(_camera) || !IsInstanceValid(_supportMarkerRoot) || !IsInstanceValid(_fleetRoot))
+            return;
+        var minDepth = MathF.Max(0.05f, GlobeLineSanity.FiniteOr(_camera.Near, 0.05f));
+        var maxScreenSpan = MathF.Max(Size.X, Size.Y) * 1.5f + 512f;
         foreach (var counter in _auxiliaryCounters)
         {
-            if (!IsInstanceValid(counter.Node) || !counter.Node.IsVisibleInTree()) continue;
-            var anchor = counter.Support is { } support
-                ? _supportMarkerRoot.ToGlobal(LocalFlatPoint(support.Latitude, support.Longitude, FlatMarkerZ - .002f))
-                : _fleetRoot.ToGlobal(counter.Anchor);
+            if (!IsInstanceValid(counter.Node) || !counter.Node.IsVisibleInTree() ||
+                counter.Plate?.Texture is null)
+                continue;
+            Vector3 localAnchor;
+            if (counter.Support is { } support)
+            {
+                if (!GlobeLineSanity.IsValidGeo(support.Latitude, support.Longitude)) continue;
+                localAnchor = LocalFlatPoint(support.Latitude, support.Longitude, FlatMarkerZ - .002f);
+            }
+            else
+            {
+                if (!GlobeLineSanity.IsFinite(ToNum(counter.Anchor))) continue;
+                localAnchor = counter.Anchor with
+                {
+                    X = DateLineSeam.NearestCopy(counter.Anchor.X, counter.Node.Position.X, FlatMapWidth)
+                };
+            }
+            if (!GlobeLineSanity.IsValidEmittedVertex(ToNum(localAnchor), true, _flatX)) continue;
+            var anchor = counter.Support is not null ? _supportMarkerRoot.ToGlobal(localAnchor) : _fleetRoot.ToGlobal(localAnchor);
+            var nodeWorld = counter.Node.GlobalPosition;
+            if (!GlobeLineSanity.IsFinite(ToNum(anchor)) || !GlobeLineSanity.IsFinite(ToNum(nodeWorld))) continue;
+            if (_camera.IsPositionBehind(anchor) || _camera.IsPositionBehind(nodeWorld)) continue;
+            var depthA = -_camera.ToLocal(anchor).Z;
+            var depthB = -_camera.ToLocal(nodeWorld).Z;
             var at = _camera.UnprojectPosition(anchor);
-            var center = _camera.UnprojectPosition(counter.Node.GlobalPosition);
+            var center = _camera.UnprojectPosition(nodeWorld);
+            if (!GlobeLineSanity.IsValidScreenRibbonSegment(ToNum(at), ToNum(center), depthA, depthB, minDepth, maxScreenSpan))
+                continue;
             var delta = at - center;
             var half = new Vector2(counter.Plate.Texture.GetWidth(), counter.Plate.Texture.GetHeight()) *
-                counter.Plate.PixelSize * _counterFlatFar * .5f;
+                GlobeLineSanity.FiniteOr(counter.Plate.PixelSize * _counterFlatFar * .5f, 1f);
             var ratio = Math.Min(half.X / Math.Max(.01f, Math.Abs(delta.X)), half.Y / Math.Max(.01f, Math.Abs(delta.Y)));
-            if (ratio >= 1f || delta.LengthSquared() < 36f) continue;
-            DrawLine(at, center + delta * ratio, new Color(.83f, .87f, .78f, .3f), 1f, true);
+            if (!float.IsFinite(ratio) || ratio >= 1f || delta.LengthSquared() < 36f) continue;
+            var edgePt = center + delta * ratio;
+            if (!GlobeLineSanity.IsFinite(ToNum(edgePt))) continue;
+            DrawLine(at, edgePt, new Color(.83f, .87f, .78f, .3f), 1f, true);
         }
     }
 

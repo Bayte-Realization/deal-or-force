@@ -187,8 +187,11 @@ public partial class DealOrForceGame
         if (_campaign is not null) _campaign.IsPaused = true;
         if (_pause is not null) _pause.Text = Tr("▶");
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
-        if (_campaign?.Player is not null && string.IsNullOrWhiteSpace(_saveNameField.Text))
-            _saveNameField.Text = $"{_campaign.Player.DisplayName} · {_campaign.Date.Display()}";
+        if (_campaign is not null && string.IsNullOrWhiteSpace(_saveNameField.Text))
+        {
+            var subject = _campaign.Player?.DisplayName ?? Tr("obs.ui.save.world_name");
+            _saveNameField.Text = $"{subject} · {_campaign.Date.Display()}";
+        }
         RefreshSaveSlots();
         _saveLoadLayer.Visible = true;
         _saveLoadLayer.MoveToFront();
@@ -343,9 +346,10 @@ public partial class DealOrForceGame
     /// </summary>
     private void SaveAsNew()
     {
-        if (_campaign?.Player is null) { _saveStatus.Text = Tr("No campaign."); return; }
+        if (_campaign is null) { _saveStatus.Text = Tr("No campaign."); return; }
         var name = _saveNameField.Text.Trim();
-        if (string.IsNullOrWhiteSpace(name)) name = $"{_campaign.Player.DisplayName} · {_campaign.Date.Display()}";
+        var subject = _campaign.Player?.DisplayName ?? Tr("obs.ui.save.world_name");
+        if (string.IsNullOrWhiteSpace(name)) name = $"{subject} · {_campaign.Date.Display()}";
         SaveToSlot($"campaign_{DateTime.Now:yyyyMMdd_HHmmss}", displayName: name);
     }
 
@@ -362,14 +366,14 @@ public partial class DealOrForceGame
     /// </summary>
     private async void SaveToSlot(string slot, bool autosave = false, string displayName = null)
     {
-        if (_campaign?.Player is null) return;
+        if (_campaign is null) return;
         if (_waitingForSave) return;
         if (!_pendingSave.IsCompleted)
         {
             if (autosave) return;
             await WaitForPendingSaveAsync();
         }
-        if (!IsInstanceValid(this) || !IsInsideTree() || _campaign?.Player is null) return;
+        if (!IsInstanceValid(this) || !IsInsideTree() || _campaign is null) return;
 
         var targetCampaign = _campaign;
         var saveRoot = SaveRoot;
@@ -388,8 +392,9 @@ public partial class DealOrForceGame
             SaveSystem.PreparedSave prepared;
             try
             {
+                var subject = targetCampaign.Player?.DisplayName ?? Tr("obs.ui.save.world_name");
                 var effectiveName = string.IsNullOrWhiteSpace(displayName)
-                    ? $"{targetCampaign.Player.DisplayName} · {targetCampaign.Date.Display()}"
+                    ? $"{subject} · {targetCampaign.Date.Display()}"
                     : displayName;
                 prepared = SaveSystem.Prepare(saveRoot, slot, targetCampaign, modFp, effectiveName, autosave);
             }
@@ -580,7 +585,9 @@ public partial class DealOrForceGame
         // ended. An army, a state or a screen carried across would be a live reference
         // into a dead object graph, so selection is dropped wholesale rather than remapped.
         _selectedNation = _campaign.Player;
-        _selectedState = _campaign.States.FirstOrDefault(state => state.NationMapIndex == _campaign.Player.MapIndex);
+        _selectedState = _campaign.Player is { } seat
+            ? _campaign.States.FirstOrDefault(state => state.NationMapIndex == seat.MapIndex)
+            : ObserverUiRules.DefaultObservedState(_campaign);
         _pickerNation = _campaign.Player;
         _selectedArmy = null;
         _selectedArmies.Clear();

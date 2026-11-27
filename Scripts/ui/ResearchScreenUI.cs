@@ -71,7 +71,11 @@ public partial class DealOrForceGame
         panel.Name = "ResearchPanel";
         Ui.Place(panel, "modal.research");
         var rows = PanelRows(panel, 18, 14, 8);
-        _researchFocus = ActionButton("Show current research", () => SelectResearchTechnology(_campaign.Player.CurrentResearch, true), 0, 32);
+        _researchFocus = ActionButton("Show current research", () =>
+        {
+            var current = (_campaign?.Player ?? ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true))?.CurrentResearch;
+            if (!string.IsNullOrEmpty(current)) SelectResearchTechnology(current, true);
+        }, 0, 32);
         _researchFocus.Name = "FocusCurrentResearch";
         // The head is the same head as the doctrine, policy and diplomacy workspaces: title in
         // the display face, a sentence of purpose, the figures on the right, a rule under it.
@@ -242,13 +246,15 @@ public partial class DealOrForceGame
     private void OpenResearchScreen()
     {
         EnsureScreen("research", BuildResearchScreen);
+        var inspected = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+        if (inspected is null) return;
         _openScreen = "Research";
         _sidePanel.Visible = false;
         HideMapSelection(true);
         SetArmyPanelVisible(false);
         RaiseWorkspaceLayer(_researchLayer);
         if (TechnologyCatalog.Of(_researchSelected) is null)
-            _researchSelected = (TechnologyCatalog.Of(_campaign.Player.CurrentResearch) ?? TechnologyCatalog.All.FirstOrDefault())?.Id ?? "";
+            _researchSelected = (TechnologyCatalog.Of(inspected.CurrentResearch) ?? TechnologyCatalog.All.FirstOrDefault())?.Id ?? "";
         RefreshResearchScreen();
         UpdateScreenButtons();
     }
@@ -312,8 +318,12 @@ public partial class DealOrForceGame
 
     private void RefreshResearchScreen()
     {
-        if (_researchLayer is null || !_researchLayer.Visible || _campaign?.Player is null) return;
-        var nation = _campaign.Player;
+        if (_researchLayer is null || !_researchLayer.Visible) return;
+        if (ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true) is not { } nation)
+        {
+            CloseResearchScreen();
+            return;
+        }
         var current = TechnologyCatalog.Of(nation.CurrentResearch);
         var pace = ResearchSystem.WeeklyPoints(_campaign, nation);
         // Per-refresh projection, not simulation state. Each visible cost is calculated at most once.
@@ -457,10 +467,11 @@ public partial class DealOrForceGame
         _researchTree.Edges.Clear();
         var width = Math.Clamp(InterfaceSkin.Metric("research.card_width", 240), 180, 400);
         var height = Math.Clamp(InterfaceSkin.Metric("research.card_height", 128), 100, 220);
+        var inspected = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
         foreach (var technology in shown)
             foreach (var requirement in technology.Requires)
                 if (_researchPositions.TryGetValue(requirement, out var from))
-                    _researchTree.Edges.Add((from + new Vector2(width, height / 2), _researchPositions[technology.Id] + new Vector2(0, height / 2), Ui.Colour(_campaign.Player.HasTechnology(requirement) ? "state.positive" : "surface.line")));
+                    _researchTree.Edges.Add((from + new Vector2(width, height / 2), _researchPositions[technology.Id] + new Vector2(0, height / 2), Ui.Colour(inspected is not null && inspected.HasTechnology(requirement) ? "state.positive" : "surface.line")));
         _researchTree.QueueRedraw();
     }
 
@@ -523,7 +534,8 @@ public partial class DealOrForceGame
 
     private void RefreshResearchDetails(TechnologyDefinition technology, ResearchSystem.DiffusionBreakdown diffusion, float pace)
     {
-        var nation = _campaign.Player;
+        if (ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true) is not { } nation) return;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         var state = ResearchWorkspace.Status(nation, technology);
         var known = state == ResearchWorkspace.State.Known;
         var enabled = _campaign.FeatureEnabled("research") &&
@@ -539,9 +551,9 @@ public partial class DealOrForceGame
             ? "Once unlocked: {0} week(s) at this pace." : "About {0} week(s) at this pace.", weeks.Value) : Tr("No research progress at the current pace.");
         _researchDetailTime.TooltipText = Ui.Tip(Tr("Research pace depends on the economy, literacy, education, universities, laboratories, stability and previous discoveries."));
         _researchStart.Text = Tr(known ? "Researched" : state == ResearchWorkspace.State.Active ? "Researching" : "Start research");
-        _researchStart.Disabled = !ResearchWorkspace.CanStart(_campaign, nation, technology);
+        _researchStart.Disabled = observing || !ResearchWorkspace.CanStart(_campaign, nation, technology);
         StyleButton(_researchStart, !_researchStart.Disabled);
-        _researchDetailReason.Text = !enabled ? Tr("Research is disabled in this campaign.") : state == ResearchWorkspace.State.Blocked ? Tr("Complete every prerequisite first.") : "";
+        _researchDetailReason.Text = observing ? Tr("obs.ui.action.readonly") : !enabled ? Tr("Research is disabled in this campaign.") : state == ResearchWorkspace.State.Blocked ? Tr("Complete every prerequisite first.") : "";
         _researchDetailReason.Visible = _researchDetailReason.Text.Length > 0;
         RefreshResearchRoute(technology, pace);
         foreach (var (id, button) in _researchRequirements)

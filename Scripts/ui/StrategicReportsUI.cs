@@ -82,7 +82,7 @@ public partial class DealOrForceGame
                 if (entry.Suppliers.Length > count) card.AddChild(Title(Simulation.Loc.Format("Additional suppliers: {0}", entry.Suppliers.Length - count), 12, Ui.Colour("text.caption")));
             }
             if (entry.UnattributedImports > .001f) card.AddChild(Title(Simulation.Loc.Format("Imports without supplier attribution: {0:0.##} units", entry.UnattributedImports), 13, Ui.Colour("text.caption")));
-            if (nation.Id == _campaign.Player.Id && CampaignUiCatalog.For("Economy").Tabs.Any(t => t.Id == "Market"))
+            if (_campaign?.Player is { } currentPlayer && nation.Id == currentPlayer.Id && CampaignUiCatalog.For("Economy").Tabs.Any(t => t.Id == "Market"))
                 card.AddChild(ActionButton("Inspect good", () =>
             {
                 CloseLedger(); OpenEconomyTab("Market"); _shortagesOnly.ButtonPressed = false;

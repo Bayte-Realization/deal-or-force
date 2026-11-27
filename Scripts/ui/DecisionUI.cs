@@ -38,9 +38,11 @@ public partial class DealOrForceGame
         if (_dossierTab == "Opportunities") { ShowOpportunityAtlas(); return; }
         if (_dossierTab == "Formables") { ShowFormableNations(); return; }
         _formationConfirmation = "";
-        if (!ReferenceEquals(_agendaWorld, _campaign) || _agendaNation != _campaign.Player.Id)
+        var nation = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+        if (nation is null) return;
+        if (!ReferenceEquals(_agendaWorld, _campaign) || _agendaNation != nation.Id)
         {
-            _agendaWorld = _campaign; _agendaNation = _campaign.Player.Id;
+            _agendaWorld = _campaign; _agendaNation = nation.Id;
             _agendaSection = AgendaWorkspace.Section.Decisions; _agendaFilter = AgendaWorkspace.Filter.All;
             _agendaQuery = _agendaSelected = "";
             _goalsSeenComplete.Clear();
@@ -139,8 +141,9 @@ public partial class DealOrForceGame
     private void RefreshAgendaControls()
     {
         if (!GodotObject.IsInstanceValid(_agendaHost) || _agendaHost.IsQueuedForDeletion() ||
-            _agendaHost.GetParent() != _decisionControls || _campaign?.Player is null) return;
-        var nation = _campaign.Player;
+            _agendaHost.GetParent() != _decisionControls ||
+            ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true) is not { } nation)
+            return;
         _sideTitle.Text = Tr("Decisions");
         _sideBody.Text = Simulation.Loc.Format("National agenda · treasury {0}", Fmt.Money(nation.Treasury));
         var wantedHeight = AgendaListHeight();
@@ -233,7 +236,8 @@ public partial class DealOrForceGame
         _agendaCost.Text = _agendaEffects.Text = _agendaReason.Text = "";
         _agendaApply.Visible = has;
         if (!has) return;
-        var nation = _campaign.Player;
+        if (ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true) is not { } nation) return;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         var lines = new List<string>();
         var action = "Enact decision";
         var enabled = row.State == AgendaWorkspace.Status.Ready;
@@ -272,11 +276,11 @@ public partial class DealOrForceGame
             _agendaCost.Text = Tr("A goal is private: nothing in the world changes when it is pinned, dropped or met. The record is the point.");
         }
         _agendaEffects.Text = lines.Count == 0 ? "" : Tr("Result") + ":\n" + string.Join("\n", lines);
-        _agendaReason.Text = Tr(row.Reason);
-        _agendaApply.Text = Tr(action); _agendaApply.Disabled = !enabled;
+        _agendaReason.Text = observing ? Tr("obs.ui.action.readonly") : Tr(row.Reason);
+        _agendaApply.Text = Tr(action); _agendaApply.Disabled = observing || !enabled;
         _agendaApply.Name = (_agendaSection == AgendaWorkspace.Section.Decisions ? "Decision_" :
             _agendaSection == AgendaWorkspace.Section.Promises ? "Promise_" : "Goal_") + row.Id;
-        SetAgendaHighlight(_agendaApply, enabled);
+        SetAgendaHighlight(_agendaApply, !observing && enabled);
     }
 
     private void SetAgendaHighlight(Button button, bool highlighted)
@@ -298,8 +302,9 @@ public partial class DealOrForceGame
 
     private void ExecuteSelectedAgenda()
     {
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player) return;
         // Revalidate against the live world; displayed state is not command authority.
-        var row = AgendaWorkspace.Entries(_campaign, _campaign.Player, _agendaSection)
+        var row = AgendaWorkspace.Entries(_campaign, player, _agendaSection)
             .FirstOrDefault(row => row.Id == _agendaSelected);
         if (string.IsNullOrEmpty(row.Id)) { RefreshAgendaControls(); return; }
         if (_agendaSection == AgendaWorkspace.Section.Goals && row.State == AgendaWorkspace.Status.Active) AbandonGoal(row.Id);
@@ -309,13 +314,30 @@ public partial class DealOrForceGame
         else AdoptGoal(row.Id);
     }
 
-    private void TakeDecision(string id) => ApplyAgendaCommand(new TakeDecisionCommand { IssuerId = _campaign.Player.Id, DecisionId = id }, "save_complete");
-    private void TakePromise(string id) => ApplyAgendaCommand(new MakePromiseCommand { IssuerId = _campaign.Player.Id, PromiseId = id }, "promise_seal");
-    private void AdoptGoal(string id) => ApplyAgendaCommand(new AdoptGoalCommand { IssuerId = _campaign.Player.Id, GoalId = id }, "goal_pinned");
-    private void AbandonGoal(string id) => ApplyAgendaCommand(new AbandonGoalCommand { IssuerId = _campaign.Player.Id, GoalId = id }, "");
+    private void TakeDecision(string id)
+    {
+        if (_campaign?.Player is not { } player) return;
+        ApplyAgendaCommand(new TakeDecisionCommand { IssuerId = player.Id, DecisionId = id }, "save_complete");
+    }
+    private void TakePromise(string id)
+    {
+        if (_campaign?.Player is not { } player) return;
+        ApplyAgendaCommand(new MakePromiseCommand { IssuerId = player.Id, PromiseId = id }, "promise_seal");
+    }
+    private void AdoptGoal(string id)
+    {
+        if (_campaign?.Player is not { } player) return;
+        ApplyAgendaCommand(new AdoptGoalCommand { IssuerId = player.Id, GoalId = id }, "goal_pinned");
+    }
+    private void AbandonGoal(string id)
+    {
+        if (_campaign?.Player is not { } player) return;
+        ApplyAgendaCommand(new AbandonGoalCommand { IssuerId = player.Id, GoalId = id }, "");
+    }
 
     private void ApplyAgendaCommand(ICampaignCommand command, string cue)
     {
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null || command is null) return;
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
         if (cue.Length > 0) PlayStrategicCue(cue);

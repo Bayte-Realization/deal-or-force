@@ -53,7 +53,9 @@ public partial class DealOrForceGame
         // player build a selection without fear. A single key that toggled did both, so
         // shift-clicking a stack you had half-selected removed the ones you wanted and
         // added the ones you did not, and there was no way to say "this one, definitely".
-        if (army.NationId == _campaign.Player.Id && (AddingToSelection || RemovingFromSelection))
+        var player = _campaign.Player;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        if (player is not null && !observing && army.NationId == player.Id && (AddingToSelection || RemovingFromSelection))
         {
             if (RemovingFromSelection) _selectedArmies.Remove(army);
             else if (!_selectedArmies.Contains(army)) _selectedArmies.Add(army);
@@ -63,7 +65,7 @@ public partial class DealOrForceGame
                 return;
             }
             _selectedArmy = _selectedArmies[0];
-            _selectedNation = _campaign.Player;
+            _selectedNation = player;
             _globe.SelectArmies(_selectedArmies.Select(candidate => candidate.Id));
             ShowSelectedArmies();
             SetArmyFeedback(Simulation.Loc.Format(

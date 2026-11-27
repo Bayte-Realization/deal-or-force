@@ -92,7 +92,13 @@ public partial class DealOrForceGame
     /// <summary>A few times a second: cheap unless an army, its state or the selection changed.</summary>
     private void MaintainArmyBar(double delta)
     {
-        if (_armyBar is null || _campaign?.Player is null) return;
+        if (_armyBar is null || _campaign is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign.Player is null)
+        {
+            if (_armyBar.Visible) _armyBar.Visible = false;
+            RefreshPlanningBar();
+            return;
+        }
         _armyBarClock += delta;
         if (_armyBarClock < 0.25) return;
         _armyBarClock = 0;

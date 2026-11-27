@@ -3,8 +3,10 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading;
+using DealOrForce.Simulation.Kernels;
 
 namespace DealOrForce.Simulation;
 
@@ -489,11 +491,15 @@ public static class MarketSystem
         foreach (var _ in TickStages(campaign)) { }
     }
 
+    /// <summary>Day-of-cycle slot on which weekly global market clearing runs (day 0).</summary>
+    internal static int ScheduleSlot(int cycle) => 0;
+
     /// <summary>The week's market in stages, for the smoothed step (EconomySystem.TickStages).</summary>
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(MarketSystem))) yield break;
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
+        var cycle = Math.Max(1, campaign.Defines.EconomyTickDays);
+        if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % cycle != ScheduleSlot(cycle)) yield break;
         foreach (var _ in RecalculateStages(campaign, true)) yield return 0;
     }
 
@@ -540,9 +546,70 @@ public static class MarketSystem
     private const int PricingStageCommodities = 6;
 
     [ThreadStatic] private static List<ScenarioState> _stateScratch;
-    [ThreadStatic] private static MarketQuote[] _priceQuotes;
     [ThreadStatic] private static List<Nation> _marketNationsScratch;
     [ThreadStatic] private static NationTally[] _tallyDenseScratch;
+    private static readonly ConditionalWeakTable<Campaign, KernelBatchBuffers> KernelBuffers = new();
+
+    private sealed class KernelBatchBuffers
+    {
+        public float[] BasePrices = Array.Empty<float>();
+        public byte[] TradedWorld = Array.Empty<byte>();
+        public float[] EssentialWeights = Array.Empty<float>();
+        public float[] TariffRates = Array.Empty<float>();
+        public float[] Demand = Array.Empty<float>();
+        public float[] Production = Array.Empty<float>();
+        public float[] Imports = Array.Empty<float>();
+        public float[] Exports = Array.Empty<float>();
+        public float[] Relieved = Array.Empty<float>();
+        public float[] Satisfaction = Array.Empty<float>();
+        public float[] Prices = Array.Empty<float>();
+        public MarketQuote[] QuoteRefs = Array.Empty<MarketQuote>();
+
+        public Nation[] ClearNations = Array.Empty<Nation>();
+        public readonly List<Nation> FallbackNations = new();
+        public float[] GrossOutput = Array.Empty<float>();
+        public float[] RealOutput = Array.Empty<float>();
+        public float[] ShortageIndex = Array.Empty<float>();
+        public float[] MarketAccess = Array.Empty<float>();
+        public float[] WeeklyTradeBalance = Array.Empty<float>();
+        public float[] WeeklyTariffIncome = Array.Empty<float>();
+
+        public void EnsurePriceCapacity(int goodCount, int nationCount)
+        {
+            if (BasePrices.Length < goodCount) BasePrices = new float[goodCount];
+            if (TradedWorld.Length < goodCount) TradedWorld = new byte[goodCount];
+            var total = goodCount * nationCount;
+            if (Demand.Length < total) Demand = new float[total];
+            if (Production.Length < total) Production = new float[total];
+            if (Imports.Length < total) Imports = new float[total];
+            if (Relieved.Length < total) Relieved = new float[total];
+            if (Satisfaction.Length < total) Satisfaction = new float[total];
+            if (Prices.Length < total) Prices = new float[total];
+            if (QuoteRefs.Length < total) QuoteRefs = new MarketQuote[total];
+        }
+
+        public void EnsureClearCapacity(int nationCount, int goodCount)
+        {
+            if (BasePrices.Length < goodCount) BasePrices = new float[goodCount];
+            if (EssentialWeights.Length < goodCount) EssentialWeights = new float[goodCount];
+            if (TariffRates.Length < nationCount) TariffRates = new float[nationCount];
+            if (ClearNations.Length < nationCount) ClearNations = new Nation[nationCount];
+            if (GrossOutput.Length < nationCount) GrossOutput = new float[nationCount];
+            if (RealOutput.Length < nationCount) RealOutput = new float[nationCount];
+            if (ShortageIndex.Length < nationCount) ShortageIndex = new float[nationCount];
+            if (MarketAccess.Length < nationCount) MarketAccess = new float[nationCount];
+            if (WeeklyTradeBalance.Length < nationCount) WeeklyTradeBalance = new float[nationCount];
+            if (WeeklyTariffIncome.Length < nationCount) WeeklyTariffIncome = new float[nationCount];
+            var total = nationCount * goodCount;
+            if (Production.Length < total) Production = new float[total];
+            if (Demand.Length < total) Demand = new float[total];
+            if (Imports.Length < total) Imports = new float[total];
+            if (Exports.Length < total) Exports = new float[total];
+            if (Relieved.Length < total) Relieved = new float[total];
+            if (Satisfaction.Length < total) Satisfaction = new float[total];
+            if (Prices.Length < total) Prices = new float[total];
+        }
+    }
 
     private static volatile int _jobCacheVersion = -1;
     private static float[] _jobOrderJobs = Array.Empty<float>();
@@ -648,65 +715,72 @@ public static class MarketSystem
     private static void SettlePrices(Campaign campaign, bool adjustPrice, CommodityCatalog.SnapshotData catalogSnap,
         Commodity[] catalogue, int from, int to, List<Nation> nations)
     {
-        var nationCount = nations.Count;
-        var byIndex = catalogSnap.ByIndex;
         var goodCount = to - from;
-        if (goodCount >= 4 && nationCount >= 16 && DeterministicParallel.Enabled(campaign))
-        {
-            DeterministicParallel.For(campaign, from, to, good =>
-                SettleSingleGoodPrice(campaign, adjustPrice, byIndex, catalogue[good], nations, nationCount), minItems: 2);
-            return;
-        }
-        for (var good = from; good < to; good++)
-            SettleSingleGoodPrice(campaign, adjustPrice, byIndex, catalogue[good], nations, nationCount);
-    }
+        var nationCount = nations.Count;
+        if (goodCount <= 0 || nationCount <= 0) return;
 
-    private static void SettleSingleGoodPrice(Campaign campaign, bool adjustPrice, CommodityDefinition[] byIndex,
-        Commodity commodity, List<Nation> nations, int nationCount)
-    {
-        var quotes = _priceQuotes;
-        if (quotes is null || quotes.Length < nationCount)
-            _priceQuotes = quotes = new MarketQuote[nationCount];
-        var totalDemand = 0f;
-        var totalProduction = 0f;
-        var wantedImports = 0f;
-        var spareExports = 0f;
-        for (var i = 0; i < nationCount; i++)
-        {
-            if (!nations[i].Market.TryGetValue(commodity, out var quote)) { quotes[i] = null; continue; }
-            quotes[i] = quote;
-            totalDemand += quote.Demand;
-            totalProduction += quote.Production;
-            if (quote.Demand > quote.Production) wantedImports += quote.Demand - quote.Production;
-            else spareExports += quote.Production - quote.Demand;
-        }
-        totalDemand = MathF.Max(0.01f, totalDemand);
-        totalProduction = MathF.Max(0.01f, totalProduction);
+        var byIndex = catalogSnap.ByIndex;
+        var buf = KernelBuffers.GetOrCreateValue(campaign);
+        buf.EnsurePriceCapacity(goodCount, nationCount);
 
-        var cidx = (int)commodity;
-        var definition = (uint)cidx < (uint)byIndex.Length && byIndex[cidx] is { } found
-            ? found
-            : CommodityCatalog.Get(commodity);
-        // A good priced on its trade: what the importers want against what the exporters can
-        // spare (CommodityDefinition.TradedWorldPrice). Everything else: the whole harvest.
-        var worldScarcity = definition.TradedWorldPrice
-            ? M.Clamp(MathF.Max(0.01f, wantedImports) / MathF.Max(0.01f, spareExports), 0.55f, 2.75f)
-            : M.Clamp(totalDemand / totalProduction, 0.55f, 2.75f);
-        for (var i = 0; i < nationCount; i++)
+        for (var g = 0; g < goodCount; g++)
         {
-            var quote = quotes[i];
+            var commodity = catalogue[from + g];
+            var cidx = (int)commodity;
+            var definition = (uint)cidx < (uint)byIndex.Length && byIndex[cidx] is { } found
+                ? found
+                : CommodityCatalog.Get(commodity);
+            buf.BasePrices[g] = definition.BasePrice;
+            buf.TradedWorld[g] = definition.TradedWorldPrice ? (byte)1 : (byte)0;
+
+            var row = g * nationCount;
+            for (var i = 0; i < nationCount; i++)
+            {
+                var idx = row + i;
+                if (!nations[i].Market.TryGetValue(commodity, out var quote))
+                {
+                    buf.QuoteRefs[idx] = null;
+                    buf.Demand[idx] = 0f;
+                    buf.Production[idx] = 0f;
+                    buf.Imports[idx] = 0f;
+                    buf.Relieved[idx] = 0f;
+                    buf.Prices[idx] = 0f;
+                    continue;
+                }
+                buf.QuoteRefs[idx] = quote;
+                buf.Demand[idx] = quote.Demand;
+                buf.Production[idx] = quote.Production;
+                buf.Imports[idx] = quote.Imports;
+                buf.Relieved[idx] = quote.Relieved;
+                buf.Prices[idx] = quote.Price;
+            }
+        }
+
+        var total = goodCount * nationCount;
+        NativeMarketKernels.SettlePrices(
+            goodCount,
+            nationCount,
+            nationCount,
+            buf.BasePrices.AsSpan(0, goodCount),
+            buf.TradedWorld.AsSpan(0, goodCount),
+            buf.Demand.AsSpan(0, total),
+            buf.Production.AsSpan(0, total),
+            buf.Imports.AsSpan(0, total),
+            buf.Relieved.AsSpan(0, total),
+            adjustPrice,
+            campaign.Defines.ImportMarkup,
+            campaign.Defines.TradeAgreementMarkupRelief,
+            campaign.Defines.PriceAdjustSpeed,
+            buf.Satisfaction.AsSpan(0, total),
+            buf.Prices.AsSpan(0, total));
+
+        for (var idx = 0; idx < total; idx++)
+        {
+            var quote = buf.QuoteRefs[idx];
             if (quote is null) continue;
-            quotes[i] = null;
-            quote.Satisfaction = quote.Demand <= 0.001f
-                ? 1f
-                : M.Clamp((quote.Production + quote.Imports) / quote.Demand, 0f, 1f);
-
-            var localScarcity = 1f + (1f - quote.Satisfaction) * 1.40f;
-            var importMarkup = ImportMarkupOf(campaign.Defines, quote);
-            var targetPrice = definition.BasePrice * worldScarcity * localScarcity * importMarkup;
-            quote.Price = adjustPrice
-                ? M.Lerp(quote.Price <= 0f ? definition.BasePrice : quote.Price, targetPrice, campaign.Defines.PriceAdjustSpeed)
-                : targetPrice;
+            buf.QuoteRefs[idx] = null;
+            quote.Satisfaction = buf.Satisfaction[idx];
+            quote.Price = buf.Prices[idx];
         }
     }
 
@@ -714,10 +788,121 @@ public static class MarketSystem
     private static void SettleNations(Campaign campaign, IReadOnlyList<Nation> active, int from, int to,
         NavalOperations.CommerceBatch commerce, CommodityCatalog.SnapshotData catalogSnap)
     {
-        DeterministicParallel.For(campaign, from, to, index =>
+        var batchCount = to - from;
+        if (batchCount <= 0) return;
+
+        var catalogue = catalogSnap.AllGoods;
+        var goodCount = catalogue.Length;
+        if (goodCount == 0)
         {
-            SettleSingleNation(campaign, active[index], commerce, catalogSnap);
-        }, minItems: 8);
+            for (var index = from; index < to; index++)
+                SettleSingleNation(campaign, active[index], commerce, catalogSnap);
+            return;
+        }
+
+        var byIndex = catalogSnap.ByIndex;
+        var buf = KernelBuffers.GetOrCreateValue(campaign);
+        buf.EnsureClearCapacity(batchCount, goodCount);
+
+        for (var g = 0; g < goodCount; g++)
+        {
+            var commodity = catalogue[g];
+            var cidx = (int)commodity;
+            var definition = (uint)cidx < (uint)byIndex.Length && byIndex[cidx] is { } found
+                ? found
+                : CommodityCatalog.Get(commodity);
+            buf.BasePrices[g] = definition.BasePrice;
+            buf.EssentialWeights[g] = definition.EssentialWeight;
+        }
+
+        var packedCount = 0;
+        buf.FallbackNations.Clear();
+        for (var index = from; index < to; index++)
+        {
+            var nation = active[index];
+            if (nation.Market.Count < goodCount)
+            {
+                buf.FallbackNations.Add(nation);
+                continue;
+            }
+
+            var row = packedCount * goodCount;
+            var complete = true;
+            for (var g = 0; g < goodCount; g++)
+            {
+                if (!nation.Market.TryGetValue(catalogue[g], out var quote))
+                {
+                    complete = false;
+                    break;
+                }
+                var idx = row + g;
+                buf.Production[idx] = quote.Production;
+                buf.Demand[idx] = quote.Demand;
+                buf.Imports[idx] = quote.Imports;
+                buf.Exports[idx] = quote.Exports;
+                buf.Relieved[idx] = quote.Relieved;
+                buf.Satisfaction[idx] = quote.Satisfaction;
+                buf.Prices[idx] = quote.Price;
+            }
+
+            if (!complete)
+            {
+                buf.FallbackNations.Add(nation);
+                continue;
+            }
+
+            buf.ClearNations[packedCount] = nation;
+            buf.TariffRates[packedCount] = TradePolicyRules.TariffRate(nation.TradePolicy);
+            packedCount++;
+        }
+
+        if (packedCount > 0)
+        {
+            var total = packedCount * goodCount;
+            NativeMarketKernels.ClearNations(
+                packedCount,
+                goodCount,
+                goodCount,
+                buf.BasePrices.AsSpan(0, goodCount),
+                buf.EssentialWeights.AsSpan(0, goodCount),
+                buf.TariffRates.AsSpan(0, packedCount),
+                buf.Production.AsSpan(0, total),
+                buf.Demand.AsSpan(0, total),
+                buf.Imports.AsSpan(0, total),
+                buf.Exports.AsSpan(0, total),
+                buf.Relieved.AsSpan(0, total),
+                buf.Satisfaction.AsSpan(0, total),
+                buf.Prices.AsSpan(0, total),
+                campaign.Defines.MarketTreasuryTradeShare,
+                campaign.Defines.GdpPriceShare,
+                campaign.Defines.GdpPriceBand,
+                buf.GrossOutput.AsSpan(0, packedCount),
+                buf.RealOutput.AsSpan(0, packedCount),
+                buf.ShortageIndex.AsSpan(0, packedCount),
+                buf.MarketAccess.AsSpan(0, packedCount),
+                buf.WeeklyTradeBalance.AsSpan(0, packedCount),
+                buf.WeeklyTariffIncome.AsSpan(0, packedCount));
+
+            for (var ni = 0; ni < packedCount; ni++)
+            {
+                var nation = buf.ClearNations[ni];
+                buf.ClearNations[ni] = null;
+                nation.GrossOutput = buf.GrossOutput[ni];
+                MeasureIncome(campaign, nation, buf.RealOutput[ni]);
+                nation.ShortageIndex = buf.ShortageIndex[ni];
+                nation.MarketAccess = buf.MarketAccess[ni];
+                nation.WeeklyTradeBalance = buf.WeeklyTradeBalance[ni];
+                NavalOperations.ApplyCommerceEffects(campaign, nation, null, commerce);
+                nation.WeeklyTariffIncome = buf.WeeklyTariffIncome[ni];
+            }
+        }
+
+        if (buf.FallbackNations.Count > 0)
+        {
+            for (var fi = 0; fi < buf.FallbackNations.Count; fi++)
+                SettleSingleNation(campaign, buf.FallbackNations[fi], commerce, catalogSnap);
+            buf.FallbackNations.Clear();
+        }
     }
 
     private static void SettleSingleNation(Campaign campaign, Nation nation, NavalOperations.CommerceBatch commerce,

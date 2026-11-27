@@ -565,8 +565,9 @@ public static class StateFailure
         for (var i = 1; i < ground.Count; i++)
             if (ground[i].Population > seed.Population) seed = ground[i];
         var (template, ideology, government) = Allegiance(c, nation, seed);
-        var parentTag = nation.Tag;
-        var parentName = nation.Name;
+        var (parentTag, parentName) = CountryNames.RisingParent(nation);
+        parentTag = (parentTag ?? "").Replace(':', ' ').Trim();
+        parentName = (parentName ?? "").Replace(':', ' ').Trim();
         var regionName = (seed.Name ?? "").Replace(':', ' ').Replace('@', ' ');
         var faith = BeliefDynamics.RebelFaith(c, nation, ground);
         var rising = SecessionEvents.Uprising(c, nation, ground, born =>
@@ -956,8 +957,9 @@ public static class StateFailure
         long groundPeople = 0;
         for (var gi = 0; gi < ground.Count; gi++) groundPeople += ground[gi].Population;
         if (groundPeople < nation.Population * 0.06f) return null;
-        var parentTag = nation.Tag;
-        var parentName = nation.Name;
+        var (parentTag, parentName) = CountryNames.RisingParent(nation);
+        parentTag = (parentTag ?? "").Replace(':', ' ').Trim();
+        parentName = (parentName ?? "").Replace(':', ' ').Trim();
         var report = SecessionEvents.Uprising(c, nation, ground, born =>
         {
             born.Name = $"rising:loyalist_government:{parentTag}:{parentName}";

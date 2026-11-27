@@ -38,7 +38,7 @@ public partial class DealOrForceGame
 
     private void RefreshPolicyReformBar(bool force = false)
     {
-        if (_policyReformBar is null || _campaign?.Player is not { } nation) return;
+        if (_policyReformBar is null || InspectedPolicyNation() is not { } nation) return;
         var now = Time.GetTicksMsec();
         if (!force && now < _policyReformNextCheck) return;
         _policyReformNextCheck = now + 150;
@@ -49,8 +49,11 @@ public partial class DealOrForceGame
         var exists = policy is not null;
         _policyReformActions.Visible = exists;
         if (!exists) { _policyReformPrice.Text = Tr("No policy selected"); _policyReformStatus.Text = Tr("Choose another section or clear your search."); return; }
-        var may = PoliticalPolicies.CanAdopt(_campaign, nation, policy, _lawTarget, _lawRegion, PolicyIsAgenda, out var refusal);
-        var confirming = _policyConfirmation == policy.Id;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        var refusal = "";
+        var may = !observing && PoliticalPolicies.CanAdopt(_campaign, nation, policy, _lawTarget, _lawRegion, PolicyIsAgenda, out refusal);
+        if (observing) refusal = "obs.ui.action.readonly";
+        var confirming = !observing && _policyConfirmation == policy.Id;
         var ready = nation.PolicyReadyOnDay.GetValueOrDefault(PolicyIsAgenda ? "agenda" : PoliticalPolicies.Slot(policy, _lawTarget, _lawRegion));
         var target = PolicyScope switch
         {

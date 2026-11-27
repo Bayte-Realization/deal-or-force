@@ -131,8 +131,9 @@ public static partial class MovementRules
                 yield return 0;
             }
         }
-        // Keep the weekly review in order, yielding between falls and whole settlements.
-        if (campaign.ElapsedDays % week == 0)
+        // Keep the weekly review in order, yielding between falls and whole settlements,
+        // offset from market day 0 so weekly fall + homeland snapshot runs on day 4.
+        if (campaign.ElapsedDays % week == WeeklyFallSlot(week))
         {
             using (SimProfiler.Measure("movements"))
             using (SimProfiler.Measure("  mov:rules"))
@@ -155,11 +156,18 @@ public static partial class MovementRules
             }
         }
         yield return 0;
-        var hasActiveMovement = false;
+        var hasDueMovement = false;
         var active = campaign.ActiveNations;
         for (var i = 0; i < active.Count; i++)
-            if (active[i].Movement is { Dissolved: false }) { hasActiveMovement = true; break; }
-        if (hasActiveMovement)
+        {
+            var candidate = active[i];
+            if (candidate.Movement is { Dissolved: false } && OnItsDay(campaign, candidate.Id, week))
+            {
+                hasDueMovement = true;
+                break;
+            }
+        }
+        if (hasDueMovement)
             foreach (var _ in EnsurePeopleIndexedStages(campaign, insideMovRules: true))
                 yield return 0;
         // Each movement's own week on a day of its own. They all used to fall on the same
@@ -207,6 +215,9 @@ public static partial class MovementRules
         foreach (var _ in MovementFall.EndLostWarsStages(campaign))
             yield return 0;
     }
+
+    /// <summary>Day-of-cycle slot on which the global weekly fall and homeland snapshot runs (day 4).</summary>
+    internal static int WeeklyFallSlot(int cycle) => cycle > 4 ? 4 : cycle > 1 ? cycle - 1 : 0;
 
     /// <summary>Whether today is this one's day in a cycle of so many days.</summary>
     internal static bool OnItsDay(Campaign campaign, int id, int cycle) =>

@@ -27,7 +27,6 @@ public sealed partial class GlobePresentation
     private ShaderMaterial _supplyLineMaterial;
     private int _supplyLineFingerprint = int.MinValue;
     private readonly List<Vector3> _supplyLinePoints = new();
-    private readonly List<float> _dateLineXs = new();
     private readonly List<DateLineSeam.Run> _dateLineRuns = new();
     private readonly List<Simulation.Army> _supplyLineArmies = new();
     private readonly Dictionary<int, (float Latitude, float Longitude)> _supplyHubByState = new();
@@ -149,7 +148,13 @@ void fragment() {
 
     private bool AppendSupplyLine(Simulation.Army army)
     {
-        var hub = SupplyHubPoint(army.SupplySourceStateMapIndex);
+        var map = _campaign?.ProvinceMap;
+        if (map is null) return false;
+        if (!GlobeLineSanity.TryResolveEntityGeo(army.Latitude, army.Longitude, army.ProvinceId,
+                map.ProvinceCount, map.ProvinceCenterCell, map.CenterOf, out var armyGeo))
+            return false;
+        if (!TrySupplyHubPoint(army.SupplySourceStateMapIndex, out var hub))
+            return false;
         var colour = army.CutOff
             ? new Color(0.96f, 0.34f, 0.28f, 0.92f)
             : army.SupplyCongestion < 0.999f
@@ -157,28 +162,33 @@ void fragment() {
                 : new Color(0.52f, 0.82f, 0.58f, 0.72f);
 
         _supplyLinePoints.Clear();
-        _supplyLinePoints.Add(PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius));
-        var latitude = army.Latitude;
-        var longitude = army.Longitude;
-        var deltaLongitude = hub.Longitude - longitude;
-        while (deltaLongitude > 180f) deltaLongitude -= 360f;
-        while (deltaLongitude < -180f) deltaLongitude += 360f;
+        if (!TryPresentationPoint(armyGeo.Latitude, armyGeo.Longitude, SurfaceLineRadius, out var originPt))
+            return false;
+        _supplyLinePoints.Add(originPt);
+        var latitude = armyGeo.Latitude;
+        var longitude = armyGeo.Longitude;
+        var deltaLongitude = GlobeLineSanity.WrapDeltaDegrees(hub.Longitude - longitude);
         var steps = Math.Max(1, (int)MathF.Ceiling(MathF.Max(MathF.Abs(hub.Latitude - latitude),
             MathF.Abs(deltaLongitude))));
         for (var step = 1; step <= steps; step++)
         {
             var t = step / (float)steps;
-            _supplyLinePoints.Add(PresentationPoint(latitude + (hub.Latitude - latitude) * t,
-                longitude + deltaLongitude * t, SurfaceLineRadius));
+            if (TryPresentationPoint(latitude + (hub.Latitude - latitude) * t,
+                    longitude + deltaLongitude * t, SurfaceLineRadius, out var stepPt))
+                _supplyLinePoints.Add(stepPt);
         }
+        if (_supplyLinePoints.Count < 2) return false;
 
         // Batch every army's strip into a single indexed Triangles surface (zero per-army draw calls).
-        var worldPx = Math.Clamp(BattleArrowUnitsPerPixel(), 0.00018f, 0.0016f);
-        var halfWidth = Math.Clamp(worldPx * 2.2f, 0.00055f, 0.0020f);
-        CollectDateLineRuns(_supplyLinePoints);
+        var worldPx = GlobeLineSanity.SafeClamp(BattleArrowUnitsPerPixel(), 0.00018f, 0.0016f, 0.0006f);
+        var halfWidth = GlobeLineSanity.SafeClamp(worldPx * 2.2f, 0.00055f, 0.0020f, 0.0011f);
+        CollectValidLineRuns(_supplyLinePoints,
+            _flatMap ? GlobeLineSanity.MaxFlatSegmentLength : GlobeLineSanity.MaxGlobeSegmentLength,
+            _dateLineRuns);
+        var drewStrip = false;
         foreach (var run in _dateLineRuns)
         {
-            var baseVert = _supplyRibbonVerts.Count;
+            var prevPair = -1;
             var cumulative = 0f;
             var endIndex = run.Start + run.Count - 1;
             for (var index = run.Start; index <= endIndex; index++)
@@ -187,52 +197,80 @@ void fragment() {
                 if (index > run.Start) cumulative += point.DistanceTo(_supplyLinePoints[index - 1]) * 18f;
                 var before = _supplyLinePoints[Math.Max(run.Start, index - 1)];
                 var after = _supplyLinePoints[Math.Min(endIndex, index + 1)];
-                var tangent = (after - before).Normalized();
-                if (tangent == Vector3.Zero) tangent = Vector3.Right;
-                var normal = _flatMap ? Vector3.Forward : point.Normalized();
-                var side = normal.Cross(tangent).Normalized() * halfWidth;
-                _supplyRibbonVerts.Add(OnOrderSurface(point + side));
+                if (!GlobeLineSanity.TrySafeRibbonFrame(ToNum(point), ToNum(before), ToNum(after),
+                        _flatMap, flatPositiveZNormal: false, out _, out _, out var sideAxis))
+                {
+                    prevPair = -1;
+                    continue;
+                }
+                var side = ToGd(sideAxis) * halfWidth;
+                if (!TryOnOrderSurface(point + side, SurfaceLineRadius, FlatLineZ, out var left) ||
+                    !TryOnOrderSurface(point - side, SurfaceLineRadius, FlatLineZ, out var right) ||
+                    !GlobeLineSanity.IsValidEmittedEdge(ToNum(left), ToNum(right), _flatMap, _flatX))
+                {
+                    prevPair = -1;
+                    continue;
+                }
+                if (prevPair >= 0 &&
+                    (!GlobeLineSanity.IsValidEmittedEdge(ToNum(_supplyRibbonVerts[prevPair]), ToNum(left), _flatMap, _flatX) ||
+                     !GlobeLineSanity.IsValidEmittedEdge(ToNum(_supplyRibbonVerts[prevPair + 1]), ToNum(right), _flatMap, _flatX)))
+                {
+                    prevPair = -1;
+                }
+                var curr = _supplyRibbonVerts.Count;
+                _supplyRibbonVerts.Add(left);
                 _supplyRibbonUvs.Add(new Vector2(cumulative, 0f));
                 _supplyRibbonColors.Add(colour);
-                _supplyRibbonVerts.Add(OnOrderSurface(point - side));
+                _supplyRibbonVerts.Add(right);
                 _supplyRibbonUvs.Add(new Vector2(cumulative, 1f));
                 _supplyRibbonColors.Add(colour);
-                if (index > run.Start)
+                if (prevPair >= 0)
                 {
-                    var prev = baseVert + (index - run.Start - 1) * 2;
-                    var curr = prev + 2;
-                    _supplyRibbonIndices.Add(prev);
-                    _supplyRibbonIndices.Add(prev + 1);
+                    _supplyRibbonIndices.Add(prevPair);
+                    _supplyRibbonIndices.Add(prevPair + 1);
                     _supplyRibbonIndices.Add(curr);
-                    _supplyRibbonIndices.Add(prev + 1);
+                    _supplyRibbonIndices.Add(prevPair + 1);
                     _supplyRibbonIndices.Add(curr + 1);
                     _supplyRibbonIndices.Add(curr);
+                    drewStrip = true;
                 }
+                prevPair = curr;
             }
         }
+        if (!drewStrip) return false;
 
         // The hub end gets a crisp diamond + inner cross depot beacon batched into the Lines surface.
         var end = _supplyLinePoints[^1];
-        var up = _flatMap ? Vector3.Forward : end.Normalized();
-        var across = up.Cross(Vector3.Up).LengthSquared() > 0.0001f ? up.Cross(Vector3.Up).Normalized() : Vector3.Right;
-        var along = up.Cross(across).Normalized();
-        var size = Math.Clamp(worldPx * 4.8f, 0.0012f, 0.0048f);
-        var inner = size * 0.48f;
-        var pE = OnOrderSurface(end + across * size);
-        var pN = OnOrderSurface(end + along * size);
-        var pW = OnOrderSurface(end - across * size);
-        var pS = OnOrderSurface(end - along * size);
-        AddSupplyLineSegment(pE, pN, colour);
-        AddSupplyLineSegment(pN, pW, colour);
-        AddSupplyLineSegment(pW, pS, colour);
-        AddSupplyLineSegment(pS, pE, colour);
-        AddSupplyLineSegment(OnOrderSurface(end - across * inner), OnOrderSurface(end + across * inner), colour);
-        AddSupplyLineSegment(OnOrderSurface(end - along * inner), OnOrderSurface(end + along * inner), colour);
+        if (GlobeLineSanity.IsValidEmittedVertex(ToNum(end), _flatMap, _flatX))
+        {
+            var up = _flatMap ? Vector3.Forward : end.Normalized();
+            var across = GlobeLineSanity.TrySafeCrossAxis(ToNum(up), out var acrossNum) ? ToGd(acrossNum) : Vector3.Right;
+            var along = GlobeLineSanity.TrySafeNormalize(ToNum(up.Cross(across)), out var alongNum) ? ToGd(alongNum) : Vector3.Up;
+            var size = GlobeLineSanity.SafeClamp(worldPx * 4.8f, 0.0012f, 0.0048f, 0.0024f);
+            var inner = size * 0.48f;
+            if (TryOnOrderSurface(end + across * size, SurfaceLineRadius, FlatLineZ, out var pE) &&
+                TryOnOrderSurface(end + along * size, SurfaceLineRadius, FlatLineZ, out var pN) &&
+                TryOnOrderSurface(end - across * size, SurfaceLineRadius, FlatLineZ, out var pW) &&
+                TryOnOrderSurface(end - along * size, SurfaceLineRadius, FlatLineZ, out var pS))
+            {
+                AddSupplyLineSegment(pE, pN, colour);
+                AddSupplyLineSegment(pN, pW, colour);
+                AddSupplyLineSegment(pW, pS, colour);
+                AddSupplyLineSegment(pS, pE, colour);
+            }
+            if (TryOnOrderSurface(end - across * inner, SurfaceLineRadius, FlatLineZ, out var hW) &&
+                TryOnOrderSurface(end + across * inner, SurfaceLineRadius, FlatLineZ, out var hE))
+                AddSupplyLineSegment(hW, hE, colour);
+            if (TryOnOrderSurface(end - along * inner, SurfaceLineRadius, FlatLineZ, out var vS) &&
+                TryOnOrderSurface(end + along * inner, SurfaceLineRadius, FlatLineZ, out var vN))
+                AddSupplyLineSegment(vS, vN, colour);
+        }
         return true;
     }
 
     private void AddSupplyLineSegment(Vector3 a, Vector3 b, Color colour)
     {
+        if (!GlobeLineSanity.IsValidEmittedEdge(ToNum(a), ToNum(b), _flatMap, _flatX)) return;
         var uv = new Vector2(0f, 0.5f);
         _supplyMarkerVerts.Add(a);
         _supplyMarkerUvs.Add(uv);
@@ -248,9 +286,10 @@ void fragment() {
     /// Averages longitude relative to the first province so a state straddling the date
     /// line does not centre itself on the far side of the world.
     /// </summary>
-    private (float Latitude, float Longitude) SupplyHubPoint(int stateMapIndex)
+    private bool TrySupplyHubPoint(int stateMapIndex, out (float Latitude, float Longitude) hub)
     {
-        if (_supplyHubByState.TryGetValue(stateMapIndex, out var cached)) return cached;
+        if (_supplyHubByState.TryGetValue(stateMapIndex, out hub))
+            return GlobeLineSanity.IsValidGeo(hub.Latitude, hub.Longitude);
         var topology = _campaign.ProvinceMap;
         var first = true;
         float refLongitude = 0f;
@@ -260,16 +299,17 @@ void fragment() {
         float centreLatitude = 0f, centreLongitude = 0f;
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
-            if (topology.ProvinceToState[province] != stateMapIndex) continue;
+            if (topology.ProvinceToState[province] != stateMapIndex ||
+                !GlobeLineSanity.TryValidateProvinceId(province, topology.ProvinceCount, topology.ProvinceCenterCell))
+                continue;
             var centre = topology.CenterOf(province);
+            if (!GlobeLineSanity.IsValidGeo(centre.Latitude, centre.Longitude)) continue;
             if (first)
             {
                 refLongitude = centre.Longitude;
                 first = false;
             }
-            var delta = centre.Longitude - refLongitude;
-            while (delta > 180f) delta -= 360f;
-            while (delta < -180f) delta += 360f;
+            var delta = GlobeLineSanity.WrapDeltaDegrees(centre.Longitude - refLongitude);
             sumLatitude += centre.Latitude;
             sumLongitude += delta;
             count++;
@@ -277,16 +317,15 @@ void fragment() {
         if (count > 0)
         {
             centreLatitude = (float)(sumLatitude / count);
-            centreLongitude = refLongitude + (float)(sumLongitude / count);
-            while (centreLongitude > 180f) centreLongitude -= 360f;
-            while (centreLongitude < -180f) centreLongitude += 360f;
+            centreLongitude = GlobeLineSanity.WrapLongitude(refLongitude + (float)(sumLongitude / count));
             for (var province = 1; province <= topology.ProvinceCount; province++)
             {
-                if (topology.ProvinceToState[province] != stateMapIndex) continue;
+                if (topology.ProvinceToState[province] != stateMapIndex ||
+                    !GlobeLineSanity.TryValidateProvinceId(province, topology.ProvinceCount, topology.ProvinceCenterCell))
+                    continue;
                 var centre = topology.CenterOf(province);
-                var delta = centre.Longitude - centreLongitude;
-                while (delta > 180f) delta -= 360f;
-                while (delta < -180f) delta += 360f;
+                if (!GlobeLineSanity.IsValidGeo(centre.Latitude, centre.Longitude)) continue;
+                var delta = GlobeLineSanity.WrapDeltaDegrees(centre.Longitude - centreLongitude);
                 var distance = (centre.Latitude - centreLatitude) * (centre.Latitude - centreLatitude) +
                                delta * delta;
                 if (distance >= nearestDistance) continue;
@@ -294,25 +333,17 @@ void fragment() {
                 nearest = province;
             }
         }
-        var hub = nearest > 0 ? topology.CenterOf(nearest) : (0f, 0f);
-        _supplyHubByState[stateMapIndex] = hub;
-        return hub;
-    }
-
-    /// <summary>
-    /// Runs of a projected line that stay on one side of the flat sheet. On the
-    /// globe the points already take the short arc, so the whole line is one run.
-    /// </summary>
-    private void CollectDateLineRuns(IReadOnlyList<Vector3> points)
-    {
-        if (!_flatMap)
+        if (nearest > 0)
         {
-            _dateLineRuns.Clear();
-            if (points.Count >= 2) _dateLineRuns.Add(new DateLineSeam.Run(0, points.Count));
-            return;
+            hub = topology.CenterOf(nearest);
+            if (GlobeLineSanity.IsValidGeo(hub.Latitude, hub.Longitude))
+            {
+                _supplyHubByState[stateMapIndex] = hub;
+                return true;
+            }
         }
-        _dateLineXs.Clear();
-        for (var i = 0; i < points.Count; i++) _dateLineXs.Add(points[i].X);
-        DateLineSeam.Split(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_dateLineXs), FlatMapWidth, _dateLineRuns);
+        hub = (float.NaN, float.NaN);
+        _supplyHubByState[stateMapIndex] = hub;
+        return false;
     }
 }

@@ -27,7 +27,7 @@ public partial class DealOrForceGame
     {
         var paper = _campaign.DealOffers.FirstOrDefault(o => o.Id == _dealInboxSelected);
         var demand = _campaign.UltimatumPapers.FirstOrDefault(candidate => candidate.Id == _ultimatumInboxSelected);
-        return $"{Loc.Language}|{_campaign.Player.Id}|{_campaign.ElapsedDays}|{_campaign.MapRevision}|" +
+        return $"{Loc.Language}|{_campaign.Player?.Id ?? -1}|{_campaign.ElapsedDays}|{_campaign.MapRevision}|" +
             $"{_campaign.DealInboxRevision}|{_campaign.NationById(paper?.FromId ?? -1)?.Treasury:R}|" +
             $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|u:{_ultimatumInboxSelected}|{demand?.State}|{demand?.ExpiresDay}|{AssistanceInboxKey()}|{ArmsInboxKey()}|{LeaseInboxKey()}|{DealAnswerKey()}";
     }
@@ -67,13 +67,13 @@ public partial class DealOrForceGame
     private void RefreshNegotiationNotifications(bool allowShellRefresh = true)
     {
         var count = CountIncomingDiplomaticInbox();
-        var playerId = _campaign.Player.Id;
+        var playerId = _campaign?.Player?.Id ?? -1;
         var day = _campaign.ElapsedDays;
         _dealNoticeScratch.Clear();
         _ultimatumNoticeScratch.Clear();
         _assistanceNoticeScratch.Clear();
         _armsNoticeScratch.Clear();
-        if (!_observerMode)
+        if (!_observerMode && playerId > 0)
         {
             var offers = _campaign.DealOffers;
             for (var i = 0; i < offers.Count; i++)
@@ -185,15 +185,24 @@ public partial class DealOrForceGame
         _dealInboxActions.AddThemeConstantOverride("h_separation", 10);
         _dealInboxActions.AddThemeConstantOverride("v_separation", 6);
         detailColumn.AddChild(_dealInboxActions);
-        if (!_campaign.UltimatumPapers.Any(paper => paper.Id == _ultimatumInboxSelected && paper.ToId == _campaign.Player.Id && paper.Pending))
+        var player = _campaign?.Player;
+        if (player is not null)
+        {
+            if (!_campaign.UltimatumPapers.Any(paper => paper.Id == _ultimatumInboxSelected && paper.ToId == player.Id && paper.Pending))
+                _ultimatumInboxSelected = -1;
+            if (!_campaign.DealOffers.Any(o => o.Id == _dealInboxSelected && (o.FromId == player.Id || o.ToId == player.Id)))
+                _dealInboxSelected = _campaign.DealOffers.Where(o => o.ToId == player.Id && o.Pending)
+                    .OrderBy(o => o.ExpiresDay).Select(o => o.Id).DefaultIfEmpty(-1).First();
+            if (_ultimatumInboxSelected < 0 && _dealInboxSelected < 0 && _assistanceInboxSelected < 0)
+                _ultimatumInboxSelected = _campaign.UltimatumPapers.Where(paper => paper.Pending && paper.ToId == player.Id && paper.ExpiresDay > _campaign.ElapsedDays)
+                    .OrderBy(paper => paper.ExpiresDay).Select(paper => paper.Id).DefaultIfEmpty(-1).First();
+            if (_ultimatumInboxSelected >= 0) _dealInboxSelected = -1;
+        }
+        else
+        {
             _ultimatumInboxSelected = -1;
-        if (!_campaign.DealOffers.Any(o => o.Id == _dealInboxSelected && (o.FromId == _campaign.Player.Id || o.ToId == _campaign.Player.Id)))
-            _dealInboxSelected = _campaign.DealOffers.Where(o => o.ToId == _campaign.Player.Id && o.Pending)
-                .OrderBy(o => o.ExpiresDay).Select(o => o.Id).DefaultIfEmpty(-1).First();
-        if (_ultimatumInboxSelected < 0 && _dealInboxSelected < 0 && _assistanceInboxSelected < 0)
-            _ultimatumInboxSelected = _campaign.UltimatumPapers.Where(paper => paper.Pending && paper.ToId == _campaign.Player.Id && paper.ExpiresDay > _campaign.ElapsedDays)
-                .OrderBy(paper => paper.ExpiresDay).Select(paper => paper.Id).DefaultIfEmpty(-1).First();
-        if (_ultimatumInboxSelected >= 0) _dealInboxSelected = -1;
+            _dealInboxSelected = -1;
+        }
         RefreshDealInbox(force: true);
     }
 
@@ -220,12 +229,14 @@ public partial class DealOrForceGame
     private void RefreshDealInbox(bool force = false)
     {
         if (!_dealInboxVisible || !IsInstanceValid(_dealInboxRows)) return;
+        var player = _campaign?.Player;
+        var playerId = player?.Id ?? -1;
         // Before the key, which holds the armed kind: the other player's strip starts unarmed.
-        if (_dealAnswerSeat != _campaign.Player.Id || _dealAnswerCampaign is null ||
+        if (_dealAnswerSeat != playerId || _dealAnswerCampaign is null ||
             !_dealAnswerCampaign.TryGetTarget(out var shown) || !ReferenceEquals(shown, _campaign))
         {
             _dealAnswerConfirmKind = "";
-            _dealAnswerSeat = _campaign.Player.Id;
+            _dealAnswerSeat = playerId;
             _dealAnswerCampaign = new WeakReference<Campaign>(_campaign);
         }
         var key = DealInboxKey();
@@ -237,7 +248,12 @@ public partial class DealOrForceGame
         foreach (var child in _dealInboxDetail.GetChildren()) { _dealInboxDetail.RemoveChild(child); child.QueueFree(); }
         foreach (var child in _dealInboxActions.GetChildren()) { _dealInboxActions.RemoveChild(child); child.QueueFree(); }
         _dealInboxActions.Visible = false;
-        var player = _campaign.Player;
+        if (player is null)
+        {
+            _dealInboxRows.AddChild(WrappedUltimatumText(Tr("obs.ui.inbox.no_player"), 14));
+            _dealInboxDetail.AddChild(WrappedUltimatumText(Tr("obs.ui.inbox.no_player"), 14));
+            return;
+        }
         RefreshDealAnswerStrip();
         AddMilitaryAccessInboxRows();
         AddAllyRivalInboxRows();
@@ -284,7 +300,7 @@ public partial class DealOrForceGame
         }
         var showUltimatum = ultimatumPapers.Any(paper => paper.Id == _ultimatumInboxSelected);
         if (!showUltimatum) _ultimatumInboxSelected = -1;
-        var playerId = player.Id;
+        playerId = player.Id;
         var armsExplicit = _campaign.ArmsShipmentRequests.Any(r => r.Id == _armsInboxSelected && (r.RequesterId == playerId || r.DonorId == playerId));
         var assistanceSelected = AddAssistanceInboxRows(showDetail: !showUltimatum && !armsExplicit);
         var armsSelected = AddArmsInboxRows(showDetail: !showUltimatum && !assistanceSelected);
@@ -404,7 +420,8 @@ public partial class DealOrForceGame
             Ultimatum.ValidateTerms(_campaign, from, to, demand.Terms, out refusal);
         if (demand.Pending && !legal) _dealInboxDetail.AddChild(WrappedUltimatumText(refusal, 14));
         else if (!demand.Pending && demand.Reason.Length > 0) _dealInboxDetail.AddChild(WrappedUltimatumText(Tr(demand.Reason), 14));
-        _dealInboxActions.Visible = demand.Pending && demand.ToId == _campaign.Player.Id;
+        var actingPlayer = _observerMode ? null : _campaign?.Player;
+        _dealInboxActions.Visible = actingPlayer is not null && demand.Pending && demand.ToId == actingPlayer.Id;
         if (!_dealInboxActions.Visible)
         {
             if (_dealInboxMessage.Length > 0) _dealInboxDetail.AddChild(WrappedUltimatumText(_dealInboxMessage, 14));
@@ -434,7 +451,8 @@ public partial class DealOrForceGame
 
     private void ReplyToUltimatum(int id, Ultimatum.Answer reply)
     {
-        var command = new AnswerUltimatumCommand { IssuerId = _campaign.Player.Id, PaperId = id, Reply = reply };
+        if (_observerMode || _campaign?.Player is not { } player) return;
+        var command = new AnswerUltimatumCommand { IssuerId = player.Id, PaperId = id, Reply = reply };
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
         ForceDiplomacyRefresh();
@@ -447,7 +465,8 @@ public partial class DealOrForceGame
 
     private void ReplyToDeal(int id, DealReply reply)
     {
-        var command = new RespondDealCommand { IssuerId = _campaign.Player.Id, OfferId = id, Reply = reply };
+        if (_observerMode || _campaign?.Player is not { } player) return;
+        var command = new RespondDealCommand { IssuerId = player.Id, OfferId = id, Reply = reply };
         _campaign.Commands.Enqueue(command); _campaign.Commands.ApplyAll(_campaign);
         ForceDiplomacyRefresh(); Refresh();
         _dealInboxMessage = _networkConnected && !_networkIsHost
@@ -458,7 +477,8 @@ public partial class DealOrForceGame
 
     private void CounterDeal(DealOffer paper)
     {
-        if (!paper.Pending || paper.ToId != _campaign.Player.Id || paper.ExpiresDay <= _campaign.ElapsedDays) return;
+        if (_observerMode || _campaign?.Player is not { } player) return;
+        if (!paper.Pending || paper.ToId != player.Id || paper.ExpiresDay <= _campaign.ElapsedDays) return;
         var target = _campaign.NationById(paper.FromId);
         // The trade terms are the pair's, not a half's: they open in the shared strip as written.
         OpenDealComposer(target, Ultimatum.TradeOf(paper.Terms));

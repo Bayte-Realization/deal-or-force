@@ -327,13 +327,17 @@ public static class BrainDrain
     [ThreadStatic] private static List<List<ScenarioState>> _receptionsPoolScratch;
     [ThreadStatic] private static List<DestCandidate> _candidatesScratch;
 
+    /// <summary>Day-of-cycle slot on which weekly skilled emigration runs (offset 1 from market day 0).</summary>
+    internal static int ScheduleSlot(int cycle) => cycle > 1 ? 1 % cycle : 0;
+
     /// <summary>
     /// The week's emigration in stages: the same countries in the same order, yielding on frame budget.
     /// </summary>
     public static IEnumerable<int> Stages(Campaign c)
     {
         if (c is null || !c.Defines.BrainDrainEnabled || !c.Defines.HouseholdDynamicsEnabled) yield break;
-        if (c.ElapsedDays <= 0 || c.ElapsedDays % Math.Max(1, c.Defines.EconomyTickDays) != 0) yield break;
+        var every = Math.Max(1, c.Defines.EconomyTickDays);
+        if (c.ElapsedDays <= 0 || c.ElapsedDays % every != ScheduleSlot(every)) yield break;
         if (c.Nations.Count < 2 || c.States.Count < 2) yield break;
 
         var atWarNations = _atWarScratch ??= new HashSet<int>();

@@ -26,6 +26,7 @@ public sealed partial class GlobePresentation
     public void SetCrossoverAtmosphere(bool enabled)
     {
         DayNightEnabled = CloudsEnabled = enabled;
+        WakeGlobeRendering();
         if (enabled)
         {
             if (_cloudLayer is null && IsInstanceValid(_skyWorld)) CreateCloudLayer(_skyWorld);

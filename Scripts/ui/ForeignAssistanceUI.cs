@@ -39,10 +39,12 @@ public partial class DealOrForceGame
         ForceDiplomacyRefresh(); Refresh();
     }
 
-    private string AssistanceInboxKey() => _assistanceInboxSelected + "|" + string.Join(";", _campaign.AssistanceRequests
-        .Where(r => r.RequesterId == _campaign.Player.Id || r.DonorId == _campaign.Player.Id)
-        .Select(r => $"{r.Id}:{r.State}:{r.Amount:R}:{r.GrantedAmount:R}:{r.ExpiresDay}:{r.Reason}:" +
-            $"{_campaign.NationById(r.DonorId)?.Treasury:R}:{_campaign.NationById(r.RequesterId)?.Treasury:R}"));
+    private string AssistanceInboxKey() => _campaign?.Player is not { } player
+        ? _assistanceInboxSelected + "|none"
+        : _assistanceInboxSelected + "|" + string.Join(";", _campaign.AssistanceRequests
+            .Where(r => r.RequesterId == player.Id || r.DonorId == player.Id)
+            .Select(r => $"{r.Id}:{r.State}:{r.Amount:R}:{r.GrantedAmount:R}:{r.ExpiresDay}:{r.Reason}:" +
+                $"{_campaign.NationById(r.DonorId)?.Treasury:R}:{_campaign.NationById(r.RequesterId)?.Treasury:R}"));
 
     private static string AssistanceStateKey(ForeignAssistanceState state) => state switch
     {
@@ -60,7 +62,7 @@ public partial class DealOrForceGame
 
     private bool AddAssistanceInboxRows(bool showDetail = true)
     {
-        var player = _campaign.Player;
+        if (_campaign?.Player is not { } player) return false;
         var letters = _campaign.AssistanceRequests.Where(r => r.RequesterId == player.Id || r.DonorId == player.Id)
             .OrderBy(r => r.State != ForeignAssistanceState.Pending).ThenByDescending(r => r.Id).ToArray();
         foreach (var letter in letters)
@@ -115,8 +117,10 @@ public partial class DealOrForceGame
         }
         else if (pending) _dealInboxDetail.AddChild(WrappedUltimatumText(Tr(assessment.Reason), 14));
         else if (letter.Reason.Length > 0) _dealInboxDetail.AddChild(WrappedUltimatumText(Tr(letter.Reason), 14));
-        _dealInboxActions.Visible = pending;
-        if (pending && letter.DonorId == _campaign.Player.Id)
+        var playerId = _campaign?.Player?.Id ?? -1;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        _dealInboxActions.Visible = pending && !observing && playerId >= 0;
+        if (pending && !observing && playerId >= 0 && letter.DonorId == playerId)
         {
             var accept = ActionButton(_assistanceConfirm == letter.Id ? "Confirm financial grant" : "Review financial grant", () =>
             {
@@ -132,7 +136,7 @@ public partial class DealOrForceGame
             var decline = ActionButton("Decline", () => ReplyToAssistance(letter.Id, ForeignAssistanceReply.Decline), 110, 36);
             decline.Name = "DeclineFinancialAssistance"; _dealInboxActions.AddChild(decline);
         }
-        else if (pending && letter.RequesterId == _campaign.Player.Id)
+        else if (pending && !observing && playerId >= 0 && letter.RequesterId == playerId)
             _dealInboxActions.AddChild(ActionButton("Withdraw request", () => ReplyToAssistance(letter.Id, ForeignAssistanceReply.Withdraw), 180, 36));
         if (_dealInboxMessage.Length > 0 && _dealInboxMessage != Tr(letter.Reason))
             _dealInboxDetail.AddChild(WrappedUltimatumText(_dealInboxMessage, 14));
@@ -140,7 +144,8 @@ public partial class DealOrForceGame
 
     private void ReplyToAssistance(int id, ForeignAssistanceReply reply, float approved = float.MaxValue)
     {
-        var command = new RespondForeignAssistanceCommand { IssuerId = _campaign.Player.Id, RequestId = id, Reply = reply, ApprovedAmount = approved };
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { IsHuman: true } player) return;
+        var command = new RespondForeignAssistanceCommand { IssuerId = player.Id, RequestId = id, Reply = reply, ApprovedAmount = approved };
         _campaign.Commands.Enqueue(command); _campaign.Commands.ApplyAll(_campaign);
         _assistanceConfirm = -1; ForceDiplomacyRefresh(); Refresh();
         _dealInboxMessage = _networkConnected && !_networkIsHost

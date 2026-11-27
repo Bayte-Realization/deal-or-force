@@ -158,7 +158,7 @@ try
     Check(Changelog.Find(notes, false, "9.9") == Path.Combine(notes, "docs", "CHANGELOG_9.9_EN.md"), "The project's notes for this version come first");
     Check(Changelog.Find(Path.Combine(temporary, "nowhere"), false, "9.9") is null, "No notes anywhere: nothing is invented");
 
-    // Real PortAlpha 0.8.7.3 RU & EN changelogs + LauncherNotes FlowDocument rendering on STA thread.
+    // Real PortAlpha 0.8.8.2 RU & EN changelogs + LauncherNotes FlowDocument rendering on STA thread.
     static string? FindRepoRoot(string? start)
     {
         var dir = start;
@@ -182,15 +182,15 @@ try
     var enMarkdown = File.ReadAllText(enChangelogPath!);
     Check(DealOrForce.Simulation.GameBuildInfo.VersionLabel == "PortAlpha " + version,
         "Shared VersionLabel uses PortAlpha prefix");
-    Check(ruMarkdown.Contains("PortAlpha 0.8.7.3", StringComparison.Ordinal) &&
-          enMarkdown.Contains("PortAlpha 0.8.7.3", StringComparison.Ordinal) &&
+    Check(ruMarkdown.Contains("PortAlpha 0.8.8.2", StringComparison.Ordinal) &&
+          enMarkdown.Contains("PortAlpha 0.8.8.2", StringComparison.Ordinal) &&
           ruMarkdown.Contains("26 ноября 2026", StringComparison.Ordinal) &&
           enMarkdown.Contains("26 November 2026", StringComparison.Ordinal) &&
-          ruMarkdown.Contains("AdaptiveStepPacing", StringComparison.Ordinal) &&
-          enMarkdown.Contains("AdaptiveStepPacing", StringComparison.Ordinal) &&
+          ruMarkdown.Contains("dof_kernels", StringComparison.Ordinal) &&
+          enMarkdown.Contains("dof_kernels", StringComparison.Ordinal) &&
           ruMarkdown.Contains("GLES3", StringComparison.Ordinal) &&
           enMarkdown.Contains("GLES3", StringComparison.Ordinal),
-        "Both PortAlpha 0.8.7.3 changelogs carry the 26 November 2026 date and technical sections");
+        "Both PortAlpha 0.8.8.2 changelogs carry the 26 November 2026 date and technical sections");
 
     Exception? staFailure = null;
     var staThread = new Thread(() =>

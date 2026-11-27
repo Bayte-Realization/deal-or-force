@@ -89,7 +89,12 @@ public partial class DealOrForceGame
     /// <summary>Shown while divisions are selected or a tool is in hand; beside the orders panel.</summary>
     private void RefreshPlanningBar()
     {
-        if (_planningBar is null || _campaign?.Player is null) return;
+        if (_planningBar is null) return;
+        if (_campaign?.Player is null || ObserverUiRules.IsObserving(_campaign, _observerMode))
+        {
+            if (_planningBar.Visible) _planningBar.Visible = false;
+            return;
+        }
         var mine = SelectedPlayerDivisions();
         var show = _hudLayer is { Visible: true } && (mine.Length > 0 || _drawingKind is not null || _erasingPlans);
         if (_planningBar.Visible != show) _planningBar.Visible = show;

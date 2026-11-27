@@ -9,7 +9,8 @@ public partial class DealOrForceGame
 {
     private void ConfirmLastDefenderWithdrawal(int[] ids, float share, Action withdraw)
     {
-        var issuer = _campaign.Player.Id;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { IsHuman: true } player) return;
+        var issuer = player.Id;
         var campaign = _campaign;
         var yieldsPosition = share >= 1f && _campaign.Battles.Any(battle => !battle.Ended &&
             battle.Defenders.Any(ids.Contains) &&
@@ -35,7 +36,7 @@ public partial class DealOrForceGame
             confirm.QueueFree();
             // The user may have changed seats or loaded a different campaign while a
             // dialog was open. Do not issue an order for a newly selected country's units.
-            if (ReferenceEquals(_campaign, campaign) && _campaign.Player.Id == issuer) withdraw();
+            if (ReferenceEquals(_campaign, campaign) && _campaign?.Player?.Id == issuer) withdraw();
         };
         confirm.Canceled += () => confirm.QueueFree();
         confirm.PopupCentered(new Vector2I(540, 190));

@@ -42,8 +42,9 @@ public partial class DealOrForceGame
 
     private void RenderFormationCards(VBoxContainer cards)
     {
-        var nation = _campaign.Player;
+        var nation = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
         ClearRuntimeChildren(cards);
+        if (nation is null) return;
         if (!string.IsNullOrEmpty(nation.FormedNationId))
         {
             cards.AddChild(Title(Simulation.Loc.Format("Proclaimed: {0} · campaign day {1}", nation.DisplayName,
@@ -199,21 +200,27 @@ public partial class DealOrForceGame
             card.AddChild(Title(Simulation.Loc.Format("Founding cost: {0} ({1:P1} of GDP)", Fmt.Money(status.Cost), d.CostShare), 14, Ui.Colour("text.accent_dim")));
             card.AddChild(Title(Simulation.Loc.Format("One-off: governance +{0:P0} (cap {2:P0}); productivity +{1:0.000}. Institutions retained; flag follows the new identity.",
                 d.GovernanceGain, d.ProductivityGain, StabilityCore.Weights.GovernanceLimit), 12, Ui.Colour("text.body_soft")));
+            var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
             if (!FormableNations.Eligible(nation, d)) continue; // Encyclopedia cards have no fake action.
-            if (!status.CanForm) _formationConfirmation = _formationConfirmation == d.Id ? "" : _formationConfirmation;
-            var confirming = _formationConfirmation == d.Id;
+            if (!status.CanForm || observing) _formationConfirmation = _formationConfirmation == d.Id ? "" : _formationConfirmation;
+            var confirming = !observing && _formationConfirmation == d.Id;
             var button = ActionButton(confirming ? "Confirm proclamation" : "Proclaim state", () =>
             {
+                if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
                 if (_formationConfirmation != d.Id) { _formationConfirmation = d.Id; ShowFormableNations(); return; }
                 _formationConfirmation = "";
                 _campaign.Commands.Enqueue(new FormNationCommand { IssuerId = nation.Id, FormableId = d.Id });
                 _campaign.Commands.ApplyAll(_campaign);
                 Refresh();
                 ShowFormableNations();
-            }, 0, 36, status.CanForm);
+            }, 0, 36, status.CanForm && !observing);
             button.Name = "FormNation_" + d.Id;
-            button.Disabled = !status.CanForm;
-            Tip(button, status.CanForm ? "Proclamation spends the displayed cost and integrates consenting partners' declared foundation territory." : string.Join("\n", status.Requirements.Where(r => !r.Met).Select(r => r.Label)));
+            button.Disabled = observing || !status.CanForm;
+            Tip(button, observing
+                ? Tr("obs.ui.action.readonly")
+                : status.CanForm
+                    ? "Proclamation spends the displayed cost and integrates consenting partners' declared foundation territory."
+                    : string.Join("\n", status.Requirements.Where(r => !r.Met).Select(r => r.Label)));
             card.AddChild(button);
             if (confirming) card.AddChild(ActionButton("Cancel", () => { _formationConfirmation = ""; ShowFormableNations(); }, 0, 30));
         }

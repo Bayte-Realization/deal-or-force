@@ -111,6 +111,11 @@ public static class InternalMigration
         foreach (var _ in TickStages(campaign)) { }
     }
 
+    internal static bool IsNationDue(Campaign campaign, int nationId, int cycle, bool staggered) =>
+        staggered
+            ? MovementRules.OnItsDay(campaign, nationId, cycle)
+            : campaign.ElapsedDays % cycle == 0;
+
     /// <summary>The same migration pass, yielded between batches of regions and countries.</summary>
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
@@ -120,12 +125,17 @@ public static class InternalMigration
         { movedState.Day = campaign.ElapsedDays; movedState.Moved = 0; MovedToday = 0; }
         var defines = campaign.Defines;
         if (!defines.InternalMigrationEnabled || !defines.HouseholdDynamicsEnabled) yield break;
-        if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % Math.Max(1, defines.EconomyTickDays) != 0) yield break;
-        var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
-        var centres = LandAtlas.CentresOf(campaign);
+        if (campaign.ElapsedDays <= 0) yield break;
+        var every = Math.Max(1, defines.EconomyTickDays);
+        var staggered = every > 1 && (defines.StaggerWeeklyEconomy || defines.EconomyWeekStaggered);
+        if (!staggered && campaign.ElapsedDays % every != 0) yield break;
+
         campaign.StatesOf(0);
-        var states = campaign.States;
-        for (var i = 0; i < states.Count; i++) states[i].ReviewInternalMigration = 0;
+        if (!staggered)
+        {
+            var states = campaign.States;
+            for (var i = 0; i < states.Count; i++) states[i].ReviewInternalMigration = 0;
+        }
 
         var active = movedState.ActiveNations;
         active.Clear();
@@ -133,10 +143,23 @@ public static class InternalMigration
         for (var i = 0; i < nations.Count; i++)
         {
             var nation = nations[i];
-            if (nation.Population <= 0 || nation.Movement is not null) continue;
-            if (campaign.StatesOf(nation).Length < 2) continue;
+            if (nation.Movement is not null) continue;
+            if (staggered)
+            {
+                if (!IsNationDue(campaign, nation.Id, every, staggered: true)) continue;
+                var ownedStates = campaign.StatesOf(nation);
+                for (var s = 0; s < ownedStates.Length; s++) ownedStates[s].ReviewInternalMigration = 0;
+                if (nation.Population <= 0 || ownedStates.Length < 2) continue;
+            }
+            else if (nation.Population <= 0 || campaign.StatesOf(nation).Length < 2)
+            {
+                continue;
+            }
             active.Add(nation);
         }
+        if (active.Count == 0) yield break;
+        var interval = Math.Clamp(every, 1, 365) / 365f;
+        var centres = LandAtlas.CentresOf(campaign);
         // Largest-Processing-Time-first by region count (ascending Nation.Id tie-break) so
         // multi-region empires run at the front of worker batches rather than creating tail lag.
         if (active.Count > 2)

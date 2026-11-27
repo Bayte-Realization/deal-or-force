@@ -712,8 +712,8 @@ static class UiClarityTests
               touchBarSrc.Contains("ShellTouchMode_BoxSelect", StringComparison.Ordinal) &&
               touchBarSrc.Contains("ShellTouchMode_Pan", StringComparison.Ordinal) &&
               touchBarSrc.Contains("TooltipFor(", StringComparison.Ordinal) &&
-              touchBarSrc.Contains("mobile.tap.order_once_tip", StringComparison.Ordinal) &&
-              touchBarSrc.Contains("mobile.tap.order_lock_tip", StringComparison.Ordinal) &&
+              touchBarSrc.Contains("mobile.mode.order.oneshot.tip", StringComparison.Ordinal) &&
+              touchBarSrc.Contains("mobile.mode.order.sticky.tip", StringComparison.Ordinal) &&
               !touchBarSrc.Contains("new Color(", StringComparison.Ordinal),
             "ShellTouchModeBarView preserves node names and attaches localized hover/long-press tooltips");
 

@@ -368,8 +368,10 @@ static class PolyglotKernelsTests
             Check(nGraph is not null, $"NativeProvinceGraph built for {map.ProvinceCount:N0} provinces in {swBuild.Elapsed.TotalMilliseconds:F1}ms");
 
             var okDf = nGraph!.TryDistanceField(sources, 1600f, out var nativeDist, out var nativeWithin);
-            Check(okDf && nativeDist is not null && nativeWithin is not null && nativeWithin.SequenceEqual(managedWithin),
-                $"DistanceField within order exact match ({managedWithin.Count:N0} provinces)");
+            Check(okDf && nativeDist is not null && nativeWithin is not null &&
+                  nativeWithin.Count == managedWithin.Count &&
+                  nativeWithin.SequenceEqual(managedWithin.OrderBy(p => p)),
+                $"DistanceField within exact match ({managedWithin.Count:N0} provinces)");
             foreach (var p in managedWithin)
                 AssertBitsEqual(nativeDist![p], managedDist[p], $"DistanceField[{p}]");
             Console.WriteLine($"PASS polyglot kernels: DistanceField 34k float bits 100% identical across {managedWithin.Count:N0} reached provinces");

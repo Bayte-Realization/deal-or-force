@@ -177,7 +177,7 @@ public sealed partial class GlobePresentation
         _supportMarkerRoot.Visible = show;
         _supportRangeNode.Visible = show && (_selectedSupportIds.Count > 0 || _supportOverlay) &&
                                     _supportRangeMesh.GetSurfaceCount() > 0;
-        if (!show || _campaign?.ProvinceMap is null) return;
+        if (!show || _campaign?.ProvinceMap is null || !IsInstanceValid(_camera)) return;
         _supportPresentationDelay += delta;
         if (_supportPresentationDelay >= .35 || !ReferenceEquals(_supportMarkedCampaign, _campaign))
         {
@@ -186,10 +186,19 @@ public sealed partial class GlobePresentation
         }
         ReprojectSupportMarkers();
         // Slots remain surface-local; use their actual normal for horizon culling.
-        var viewNormal = _camera.GlobalPosition.Normalized();
-        var horizon = GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f;
-        foreach (var marker in _supportMapMarkers.Values)
-            if (!_flatMap) marker.Node.Visible = marker.Node.Position.Normalized().Dot(viewNormal) > horizon;
+        var camPos = _camera.GlobalPosition;
+        var hasView = GlobeLineSanity.TrySafeNormalize(ToNum(camPos), out var viewNormalNum);
+        var viewNormal = ToGd(viewNormalNum);
+        var camLen = GlobeLineSanity.IsFinite(ToNum(camPos)) ? camPos.Length() : GlobeRadius;
+        var horizon = GlobeRadius / Math.Max(GlobeRadius, camLen) + .002f;
+        if (hasView)
+            foreach (var marker in _supportMapMarkers.Values)
+                if (!_flatMap && IsInstanceValid(marker.Node))
+                {
+                    var visible = GlobeLineSanity.TrySafeNormalize(ToNum(marker.Node.Position), out var markerNorm) &&
+                        ToGd(markerNorm).Dot(viewNormal) > horizon;
+                    marker.Node.Visible = visible;
+                }
         if (_flatMap) UpdateMarkerVisibility(_supportMarkerRoot, _supportVisibility, true);
         // Screen-width ribbons only need rebuilding when projection/viewport/zoom changes or camera moves past a wrap/horizon angle.
         if (_supportRangeNode.Visible && Time.GetTicksMsec() >= _nextSupportRangeRefreshMs)
@@ -572,6 +581,7 @@ public sealed partial class GlobePresentation
         if (!IsInstanceValid(_supportRangeNode) || _campaign?.ProvinceMap is null) return;
         _supportRangeMesh.ClearSurfaces();
         var player = _campaign.Player;
+        if (!IsInstanceValid(_camera) || _campaign?.ProvinceMap is not { } supportMap) return;
         var rings = _supportRingsScratch;
         var paths = _supportPathsScratch;
         var deduplicate = _supportDedupScratch;
@@ -586,7 +596,8 @@ public sealed partial class GlobePresentation
             if (!selected && !_supportOverlay) continue;
             // A column on the road has no ring - it reaches nothing until it has arrived - but it has a path.
             if (candidate.Route.Count > 0) { paths.Add((candidate, selected)); continue; }
-            if (candidate.BaseProvinceId <= 0 || candidate.BaseProvinceId > _campaign.ProvinceMap.ProvinceCount) continue;
+            if (!GlobeLineSanity.TryValidateProvinceId(candidate.BaseProvinceId, supportMap.ProvinceCount, supportMap.ProvinceCenterCell))
+                continue;
             if (!SupportTypeCatalog.TryGet(candidate.TypeId, out var candidateType)) continue;
             if (!deduplicate.Add((candidate.BaseProvinceId, candidate.TypeId, candidate.Mission, selected))) continue;
             rings.Add((candidate, candidateType, selected));
@@ -595,7 +606,8 @@ public sealed partial class GlobePresentation
         _supportRangeFlatX = _flatX;
         _supportRangeFlatZoom = _flatZoom;
         _supportRangeViewDistance = ViewDistance;
-        _supportRangeCamNormal = _flatMap ? Vector3.Back : _camera.GlobalPosition.Normalized();
+        _supportRangeCamNormal = _flatMap ? Vector3.Back
+            : (GlobeLineSanity.TrySafeNormalize(ToNum(_camera.GlobalPosition), out var camNorm) ? ToGd(camNorm) : Vector3.Back);
         _supportRangeViewport = Size;
         _nextSupportRangeRefreshMs = Time.GetTicksMsec() + 50;
         if (rings.Count == 0 && paths.Count == 0)
@@ -603,9 +615,14 @@ public sealed partial class GlobePresentation
             _supportRangeNode.Visible = false;
             return;
         }
+        var minDepth = MathF.Max(0.05f, GlobeLineSanity.FiniteOr(_camera.Near, 0.05f));
+        var maxScreenSpan = GlobeLineSanity.FiniteOr(MathF.Max(Size.X, Size.Y), 1920f) * 1.5f + 512f;
+        var maxTriangleEdge = _flatMap ? 8.5f : 4.5f;
+        var maxRibbonEdge = _flatMap ? GlobeLineSanity.MaxFlatSegmentLength : GlobeLineSanity.MaxGlobeSegmentLength;
         const int steps = 120;
         const int bands = 6;
         float latitude = 0f, longitude = 0f, angularReach = 0f;
+        var aimValid = false;
         _supportRangeVerts.Clear();
         _supportRangeColors.Clear();
 
@@ -617,7 +634,7 @@ public sealed partial class GlobePresentation
             // Reserve/recovery needs an outline to show reach, not a blanket that washes
             // out the whole country. Only an active selected mission fills its footprint.
             if (!selected || formation.Mission == SupportCore.MissionStandby || SupportCore.Displaced(_campaign, formation)) continue;
-            Aim(formation, type);
+            if (!Aim(formation, type)) continue;
             var fill = SupportArmColour(type.Kind) with { A = Ui.Metric("support.reach_fill_alpha", .08f) };
             for (var band = 0; band < bands; band++)
             {
@@ -625,19 +642,20 @@ public sealed partial class GlobePresentation
                 var outer = (band + 1) / (float)bands;
                 for (var segment = 0; segment < steps; segment++)
                 {
-                    var a = Destination(segment, inner);
-                    var b = Destination(segment + 1, inner);
-                    var c = Destination(segment, outer);
-                    var d = Destination(segment + 1, outer);
-                    if (_flatMap && (Wraps(a, b) || Wraps(a, c) || Wraps(c, d))) continue;
-                    Triangle(a, c, d, fill);
-                    if (band > 0) Triangle(a, d, b, fill);
+                    if (!TryDestination(segment, inner, out var a) ||
+                        !TryDestination(segment + 1, inner, out var b) ||
+                        !TryDestination(segment, outer, out var c) ||
+                        !TryDestination(segment + 1, outer, out var d))
+                        continue;
+                    if (_flatMap && (Wraps(a, b) || Wraps(a, c) || Wraps(c, d) || Wraps(a, d) || Wraps(d, b))) continue;
+                    Triangle(a, c, d, fill, maxTriangleEdge);
+                    if (band > 0) Triangle(a, d, b, fill, maxTriangleEdge);
                 }
             }
         }
         foreach (var (formation, type, selected) in rings)
         {
-            Aim(formation, type);
+            if (!Aim(formation, type)) continue;
             var arm = SupportArmColour(type.Kind);
             var resting = formation.Mission == SupportCore.MissionStandby;
             var colour = SupportCore.Displaced(_campaign, formation) ? new Color(.85f, .35f, .33f, selected ? .9f : .35f)
@@ -648,32 +666,35 @@ public sealed partial class GlobePresentation
                 // A resting formation's ring is dashed: it reaches there, but it is not flying.
                 if (resting && segment % 4 >= 2) continue;
                 {
-                    var a = Destination(segment, 1f);
-                    var b = Destination(segment + 1, 1f);
+                    if (!TryDestination(segment, 1f, out var a) || !TryDestination(segment + 1, 1f, out var b)) continue;
                     if (_flatMap && Wraps(a, b)) continue;
                     var worldA = _supportRangeNode.ToGlobal(a);
                     var worldB = _supportRangeNode.ToGlobal(b);
                     if (_camera.IsPositionBehind(worldA) || _camera.IsPositionBehind(worldB)) continue;
                     if (!_flatMap)
                     {
-                        var horizon = GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length());
-                        var view = _camera.GlobalPosition.Normalized();
+                        var horizon = GlobeRadius / Math.Max(GlobeRadius, GlobeLineSanity.FiniteOr(_camera.GlobalPosition.Length(), GlobeRadius));
+                        if (!GlobeLineSanity.TrySafeNormalize(ToNum(_camera.GlobalPosition), out var viewNum)) continue;
+                        var view = ToGd(viewNum);
                         if (a.Normalized().Dot(view) < horizon && b.Normalized().Dot(view) < horizon) continue;
                     }
+                    var depthA = -_camera.ToLocal(worldA).Z;
+                    var depthB = -_camera.ToLocal(worldB).Z;
+                    if (depthA < minDepth || depthB < minDepth) continue;
                     var screenA = _camera.UnprojectPosition(worldA);
                     var screenB = _camera.UnprojectPosition(worldB);
-                    if (screenA.DistanceSquaredTo(screenB) < .01f) continue;
-                    var direction = (screenB - screenA).Normalized();
-                    var normal = new Vector2(-direction.Y, direction.X) *
-                        Math.Clamp(Ui.Metric(selected ? "support.reach_width_pixels" : "support.reach_idle_width_pixels", selected ? 1.2f : .7f), .5f, 3f) * .5f;
-                    var depthA = -_camera.ToLocal(_supportRangeNode.ToGlobal(a)).Z;
-                    var depthB = -_camera.ToLocal(_supportRangeNode.ToGlobal(b)).Z;
+                    if (!GlobeLineSanity.IsValidScreenRibbonSegment(ToNum(screenA), ToNum(screenB), depthA, depthB, minDepth, maxScreenSpan))
+                        continue;
+                    if (!GlobeLineSanity.TrySafeNormalize(new System.Numerics.Vector3(screenB.X - screenA.X, screenB.Y - screenA.Y, 0f), out var dirNum))
+                        continue;
+                    var normal = new Vector2(-dirNum.Y, dirNum.X) *
+                        GlobeLineSanity.SafeClamp(Ui.Metric(selected ? "support.reach_width_pixels" : "support.reach_idle_width_pixels", selected ? 1.2f : .7f), .5f, 3f, 1f) * .5f;
                     var ai = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenA - normal, depthA));
                     var ao = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenA + normal, depthA));
                     var bi = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenB - normal, depthB));
                     var bo = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenB + normal, depthB));
-                    Triangle(ai, ao, bo, colour);
-                    Triangle(ai, bo, bi, colour);
+                    Triangle(ai, ao, bo, colour, maxRibbonEdge);
+                    Triangle(ai, bo, bi, colour, maxRibbonEdge);
                 }
             }
         }
@@ -693,12 +714,18 @@ public sealed partial class GlobePresentation
             {
                 var from = _supportTrail[leg - 1];
                 var to = _supportTrail[leg];
-                var pieces = Math.Clamp((int)(LegKm(from, to) / 40f), 1, 40);
+                if (!GlobeLineSanity.IsValidGeo(from.Latitude, from.Longitude) ||
+                    !GlobeLineSanity.IsValidGeo(to.Latitude, to.Longitude))
+                    continue;
+                var legKm = LegKm(from, to);
+                if (!float.IsFinite(legKm)) continue;
+                var pieces = Math.Clamp((int)(legKm / 40f), 1, 40);
                 for (var piece = 0; piece < pieces; piece++, dash++)
                 {
                     if (dash % 2 == 1) continue;
-                    var a = PathPoint(from, to, piece / (float)pieces);
-                    var b = PathPoint(from, to, (piece + 1) / (float)pieces);
+                    if (!TryPathPoint(from, to, piece / (float)pieces, out var a) ||
+                        !TryPathPoint(from, to, (piece + 1) / (float)pieces, out var b))
+                        continue;
                     if (_flatMap && Wraps(a, b)) continue;
                     Ribbon(a, b, colour, selected ? 1.6f : .8f);
                 }
@@ -721,52 +748,76 @@ public sealed partial class GlobePresentation
             var sinLat = MathF.Sin((b.Latitude - a.Latitude) * radians * .5f);
             var sinLon = MathF.Sin((b.Longitude - a.Longitude) * radians * .5f);
             var h = sinLat * sinLat + MathF.Cos(a.Latitude * radians) * MathF.Cos(b.Latitude * radians) * sinLon * sinLon;
-            return 6371f * 2f * MathF.Asin(MathF.Min(1f, MathF.Sqrt(h)));
+            return 6371f * 2f * MathF.Asin(GlobeLineSanity.ClampUnit(MathF.Sqrt(MathF.Max(0f, h))));
         }
 
-        Vector3 PathPoint((float Latitude, float Longitude) a, (float Latitude, float Longitude) b, float t)
+        bool TryPathPoint((float Latitude, float Longitude) a, (float Latitude, float Longitude) b, float t, out Vector3 pt)
         {
             // The same great circle the card travels along (LongRangeMovement.Between).
             var (lat, lon) = LongRangeMovement.Between(a, b, t);
-            return _flatMap ? LocalFlatPoint(lat, lon, FlatLineZ + .0012f) : LocalSurfacePoint(lat, lon, SurfaceLineRadius * 1.0008f);
+            if (!GlobeLineSanity.IsValidGeo(lat, lon))
+            {
+                pt = default;
+                return false;
+            }
+            pt = _flatMap ? LocalFlatPoint(lat, lon, FlatLineZ + .0012f) : LocalSurfacePoint(lat, lon, SurfaceLineRadius * 1.0008f);
+            return GlobeLineSanity.IsValidEmittedVertex(ToNum(pt), _flatMap, _flatX);
         }
 
         void Ribbon(Vector3 a, Vector3 b, Color colour, float width)
         {
+            if (!GlobeLineSanity.IsValidEmittedVertex(ToNum(a), _flatMap, _flatX) ||
+                !GlobeLineSanity.IsValidEmittedVertex(ToNum(b), _flatMap, _flatX))
+                return;
             var worldA = _supportRangeNode.ToGlobal(a);
             var worldB = _supportRangeNode.ToGlobal(b);
             if (_camera.IsPositionBehind(worldA) || _camera.IsPositionBehind(worldB)) return;
             if (!_flatMap)
             {
-                var horizon = GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length());
-                var view = _camera.GlobalPosition.Normalized();
+                var horizon = GlobeRadius / Math.Max(GlobeRadius, GlobeLineSanity.FiniteOr(_camera.GlobalPosition.Length(), GlobeRadius));
+                if (!GlobeLineSanity.TrySafeNormalize(ToNum(_camera.GlobalPosition), out var viewNum)) return;
+                var view = ToGd(viewNum);
                 if (a.Normalized().Dot(view) < horizon && b.Normalized().Dot(view) < horizon) return;
             }
-            var screenA = _camera.UnprojectPosition(worldA);
-            var screenB = _camera.UnprojectPosition(worldB);
-            if (screenA.DistanceSquaredTo(screenB) < .01f) return;
-            var direction = (screenB - screenA).Normalized();
-            var normal = new Vector2(-direction.Y, direction.X) * width * .5f;
             var depthA = -_camera.ToLocal(worldA).Z;
             var depthB = -_camera.ToLocal(worldB).Z;
+            if (depthA < minDepth || depthB < minDepth) return;
+            var screenA = _camera.UnprojectPosition(worldA);
+            var screenB = _camera.UnprojectPosition(worldB);
+            if (!GlobeLineSanity.IsValidScreenRibbonSegment(ToNum(screenA), ToNum(screenB), depthA, depthB, minDepth, maxScreenSpan))
+                return;
+            if (!GlobeLineSanity.TrySafeNormalize(new System.Numerics.Vector3(screenB.X - screenA.X, screenB.Y - screenA.Y, 0f), out var dirNum))
+                return;
+            var normal = new Vector2(-dirNum.Y, dirNum.X) * GlobeLineSanity.SafeClamp(width, 0.2f, 6f, 1f) * .5f;
             var ai = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenA - normal, depthA));
             var ao = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenA + normal, depthA));
             var bi = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenB - normal, depthB));
             var bo = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenB + normal, depthB));
-            Triangle(ai, ao, bo, colour);
-            Triangle(ai, bo, bi, colour);
+            Triangle(ai, ao, bo, colour, maxRibbonEdge);
+            Triangle(ai, bo, bi, colour, maxRibbonEdge);
         }
 
-        void Aim(SupportFormation formation, SupportTypeDefinition type)
+        bool Aim(SupportFormation formation, SupportTypeDefinition type)
         {
-            var center = _campaign.ProvinceMap.CenterOf(formation.BaseProvinceId);
+            aimValid = false;
+            if (!GlobeLineSanity.TryValidateProvinceId(formation.BaseProvinceId, supportMap.ProvinceCount, supportMap.ProvinceCenterCell))
+                return false;
+            var center = supportMap.CenterOf(formation.BaseProvinceId);
+            if (!GlobeLineSanity.IsValidGeo(center.Latitude, center.Longitude)) return false;
             latitude = Mathf.DegToRad(center.Latitude);
             longitude = Mathf.DegToRad(center.Longitude);
-            angularReach = Math.Clamp(SupportCore.ReachKm(_campaign, type) / 6371f, .002f, MathF.PI);
+            angularReach = GlobeLineSanity.SafeClamp(SupportCore.ReachKm(_campaign, type) / 6371f, .002f, MathF.PI, .002f);
+            aimValid = true;
+            return true;
         }
 
-        void Triangle(Vector3 p, Vector3 q, Vector3 r, Color colour)
+        void Triangle(Vector3 p, Vector3 q, Vector3 r, Color colour, float edgeCap)
         {
+            if (_flatMap && (Wraps(p, q) || Wraps(q, r) || Wraps(r, p))) return;
+            if (!GlobeLineSanity.IsValidEmittedEdge(ToNum(p), ToNum(q), _flatMap, _flatX, edgeCap) ||
+                !GlobeLineSanity.IsValidEmittedEdge(ToNum(q), ToNum(r), _flatMap, _flatX, edgeCap) ||
+                !GlobeLineSanity.IsValidEmittedEdge(ToNum(r), ToNum(p), _flatMap, _flatX, edgeCap))
+                return;
             _supportRangeVerts.Add(p);
             _supportRangeColors.Add(colour);
             _supportRangeVerts.Add(q);
@@ -777,19 +828,31 @@ public sealed partial class GlobePresentation
 
         static bool Wraps(Vector3 p, Vector3 q) => MathF.Abs(p.X - q.X) > FlatMapWidth * .5f;
 
-        Vector3 Destination(int step, float fraction)
+        bool TryDestination(int step, float fraction, out Vector3 point)
         {
+            if (!aimValid)
+            {
+                point = default;
+                return false;
+            }
             var reach = angularReach * fraction;
             var bearing = MathF.Tau * step / steps;
-            var targetLatitude = MathF.Asin(MathF.Sin(latitude) * MathF.Cos(reach) +
-                MathF.Cos(latitude) * MathF.Sin(reach) * MathF.Cos(bearing));
+            var targetLatitude = MathF.Asin(GlobeLineSanity.ClampUnit(
+                MathF.Sin(latitude) * MathF.Cos(reach) +
+                MathF.Cos(latitude) * MathF.Sin(reach) * MathF.Cos(bearing)));
             var targetLongitude = longitude + MathF.Atan2(
                 MathF.Sin(bearing) * MathF.Sin(reach) * MathF.Cos(latitude),
                 MathF.Cos(reach) - MathF.Sin(latitude) * MathF.Sin(targetLatitude));
             var lat = Mathf.RadToDeg(targetLatitude);
-            var lon = Mathf.RadToDeg(targetLongitude);
-            return _flatMap ? LocalFlatPoint(lat, lon, FlatLineZ + .001f) :
+            var lon = GlobeLineSanity.WrapLongitude(Mathf.RadToDeg(targetLongitude));
+            if (!GlobeLineSanity.IsValidGeo(lat, lon))
+            {
+                point = default;
+                return false;
+            }
+            point = _flatMap ? LocalFlatPoint(lat, lon, FlatLineZ + .001f) :
                 LocalSurfacePoint(lat, lon, SurfaceLineRadius * 1.0007f);
+            return GlobeLineSanity.IsValidEmittedVertex(ToNum(point), _flatMap, _flatX);
         }
     }
 

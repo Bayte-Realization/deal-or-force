@@ -413,27 +413,31 @@ internal sealed class ShellAlertColumnView
         if (obscured) return;
 
         var world = _ctx.World;
-        if (world?.Player is not { } player) return;
+        if (world is null) return;
+        var player = world.Player;
 
         var kbdVis = _ctx.AltKeycapsVisible && _profile?.TouchMode != true;
         if (_outlinerKbd.Visible != kbdVis) _outlinerKbd.Visible = kbdVis;
         var inboxChanged = _inboxBar.Refresh();
 
-        var isObs = _ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
+        var isObs = ObserverUiRules.IsObserving(world, _ctx.IsObserverMode?.Invoke() ?? false);
         var nextHints = SettingsCatalog.Flag("ui_shell_next_hints");
+        var movCount = isObs ? ObserverUiRules.ObservedLandlessMovements(world).Count : 0;
         var preHash = HashCode.Combine(
-            HashCode.Combine(player.Id, isObs, _outlinerOpen, nextHints, Loc.Language, _profile?.Compact ?? false, _profile?.TouchMode ?? false, _inboxBar.LastCount),
-            HashCode.Combine(world.ElapsedDays, world.MapRevision, world.WarRevision, world.PendingEvents.Count, world.Armies.Count, world.Construction.Count, _viewedAlerts.Count, _localMutationRev));
+            HashCode.Combine(player?.Id ?? -1, isObs, _outlinerOpen, nextHints, Loc.Language, _profile?.Compact ?? false, _profile?.TouchMode ?? false, _inboxBar.LastCount),
+            HashCode.Combine(world.ElapsedDays, world.MapRevision, world.WarRevision, world.PendingEvents.Count, world.Armies.Count, movCount, _viewedAlerts.Count, _localMutationRev));
         if (!inboxChanged && _hasPreSnapHash && _lastPreSnapHash == preHash) return;
         _hasPreSnapHash = true;
         _lastPreSnapHash = preHash;
 
-        var snap = ShellAlerts.BuildSnapshot(
-            world, player, _outlinerOpen, nextHints,
-            isObs, _viewedAlerts, _snoozes, _watchedGoods, _profile?.TouchMode == true);
+        var snap = isObs
+            ? ObserverUiRules.BuildWorldObserverSnapshot(world, _outlinerOpen)
+            : ShellAlerts.BuildSnapshot(
+                world, player, _outlinerOpen, nextHints,
+                false, _viewedAlerts, _snoozes, _watchedGoods, _profile?.TouchMode == true);
 
         var hc = new HashCode();
-        hc.Add(player.Id); hc.Add(isObs); hc.Add(_outlinerOpen); hc.Add(Loc.Language);
+        hc.Add(player?.Id ?? -1); hc.Add(isObs); hc.Add(_outlinerOpen); hc.Add(Loc.Language);
         hc.Add(_profile?.Compact ?? false); hc.Add(_profile?.TouchMode ?? false); hc.Add(_inboxBar.LastCount);
         hc.Add(snap.Alerts.Count);
         for (var i = 0; i < snap.Alerts.Count; i++)
@@ -489,7 +493,7 @@ internal sealed class ShellAlertColumnView
                 _viewedAlerts.Add(captured.TopicKey);
                 _localMutationRev++;
                 _ctx.PlayCue?.Invoke("ui_select");
-                RouteTopic(RouteOfEntry(captured.Route), captured.TargetId);
+                RouteTopic(captured.Id == "obs_movements" ? "Movements" : RouteOfEntry(captured.Route), captured.TargetId);
                 Refresh();
             };
             btn.GuiInput += ev =>
@@ -757,6 +761,7 @@ internal sealed class ShellAlertColumnView
     {
         if (screen == "Space") { _ctx.TogglePause?.Invoke(); return; }
         if (screen is "Wars" or "War") { _ctx.OpenWarLedger?.Invoke(); if (targetId >= 0) _ctx.ShowWarDetail?.Invoke(targetId); return; }
+        if (screen == "Movements") { _ctx.OpenObservedMovement?.Invoke(targetId); return; }
         if (screen == "Defcon") { if (!_messages.IsVisible) _messages.Toggle(); return; }
         if (screen == "SovereignFinance") { _ctx.OpenSovereignFinance?.Invoke(); return; }
         _ctx.OpenScreen?.Invoke(screen);

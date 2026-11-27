@@ -46,6 +46,13 @@ public sealed partial class GlobePresentation
     // the same size. The buffers and the images are made once and overwritten.
     private byte[] _controlPixels;
     private byte[] _frontPixels;
+    private readonly byte[] _frontSideByMapIndex = new byte[65536];
+    private readonly byte[] _frontWarCountByMapIndex = new byte[65536];
+    private readonly int[] _frontWarOrderByMapIndex = new int[65536];
+    private readonly int[] _frontWarIdByMapIndex = new int[65536];
+    private readonly Dictionary<int, List<(int Order, int WarId, byte WarCode, byte Side)>> _frontMultiWarByMapIndex = new();
+    private readonly List<List<(int Order, int WarId, byte WarCode, byte Side)>> _frontMultiWarListPool = new();
+    private readonly List<int> _frontTouchedMapIndices = new();
     private Image _controlImage;
     private Image _frontImage;
     private int _routeFingerprint = int.MinValue;
@@ -241,12 +248,17 @@ public sealed partial class GlobePresentation
 
     private bool _frontPreviewDeferred;
     private int _frontPreviewZoomBucket = int.MinValue;
+    private bool _frontPreviewFlatMap;
+    private int _frontPreviewFlatBucket = int.MinValue;
 
     private void RefreshFrontPreviewZoomIfNeeded()
     {
-        if (!IsInstanceValid(_frontPreview) || !_frontPreview.Visible || _frontPreviewDeferred) return;
+        if (!IsInstanceValid(_frontPreview) || (!_frontPreview.Visible && !_frontPreviewFlatMap) || _frontPreviewDeferred) return;
         var bucket = CurrentBattleArrowZoomBucket();
-        if (bucket == _frontPreviewZoomBucket) return;
+        var flatBucket = _flatMap ? Mathf.FloorToInt(_flatX * 0.25f) : 0;
+        if (bucket == _frontPreviewZoomBucket &&
+            _frontPreviewFlatMap == _flatMap &&
+            _frontPreviewFlatBucket == flatBucket) return;
         _frontPreviewZoomBucket = bucket;
         BuildFrontPreview();
     }
@@ -271,6 +283,8 @@ public sealed partial class GlobePresentation
     {
         _frontPreviewDeferred = false;
         _frontPreviewZoomBucket = CurrentBattleArrowZoomBucket();
+        _frontPreviewFlatMap = _flatMap;
+        _frontPreviewFlatBucket = _flatMap ? Mathf.FloorToInt(_flatX * 0.25f) : 0;
         if (_campaign?.ProvinceMap is null || _globeMaterial is null) return;
         _frontMesh.ClearSurfaces();
         _frontVerts.Clear();
@@ -291,23 +305,7 @@ public sealed partial class GlobePresentation
             controllers[p * 2 + 1] = (byte)(liveControl[p] >> 8);
         }
         Array.Clear(pixels);
-        foreach (var war in _campaign.Wars)
-        {
-            if (war.Ended) continue;
-            var warCode = (byte)(war.Id % 254 + 1);
-            foreach (var province in war.AttackerFront)
-            {
-                var write = province * 4;
-                pixels[write] = warCode;
-                pixels[write + 1] = 85;
-            }
-            foreach (var province in war.DefenderFront)
-            {
-                var write = province * 4;
-                pixels[write] = warCode;
-                pixels[write + 1] = 170;
-            }
-        }
+        PaintLiveWarFronts(pixels, liveControl, _campaign.ProvinceMap);
 
         // The blue channel carries what the player drew: which kind of line a province
         // belongs to, committed lines first and the stroke in progress painted over them,
@@ -327,6 +325,7 @@ public sealed partial class GlobePresentation
             {
                 foreach (var p in line.SourceProvinces)
                 {
+                    if (p <= 0 || p >= 256 * 256) continue;
                     pixels[p * 4 + 2] = 64;
                     PutBorderTarget(borderTargets, p, line.NationId, line.BorderNationId);
                 }
@@ -353,16 +352,18 @@ public sealed partial class GlobePresentation
         }
         _drawingPlanId = -1;
         if (_objectivePreview.Count > 0) DrawOffensiveGeometry(_objectivePreview, _departurePreview, true);
-        if (_defensivePreview.Count > 0) DrawDefensiveGeometry(_defensivePreview, _campaign.Player.Id, true);
+        if (_defensivePreview.Count > 0 && _campaign.Player is { } defPlayer)
+            DrawDefensiveGeometry(_defensivePreview, defPlayer.Id, true);
         if (_planPreview.Count > 0 && _objectivePreview.Count == 0 && _defensivePreview.Count == 0)
         {
             var code = (byte)(Mathf.Clamp(_planPreviewKind + 1, 1, 3) * 64);
+            var previewPlayerId = _campaign.Player?.Id ?? -1;
             foreach (var province in _planPreview)
             {
                 if (province <= 0 || province >= 256 * 256) continue;
                 pixels[province * 4 + 2] = code;
-                if (_planPreviewForeignId >= 0)
-                    PutBorderTarget(borderTargets, province, _campaign.Player.Id, _planPreviewForeignId);
+                if (_planPreviewForeignId >= 0 && previewPlayerId >= 0)
+                    PutBorderTarget(borderTargets, province, previewPlayerId, _planPreviewForeignId);
             }
         }
 
@@ -376,6 +377,197 @@ public sealed partial class GlobePresentation
         if (_frontImage is null) _frontImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _frontImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
         UpdateMapImage("front_membership", _frontImage, ref _frontTexture);
+    }
+
+    /// <summary>Rebuilds front_membership from live province controllers in a single O(P) province sweep.</summary>
+    private void PaintLiveWarFronts(byte[] pixels, ushort[] liveControl, Simulation.ProvinceTopology topology)
+    {
+        var provCount = Math.Min(topology.ProvinceCount, Math.Min(liveControl.Length - 1, (256 * 256) - 1));
+        if (provCount <= 0 || topology.Neighbors is not { Length: > 0 } neighbors) return;
+
+        var liveWars = Simulation.Warfare.LiveWars(_campaign);
+        for (var wi = 0; wi < liveWars.Count; wi++)
+        {
+            var war = liveWars[wi];
+            if (war is null || war.Ended) continue;
+            var warCode = (byte)(war.Id % 254 + 1);
+            var hasAtt = RegisterFrontWarSide(war.Side(true), wi, war.Id, warCode, 85);
+            var hasDef = RegisterFrontWarSide(war.Side(false), wi, war.Id, warCode, 170);
+            if (!hasAtt || !hasDef)
+            {
+                // Unlikely degenerate war with an empty side: still leave CleanupFrontMapIndices at the end to clear cleanly.
+            }
+        }
+        if (_frontTouchedMapIndices.Count == 0) return;
+
+        for (var p = 1; p <= provCount; p++)
+        {
+            var ctrl = liveControl[p];
+            var count = _frontWarCountByMapIndex[ctrl];
+            if (count == 0 || topology.IsWater(p)) continue;
+            var adj = p < neighbors.Length ? neighbors[p] : null;
+            if (adj is null) continue;
+
+            if (count == 1)
+            {
+                var warOrder = _frontWarOrderByMapIndex[ctrl];
+                var warId = _frontWarIdByMapIndex[ctrl];
+                var side = _frontSideByMapIndex[ctrl];
+                for (var ni = 0; ni < adj.Length; ni++)
+                {
+                    var nb = adj[ni];
+                    if (nb <= 0 || nb >= liveControl.Length || topology.IsWater(nb)) continue;
+                    var nbCtrl = liveControl[nb];
+                    var nbCount = _frontWarCountByMapIndex[nbCtrl];
+                    if (nbCount == 0) continue;
+                    if (nbCount == 1)
+                    {
+                        if (_frontWarIdByMapIndex[nbCtrl] == warId && _frontSideByMapIndex[nbCtrl] != side)
+                        {
+                            var write = p * 4;
+                            pixels[write] = (byte)(warId % 254 + 1);
+                            pixels[write + 1] = side;
+                            break;
+                        }
+                    }
+                    else if (_frontMultiWarByMapIndex.TryGetValue(nbCtrl, out var nbList))
+                    {
+                        var matched = false;
+                        for (var k = 0; k < nbList.Count; k++)
+                        {
+                            var e = nbList[k];
+                            if (e.WarId == warId && e.Side != side)
+                            {
+                                var write = p * 4;
+                                pixels[write] = e.WarCode;
+                                pixels[write + 1] = side;
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if (matched) break;
+                    }
+                }
+                continue;
+            }
+
+            if (!_frontMultiWarByMapIndex.TryGetValue(ctrl, out var ctrlList)) continue;
+            var bestOrder = -1;
+            byte bestCode = 0;
+            byte bestSide = 0;
+            for (var ni = 0; ni < adj.Length; ni++)
+            {
+                var nb = adj[ni];
+                if (nb <= 0 || nb >= liveControl.Length || topology.IsWater(nb)) continue;
+                var nbCtrl = liveControl[nb];
+                var nbCount = _frontWarCountByMapIndex[nbCtrl];
+                if (nbCount == 0) continue;
+                if (nbCount == 1)
+                {
+                    var nbOrder = _frontWarOrderByMapIndex[nbCtrl];
+                    if (nbOrder <= bestOrder) continue;
+                    var nbWarId = _frontWarIdByMapIndex[nbCtrl];
+                    var nbSide = _frontSideByMapIndex[nbCtrl];
+                    for (var k = ctrlList.Count - 1; k >= 0; k--)
+                    {
+                        var e = ctrlList[k];
+                        if (e.Order <= bestOrder) break;
+                        if (e.WarId == nbWarId && e.Side != nbSide)
+                        {
+                            bestOrder = e.Order;
+                            bestCode = e.WarCode;
+                            bestSide = e.Side;
+                            break;
+                        }
+                    }
+                }
+                else if (_frontMultiWarByMapIndex.TryGetValue(nbCtrl, out var nbList))
+                {
+                    for (var ci = ctrlList.Count - 1; ci >= 0; ci--)
+                    {
+                        var ce = ctrlList[ci];
+                        if (ce.Order <= bestOrder) break;
+                        for (var nbi = nbList.Count - 1; nbi >= 0; nbi--)
+                        {
+                            var ne = nbList[nbi];
+                            if (ne.Order < ce.Order) break;
+                            if (ne.WarId == ce.WarId && ne.Side != ce.Side)
+                            {
+                                bestOrder = ce.Order;
+                                bestCode = ce.WarCode;
+                                bestSide = ce.Side;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if (bestOrder >= 0)
+            {
+                var write = p * 4;
+                pixels[write] = bestCode;
+                pixels[write + 1] = bestSide;
+            }
+        }
+
+        for (var ti = 0; ti < _frontTouchedMapIndices.Count; ti++)
+        {
+            var idx = _frontTouchedMapIndices[ti];
+            _frontSideByMapIndex[idx] = 0;
+            _frontWarCountByMapIndex[idx] = 0;
+            _frontWarOrderByMapIndex[idx] = 0;
+            _frontWarIdByMapIndex[idx] = 0;
+            if (_frontMultiWarByMapIndex.Remove(idx, out var list))
+            {
+                list.Clear();
+                if (_frontMultiWarListPool.Count < 128) _frontMultiWarListPool.Add(list);
+            }
+        }
+        _frontTouchedMapIndices.Clear();
+    }
+
+    private bool RegisterFrontWarSide(
+        Simulation.StrategicWar.SideEnumerable sideMembers, int warOrder, int warId, byte warCode, byte sideCode)
+    {
+        var any = false;
+        foreach (var id in sideMembers)
+        {
+            var mapIdx = _campaign.NationById(id)?.MapIndex ?? 0;
+            if (mapIdx <= 0 || mapIdx >= _frontSideByMapIndex.Length) continue;
+            var prevCount = _frontWarCountByMapIndex[mapIdx];
+            if (prevCount == 0)
+            {
+                _frontSideByMapIndex[mapIdx] = sideCode;
+                _frontWarCountByMapIndex[mapIdx] = 1;
+                _frontWarOrderByMapIndex[mapIdx] = warOrder;
+                _frontWarIdByMapIndex[mapIdx] = warId;
+                _frontTouchedMapIndices.Add(mapIdx);
+            }
+            else
+            {
+                if (!_frontMultiWarByMapIndex.TryGetValue(mapIdx, out var list))
+                {
+                    var poolIdx = _frontMultiWarListPool.Count - 1;
+                    if (poolIdx >= 0)
+                    {
+                        list = _frontMultiWarListPool[poolIdx];
+                        _frontMultiWarListPool.RemoveAt(poolIdx);
+                    }
+                    else
+                    {
+                        list = new List<(int Order, int WarId, byte WarCode, byte Side)>(4);
+                    }
+                    var firstOrder = _frontWarOrderByMapIndex[mapIdx];
+                    var firstId = _frontWarIdByMapIndex[mapIdx];
+                    list.Add((firstOrder, firstId, (byte)(firstId % 254 + 1), _frontSideByMapIndex[mapIdx]));
+                    _frontMultiWarByMapIndex[mapIdx] = list;
+                }
+                list.Add((warOrder, warId, warCode, sideCode));
+                _frontWarCountByMapIndex[mapIdx] = prevCount < byte.MaxValue ? (byte)(prevCount + 1) : byte.MaxValue;
+            }
+            any = true;
+        }
+        return any;
     }
 
     private static byte PlanCode(Simulation.FrontLineKind kind) => kind switch
@@ -414,7 +606,8 @@ public sealed partial class GlobePresentation
     {
         if (_campaign?.ProvinceMap is null || !IsInstanceValid(_routePreview)) return;
 
-        var fingerprint = HashCode.Combine(_selectedArmyIds.Count, _campaign.Player?.Id ?? -1);
+        var fingerprint = HashCode.Combine(_selectedArmyIds.Count, _campaign.Player?.Id ?? -1,
+            _flatMap, _flatMap ? Mathf.FloorToInt(_flatX * 0.5f) : 0);
         if (_selectedArmyIds.Count > 0)
             foreach (var candidate in _campaign.Armies)
             {
@@ -530,6 +723,11 @@ public sealed partial class GlobePresentation
         int lastStep = -1;
         int stepCount = 0;
 
+        var map = _campaign.ProvinceMap;
+        if (map is null) return false;
+        if (!TryResolveArmyGeoPoint(army, SurfaceLineRadius, out var startPoint))
+            return false;
+
         _routePoints.Clear();
         if (activeBattle is not null &&
             (activeBattle.ProvinceId == army.ProvinceId || !activeBattle.Attackers.Contains(army.Id)))
@@ -540,12 +738,12 @@ public sealed partial class GlobePresentation
             if (army.Route.Count == 0 && army.PostBattleWaypoints.Count == 0)
                 return false;
             attack = false;
-            _routePoints.Add(PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius));
+            _routePoints.Add(startPoint);
             for (var i = 0; i < army.Route.Count; i++)
             {
                 var province = army.Route[i];
-                var center = _campaign.ProvinceMap.CenterOf(province);
-                AddRoutePoint(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+                if (!TryPlanPoint(province, out var pt)) continue;
+                AddRoutePoint(pt);
                 if (firstStep < 0) firstStep = province;
                 lastStep = province;
                 stepCount++;
@@ -553,9 +751,8 @@ public sealed partial class GlobePresentation
             for (var i = 0; i < army.PostBattleWaypoints.Count; i++)
             {
                 var wp = army.PostBattleWaypoints[i];
-                if (wp <= 0 || wp == lastStep) continue;
-                var center = _campaign.ProvinceMap.CenterOf(wp);
-                AddRoutePoint(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+                if (wp == lastStep || !TryPlanPoint(wp, out var pt)) continue;
+                AddRoutePoint(pt);
                 if (firstStep < 0) firstStep = wp;
                 lastStep = wp;
                 stepCount++;
@@ -566,13 +763,14 @@ public sealed partial class GlobePresentation
             // Selected attacker in active battle or marching division: draw full signature GlobeOrderRibbons arrow.
             attack = IsAttackIntent(army);
             route = PresentationRoute(army, attack);
-            var directObjective = army.OrderProvinceId > 0;
+            var directObjective = GlobeLineSanity.TryValidateProvinceId(
+                army.OrderProvinceId, map.ProvinceCount, map.ProvinceCenterCell);
 
-            _routePoints.Add(PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius));
+            _routePoints.Add(startPoint);
             foreach (var province in route)
             {
-                var center = _campaign.ProvinceMap.CenterOf(province);
-                AddRoutePoint(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+                if (!TryPlanPoint(province, out var pt)) continue;
+                AddRoutePoint(pt);
                 if (firstStep < 0) firstStep = province;
                 lastStep = province;
                 stepCount++;
@@ -580,10 +778,10 @@ public sealed partial class GlobePresentation
             // A manual order may come from an old save which predates PlannedRoute. Offensive
             // orders never receive a ruler-straight fallback: their corridor is reconstructed
             // through the two belligerents' province graph below.
-            if (!attack && directObjective && (route.Count == 0 || route[^1] != army.OrderProvinceId))
+            if (!attack && directObjective && (route.Count == 0 || route[^1] != army.OrderProvinceId) &&
+                TryPlanPoint(army.OrderProvinceId, out var objPt))
             {
-                var objective = _campaign.ProvinceMap.CenterOf(army.OrderProvinceId);
-                AddRoutePoint(PresentationPoint(objective.Latitude, objective.Longitude, SurfaceLineRadius));
+                AddRoutePoint(objPt);
                 if (firstStep < 0) firstStep = army.OrderProvinceId;
                 lastStep = army.OrderProvinceId;
                 stepCount++;
@@ -591,9 +789,8 @@ public sealed partial class GlobePresentation
             for (var i = 0; i < army.PostBattleWaypoints.Count; i++)
             {
                 var wp = army.PostBattleWaypoints[i];
-                if (wp <= 0 || wp == lastStep) continue;
-                var center = _campaign.ProvinceMap.CenterOf(wp);
-                AddRoutePoint(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+                if (wp == lastStep || !TryPlanPoint(wp, out var pt)) continue;
+                AddRoutePoint(pt);
                 if (firstStep < 0) firstStep = wp;
                 lastStep = wp;
                 stepCount++;
@@ -626,8 +823,26 @@ public sealed partial class GlobePresentation
             (ushort)nation.MapIndex, (ushort)enemy.MapIndex, controllers);
     }
 
+    private bool TryResolveArmyGeoPoint(Simulation.Army army, float sphereRadius, out Vector3 point)
+    {
+        var map = _campaign?.ProvinceMap;
+        if (army is null || map is null)
+        {
+            point = default;
+            return false;
+        }
+        if (!GlobeLineSanity.TryResolveEntityGeo(army.Latitude, army.Longitude, army.ProvinceId,
+                map.ProvinceCount, map.ProvinceCenterCell, map.CenterOf, out var geo))
+        {
+            point = default;
+            return false;
+        }
+        return TryPresentationPoint(geo.Latitude, geo.Longitude, sphereRadius, out point);
+    }
+
     private void AddRoutePoint(Vector3 point)
     {
+        if (!GlobeLineSanity.IsValidEmittedVertex(ToNum(point), _flatMap, _flatX)) return;
         if (_routePoints.Count == 0 || _routePoints[^1].DistanceSquaredTo(point) > 0.000004f)
             _routePoints.Add(point);
     }

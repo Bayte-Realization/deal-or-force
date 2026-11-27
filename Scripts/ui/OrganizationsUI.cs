@@ -19,13 +19,15 @@ public partial class DealOrForceGame
     // Rebuild only when their displayed identity/order or selection actually changes.
     private void RefreshOrganizationIndex()
     {
+        var player = _campaign.Player;
+        var playerId = player?.Id ?? -1;
         var hash = new HashCode();
-        hash.Add(Loc.Language); hash.Add(_campaign.Player.Id); hash.Add(_selectedOrganization);
+        hash.Add(Loc.Language); hash.Add(playerId); hash.Add(_selectedOrganization);
         hash.Add(_campaign.Defines.OrganizationFoundingDeposit);
         var politicalCost = InternationalOrganizations.FoundingPoliticalCost(_campaign);
         hash.Add(politicalCost); hash.Add(_observerMode);
-        hash.Add(_campaign.Player.PoliticalPoints >= politicalCost);
-        hash.Add(_campaign.Player.Treasury >= Math.Max(0, _campaign.Defines.OrganizationFoundingDeposit));
+        hash.Add(player is not null && player.PoliticalPoints >= politicalCost);
+        hash.Add(player is not null && player.Treasury >= Math.Max(0, _campaign.Defines.OrganizationFoundingDeposit));
         foreach (var o in InternationalOrganizations.Active(_campaign).OrderBy(o => o.Id))
         {
             hash.Add(o.Id); hash.Add(InternationalOrganizations.DisplayName(_campaign, o)); hash.Add(o.CharterId);
@@ -50,24 +52,27 @@ public partial class DealOrForceGame
     }
     private void ListOrganizations()
     {
+        var player = _campaign.Player;
+        var playerId = player?.Id ?? -1;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         var newOrganization = ActionButton("New organization…", () =>
         {
             if (_conflictsList.FindChild("OrganizationName", true, false) is LineEdit input)
             { _conflictsListScroll.EnsureControlVisible(input); input.GrabFocus(); }
         }, 0, 34, iconPath: Icon("decisions"));
         newOrganization.Name = "BeginOrganizationFounding";
-        newOrganization.Disabled = _observerMode;
+        newOrganization.Disabled = observing || player is null;
         _conflictsList.AddChild(newOrganization);
         _conflictsList.AddChild(Caption("INTERNATIONAL ORGANIZATIONS"));
         var listed = InternationalOrganizations.Active(_campaign)
-            .OrderByDescending(o => o.Members.Contains(_campaign.Player.Id))
+            .OrderByDescending(o => playerId > 0 && o.Members.Contains(playerId))
             .ThenByDescending(o => o.Members.Count).ThenBy(o => o.Name).ToList();
         // Something is always open on the right: ours, or the largest.
         if (listed.Count > 0 && listed.All(o => o.Id != _selectedOrganization)) _selectedOrganization = listed[0].Id;
         foreach (var o in listed)
         {
             var id = o.Id;
-            var ours = o.Members.Contains(_campaign.Player.Id);
+            var ours = playerId > 0 && o.Members.Contains(playerId);
             var kind = InternationalOrganizations.Charter(o.CharterId);
             var row = ActionButton(Loc.Format("{0} · {1} members", InternationalOrganizations.DisplayName(_campaign, o), o.Members.Count) +
                 (ours ? "  ·  " + Tr("we are a member") : ""), () => {
@@ -105,8 +110,8 @@ public partial class DealOrForceGame
         _conflictsList.AddChild(charter);
         var explanation = WrappedUltimatumText("", 14); _conflictsList.AddChild(explanation);
         var create = ActionButton("Found organization", () => {
-            if (charters.Length == 0) return;
-            var cmd = new OrganizationCommand { IssuerId = _campaign.Player.Id, Action = "create", Name = name.Text, CharterId = charters[charter.Selected].Id };
+            if (charters.Length == 0 || player is null || observing) return;
+            var cmd = new OrganizationCommand { IssuerId = player.Id, Action = "create", Name = name.Text, CharterId = charters[charter.Selected].Id };
             OrganizationAction(cmd, "found:" + name.Text + ":" + cmd.CharterId);
         }, 0, 36, iconPath: "res://game/gfx/interface/icons/icon_decisions.png");
         create.Name = "CreateOrganization"; _conflictsList.AddChild(create);
@@ -117,10 +122,12 @@ public partial class DealOrForceGame
                     "Founding cost: {0} into the common fund and {1:0.#} political capital.",
                     Fmt.Money(Math.Max(0, _campaign.Defines.OrganizationFoundingDeposit)),
                     InternationalOrganizations.FoundingPoliticalCost(_campaign));
-            var refusal = charters.Length == 0 ? Tr("No organization charters are available.") :
-                InternationalOrganizations.Refusal(_campaign, new OrganizationCommand { IssuerId = _campaign.Player.Id,
-                    Action = "create", Name = name.Text, CharterId = charters[charter.Selected].Id });
-            if (_observerMode) refusal = Tr("Observer mode cannot issue diplomatic orders.");
+            var refusal = observing || player is null
+                ? Tr("Observer mode cannot issue diplomatic orders.")
+                : charters.Length == 0
+                    ? Tr("No organization charters are available.")
+                    : InternationalOrganizations.Refusal(_campaign, new OrganizationCommand { IssuerId = player.Id,
+                        Action = "create", Name = name.Text, CharterId = charters[charter.Selected].Id });
             create.Disabled = refusal.Length > 0;
             create.TooltipText = Ui.Tip(refusal.Length > 0 ? refusal : Tr("Press again to confirm."));
         }
@@ -213,23 +220,29 @@ public partial class DealOrForceGame
                 engagement*100,rift*100),12));
         }
         var player = _campaign.Player;
-        if (o.Invitations.Contains(player.Id))
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        if (player is not null && o.Invitations.Contains(player.Id))
         {
             _conflictsPage.AddChild(WrappedUltimatumText("The assembly has invited your country. Accession requires your consent and future dues.", 15));
             foreach (var action in new[] { "join", "decline" })
             {
                 var captured = action;
-                _conflictsPage.AddChild(ActionButton(action == "join" ? "Accept membership" : "Decline invitation", () =>
-                    OrganizationAction(new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id, Action = captured }, captured + o.Id), 0, 34));
+                var inviteBtn = ActionButton(action == "join" ? "Accept membership" : "Decline invitation", () =>
+                    OrganizationAction(new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id, Action = captured }, captured + o.Id), 0, 34);
+                inviteBtn.Disabled = observing;
+                _conflictsPage.AddChild(inviteBtn);
             }
         }
         if (o.LastOutcome.Length > 0) _conflictsPage.AddChild(WrappedUltimatumText(Loc.Format("Last vote: {0} of {1} yes · {2}", o.LastYes, o.LastVoters,
             Tr(o.LastOutcome.EndsWith("_passed", StringComparison.Ordinal) ? "Motion passed." : "Motion did not pass.")), 13));
+        if (player is null) return;
         if (o.Suspended.ContainsKey(player.Id))
         {
             _conflictsPage.AddChild(WrappedUltimatumText("Your country's seat is suspended: no vote, no customs union, no common defence, no grants. The assembly may give it back once the cause is gone, or vote to expel it while the cause stands.", 14));
-            _conflictsPage.AddChild(ActionButton("Give up the seat", () => OrganizationAction(new OrganizationCommand {
-                IssuerId = player.Id, OrganizationId = o.Id, Action = "leave" }, "leave" + o.Id), 0, 34));
+            var leaveSuspended = ActionButton("Give up the seat", () => OrganizationAction(new OrganizationCommand {
+                IssuerId = player.Id, OrganizationId = o.Id, Action = "leave" }, "leave" + o.Id), 0, 34);
+            leaveSuspended.Disabled = observing;
+            _conflictsPage.AddChild(leaveSuspended);
             return;
         }
         if (!o.Members.Contains(player.Id))
@@ -243,7 +256,7 @@ public partial class DealOrForceGame
                     : Tr("Apply for membership to start an assembly vote. Approval gives an invitation, not automatic membership; you can then accept or decline."), 14));
                 var command = new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id,
                     Action = pending ? "withdraw_application" : "request_membership" };
-                var refusal = _observerMode ? Tr("Observer mode cannot issue diplomatic orders.") : InternationalOrganizations.Refusal(_campaign, command);
+                var refusal = observing ? Tr("Observer mode cannot issue diplomatic orders.") : InternationalOrganizations.Refusal(_campaign, command);
                 var apply = ActionButton(pending ? "Withdraw application" : "Apply for membership", () =>
                     OrganizationAction(command, command.Action + ":" + o.Id), 0, 36, iconPath: Icon("diplomacy"));
                 apply.Name = pending ? "WithdrawOrganizationApplication" : "RequestOrganizationMembership";
@@ -256,7 +269,7 @@ public partial class DealOrForceGame
         foreach (var war in _campaign.Wars.Where(w => !w.Ended && !w.Involves(player.Id) && o.Members.Any(w.IsDefending)))
         {
             var command = new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id, Action = "defend", WarId = war.Id };
-            var refusal = InternationalOrganizations.Refusal(_campaign, command);
+            var refusal = observing ? Tr("Observer mode cannot issue diplomatic orders.") : InternationalOrganizations.Refusal(_campaign, command);
             var defend = ActionButton(Loc.Format("Answer defensive call: {0}", WarNames.Of(_campaign, war)), () => OrganizationAction(command, "defend:" + war.Id), 0, 36,
                 iconPath: Icon("war"));
             defend.Disabled = refusal.Length > 0; defend.TooltipText = Ui.Tip(refusal); _conflictsPage.AddChild(defend);

@@ -49,20 +49,20 @@ internal static class ShellCountryDiplomacyView
         root.AddThemeConstantOverride("separation", 7);
         pad.AddChild(root);
 
-        var observing = ctx.IsObserverMode?.Invoke() ?? world.ObserverMode;
+        var observing = ObserverUiRules.IsObserving(world, ctx.IsObserverMode?.Invoke() ?? false);
         if (observing)
             AddNoticeStrip(ctx, root, "icon_shell_eye", Loc.Get("shell.obs.readonly_banner"), "shell.state.info");
 
         if (isOwn)
             PopulateOwnSummary(ctx, root, world, nation, observing);
-        else if (world.Player is { } player)
+        else if (!observing && world.Player is { } player)
             PopulateBilateralCard(ctx, root, world, player, nation);
 
         PopulateWars(ctx, root, world, nation);
         ShellCountryDiplomacyStanding.PopulateStandoffs(ctx, root, world, nation, openCountry);
         ShellCountryDiplomacyStanding.PopulateWorldStanding(ctx, root, world, nation, openCountry);
 
-        if (!isOwn && world.Player is { } actingPlayer)
+        if (!isOwn && !observing && world.Player is { } actingPlayer)
             ShellCountryDiplomacyActions.Populate(ctx, root, feedbackLabel, world, actingPlayer, nation, observing, onMutated);
     }
 

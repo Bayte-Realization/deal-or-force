@@ -26,13 +26,17 @@ internal static class Program
 
     private static int Main(string[] args)
     {
-        if (args.Length < 1 || !File.Exists(args[0]))
-        {
-            Console.WriteLine("usage: KernelBench <save.dofsave> [--samples N] [--warmup N]");
-            return 2;
-        }
         var samples = Arg(args, "--samples", 31);
         var warmup = Arg(args, "--warmup", 10);
+        if (Array.IndexOf(args, "--dof-kernels-only") >= 0)
+        {
+            return DofKernelsBench.Run(samples, warmup);
+        }
+        if (args.Length < 1 || !File.Exists(args[0]))
+        {
+            Console.WriteLine("usage: KernelBench <save.dofsave> [--samples N] [--warmup N] [--dof-kernels | --dof-kernels-only]");
+            return 2;
+        }
         Console.WriteLine("KernelBench - household review over population groups");
         Console.WriteLine($"  runtime {Environment.Version}, {Environment.ProcessorCount} logical cores, " +
                           $"DeterministicParallel.Workers={DeterministicParallel.Workers}, Vector256 accelerated={Vector256.IsHardwareAccelerated}, " +
@@ -250,7 +254,12 @@ internal static class Program
         }
         Console.WriteLine($"STAGE the game's whole HouseholdEconomy.Review over the same regions, 15 samples after 5: serial {Stats(fullSerial)}; " +
                           $"as scheduled (per country, DeterministicParallel) {Stats(fullScheduled)}");
-        if (mismatches.Count > 0) return 1;
+        int kernelExit = 0;
+        if (Array.IndexOf(args, "--dof-kernels") >= 0)
+        {
+            kernelExit = DofKernelsBench.Run(samples, warmup);
+        }
+        if (mismatches.Count > 0 || kernelExit != 0) return 1;
         return verdict.Where((v, i) => !variants[i].Name.StartsWith("   bridge")).Any(v => v is not null) ? 1 : 0;
     }
 

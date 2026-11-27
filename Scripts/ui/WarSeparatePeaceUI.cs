@@ -12,7 +12,8 @@ public partial class DealOrForceGame
 {
     private void BuildSeparatePeaceActions(StrategicWar war, Nation player)
     {
-        if (_campaign?.Defines is not { SeparatePeaceEnabled: true } || war is null || war.Ended || !war.Involves(player.Id)) return;
+        if (_campaign?.Defines is not { SeparatePeaceEnabled: true } || war is null || player is null ||
+            ObserverUiRules.IsObserving(_campaign, _observerMode) || war.Ended || !war.Involves(player.Id)) return;
         var attacking = war.IsAttacking(player.Id);
         var leader = SeparatePeace.IsLeader(war, player.Id);
         var enemyMembers = war.EnemiesOf(player.Id).Where(id => !SeparatePeace.IsLeader(war, id)).ToList();

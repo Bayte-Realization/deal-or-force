@@ -99,7 +99,8 @@ public partial class DealOrForceGame
         var (open, close) = CampaignScreen(screen);
         if (!open)
         {
-            if (screen == "Nation") _selectedNation = _campaign.Player;
+            if (screen == "Nation")
+                _selectedNation = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
             OpenScreen(screen);
             return;
         }

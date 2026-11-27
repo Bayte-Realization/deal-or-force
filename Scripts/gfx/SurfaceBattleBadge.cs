@@ -142,12 +142,12 @@ void fragment() {
         bool pocketAlert)
     {
         if (_text == text &&
-            MathF.Abs(_share - share) <= 0.001f &&
+            MathF.Abs(_share - share) <= 0.01f &&
             _tone == tone &&
             _symbol == symbol &&
             _attackerColor == attackerColor &&
             _defenderColor == defenderColor &&
-            MathF.Abs(_momentum - momentum) <= 0.05f &&
+            MathF.Abs(_momentum - momentum) <= 0.15f &&
             _pocketAlert == pocketAlert)
             return;
 
@@ -206,17 +206,17 @@ void fragment() {
         _ink.DrawCircle(center, outerRadius - 3f, background);
 
         // Dual faction rim crescents (left = attacker colour, right = defender colour).
-        _ink.DrawArc(center, outerRadius - 1.5f, Mathf.Pi * 0.56f, Mathf.Pi * 1.44f, 32, _attackerColor.Lightened(0.18f), 3.2f, true);
-        _ink.DrawArc(center, outerRadius - 1.5f, -Mathf.Pi * 0.44f, Mathf.Pi * 0.44f, 32, _defenderColor.Lightened(0.18f), 3.2f, true);
-        _ink.DrawArc(center, outerRadius + 0.5f, 0f, Mathf.Tau, 64, border, _pocketAlert ? 2.6f : 1.8f, true);
+        _ink.DrawArc(center, outerRadius - 1.5f, Mathf.Pi * 0.56f, Mathf.Pi * 1.44f, 20, _attackerColor.Lightened(0.18f), 3.2f, true);
+        _ink.DrawArc(center, outerRadius - 1.5f, -Mathf.Pi * 0.44f, Mathf.Pi * 0.44f, 20, _defenderColor.Lightened(0.18f), 3.2f, true);
+        _ink.DrawArc(center, outerRadius + 0.5f, 0f, Mathf.Tau, 32, border, _pocketAlert ? 2.6f : 1.8f, true);
 
         // Progress ring track + smooth green-amber-red progress arc.
-        _ink.DrawArc(center, ringRadius, -Mathf.Pi * 0.5f, Mathf.Pi * 1.5f, 64, background.Darkened(0.55f), 7.5f, true);
-        _ink.DrawArc(center, ringRadius, -Mathf.Pi * 0.5f, Mathf.Pi * 1.5f, 64, Ui.Colour("state.negative", 0.32f), 5.5f, true);
+        _ink.DrawArc(center, ringRadius, -Mathf.Pi * 0.5f, Mathf.Pi * 1.5f, 32, background.Darkened(0.55f), 7.5f, true);
+        _ink.DrawArc(center, ringRadius, -Mathf.Pi * 0.5f, Mathf.Pi * 1.5f, 32, Ui.Colour("state.negative", 0.32f), 5.5f, true);
         if (known)
         {
             var sweep = Mathf.Tau * Math.Clamp(_share, 0.02f, 1f);
-            _ink.DrawArc(center, ringRadius, -Mathf.Pi * 0.5f, -Mathf.Pi * 0.5f + sweep, 64, ringInk, 6.2f, true);
+            _ink.DrawArc(center, ringRadius, -Mathf.Pi * 0.5f, -Mathf.Pi * 0.5f + sweep, 32, ringInk, 6.2f, true);
             // Bright leading-edge pip at the end of the progress arc.
             var tipAngle = -Mathf.Pi * 0.5f + sweep;
             var tip = center + new Vector2(MathF.Cos(tipAngle), MathF.Sin(tipAngle)) * ringRadius;

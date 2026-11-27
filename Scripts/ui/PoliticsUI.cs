@@ -198,7 +198,7 @@ public partial class DealOrForceGame
 
     private void DeclareIdentity(string religion, string culture)
     {
-        if (_campaign?.Player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         var refusal = Simulation.StateIdentity.BlockReason(_campaign, _campaign.Player, religion, culture);
         if (refusal.Length > 0)
         {
@@ -218,7 +218,7 @@ public partial class DealOrForceGame
 
     private void ChangePolitics(string government, string ideology)
     {
-        if (_campaign?.Player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         var refusal = PoliticsCore.Refusal(_campaign, _campaign.Player, government, ideology);
         if (refusal.Length > 0)
         {

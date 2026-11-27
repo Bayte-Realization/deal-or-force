@@ -48,6 +48,7 @@ public sealed partial class GlobePresentation
     /// <summary>Frames a geographic point exactly as the source globe's country focus does.</summary>
     public void FocusOn(float latitude, float longitude, float distance = 8f)
     {
+        WakeGlobeRendering();
         _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero;
         _flatZoomAnchorActive = false;
         _cameraTransformDirty = true;
@@ -752,8 +753,10 @@ public sealed partial class GlobePresentation
         _lastAppliedDistance = _distance;
         _camera.Projection = Camera3D.ProjectionType.Perspective;
         _orbit.Rotation = new Vector3(_pitch, _yaw, 0f);
+        _orbit.ForceUpdateTransform();
         _camera.Position = new Vector3(0f, 0f, _distance);
         _camera.LookAt(Vector3.Zero, Vector3.Up);
+        _camera.ForceUpdateTransform();
     }
 
 

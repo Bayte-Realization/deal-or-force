@@ -255,25 +255,7 @@ public static class CountryNames
         // An armed opposition is named for what it wants and the country it wants it in:
         // "rising:salvation_front:ETH" reads "National Salvation Front of Ethiopia" in the
         // reader's own language, with the country's own translated name (CivilWarOutbreak).
-        if (nation.Name.StartsWith("rising:", StringComparison.Ordinal))
-        {
-            var parts = nation.Name.Split(':', 4);
-            if (parts.Length == 4)
-            {
-                var country = Loc.Has($"country.{parts[2]}.name") ? Loc.Get($"country.{parts[2]}.name") : Loc.Get(parts[3]);
-                // A side of a collapse is named for the region it holds as well as the country:
-                // "rising:military_command@sd_ds@South Darfur:SDN:Sudan" reads "South Darfur
-                // Military Command (Sudan)". Several of them rise in one state at once, and a
-                // map of five "National Salvation Fronts of Sudan" tells a player nothing.
-                var template = parts[1].Split('@', 3);
-                if (template.Length == 3)
-                {
-                    var region = Loc.Has($"region.{template[1]}.name") ? Loc.Get($"region.{template[1]}.name") : Loc.Get(template[2]);
-                    return Loc.Format("rising." + template[0], country, region);
-                }
-                return Loc.Format("rising." + parts[1], country);
-            }
-        }
+        if (TryResolveRising(nation.Name, out var rising)) return rising;
         return NameOfRecord(nation);
     }
 
@@ -284,13 +266,15 @@ public static class CountryNames
     /// </summary>
     private static string NameOfRecord(Nation nation)
     {
-        var raw = nation.Name ?? "";
+        if (TryResolveRising(nation.Name, out var rising)) return rising;
+        var raw = SanitizeRisingText(nation.Name ?? "");
         if (NationNaming.TryTranslate(raw, out var translated)) return translated;
         if (FormableNameOf(raw) is { Length: > 0 } formable) return formable;
         // Nothing left but the country's own row, and failing that its tag. A tag is short,
         // ugly and true; a key is none of those things.
         if (Loc.TryGet($"country.{nation.Tag}.name", out var own) && own.Length > 0) return own;
-        return string.IsNullOrWhiteSpace(nation.Tag) ? raw : nation.Tag;
+        if (!string.IsNullOrWhiteSpace(nation.Tag)) return nation.Tag;
+        return NationNaming.LooksLikeKey(raw) || HasRisingRecipe(raw) ? "" : raw;
     }
 
     /// <summary>The catalogue name behind a "formable.&lt;id&gt;.name" key, or nothing.</summary>
@@ -313,9 +297,185 @@ public static class CountryNames
     public static string Recorded(string text)
     {
         if (string.IsNullOrEmpty(text)) return "";
+        if (TryResolveRising(text, out var rising)) return rising;
+        if (HasRisingRecipe(text))
+        {
+            var cleaned = SanitizeRisingText(text);
+            return string.IsNullOrEmpty(cleaned) || NationNaming.LooksLikeKey(cleaned) ? "" : cleaned;
+        }
         if (Loc.Has(text)) return Loc.Get(text);
         if (FormableNameOf(text) is { Length: > 0 } formable) return formable;
         return NationNaming.LooksLikeKey(text) ? "" : text;
+    }
+
+    /// <summary>
+    /// Iteratively peels nested <c>rising:template:TAG:Label</c> prefixes (up to depth 8)
+    /// until the innermost country tag and clean base label are reached.
+    /// </summary>
+    public static bool TryUnwrapRisingBase(string raw, out string tag, out string label)
+    {
+        tag = "";
+        label = "";
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        var current = raw.Trim();
+        if (!current.StartsWith("rising:", StringComparison.Ordinal)) return false;
+
+        var innerTag = "";
+        var innerLabel = "";
+        for (var depth = 0; depth < 8; depth++)
+        {
+            if (!current.StartsWith("rising:", StringComparison.Ordinal)) break;
+            var parts = current.Split(':', 4);
+            if (parts.Length < 3) break;
+            var candidateTag = parts[2].Trim();
+            if (candidateTag.Length > 0 && !candidateTag.StartsWith("rising:", StringComparison.Ordinal))
+                innerTag = candidateTag;
+            var candidateLabel = parts.Length >= 4 ? parts[3].Trim() : "";
+            var nestedIdx = candidateLabel.IndexOf("rising:", StringComparison.Ordinal);
+            if (nestedIdx >= 0 && (nestedIdx == 0 || nestedIdx + 7 == candidateLabel.Length ||
+                                   !char.IsWhiteSpace(candidateLabel[nestedIdx + 7])))
+            {
+                current = candidateLabel[nestedIdx..];
+                continue;
+            }
+            innerLabel = candidateLabel;
+            break;
+        }
+
+        if (HasRisingRecipe(innerLabel)) innerLabel = "";
+        innerTag = innerTag.Replace(':', ' ').Trim();
+
+        string resolved;
+        if (innerTag.Length > 0 && Loc.Has("country." + innerTag + ".name"))
+            resolved = Loc.Get("country." + innerTag + ".name");
+        else if (FormableNameOf(innerLabel) is { Length: > 0 } formable)
+            resolved = formable;
+        else if (innerLabel.Length > 0)
+            resolved = Loc.Get(innerLabel);
+        else
+            resolved = "";
+
+        if (HasRisingRecipe(resolved) || NationNaming.LooksLikeKey(resolved)) resolved = "";
+
+        tag = innerTag;
+        label = resolved.Trim();
+        return tag.Length > 0 || label.Length > 0;
+    }
+
+    /// <summary>
+    /// Extracts the innermost parent tag and clean country name from <paramref name="parent"/>
+    /// before building a new <c>rising:</c> identifier, preventing nested prefixes.
+    /// </summary>
+    public static (string Tag, string Name) RisingParent(Nation parent)
+    {
+        if (parent is null) return ("", "");
+        if (!string.IsNullOrEmpty(parent.Name) &&
+            parent.Name.StartsWith("rising:", StringComparison.Ordinal) &&
+            TryUnwrapRisingBase(parent.Name, out var innerTag, out var innerLabel))
+        {
+            var resolved = !string.IsNullOrWhiteSpace(innerLabel)
+                ? innerLabel
+                : !string.IsNullOrWhiteSpace(innerTag) ? Of(innerTag) : "";
+            return (innerTag, SanitizeRisingText(resolved));
+        }
+        if (parent.FoundNameKind == "tag" &&
+            !string.IsNullOrEmpty(parent.FoundNameId) &&
+            !HasRisingRecipe(parent.FoundNameId))
+            return (parent.FoundNameId, SanitizeRisingText(Of(parent.FoundNameId)));
+        var cleanName = SanitizeRisingText(parent.Name ?? "");
+        if (string.IsNullOrWhiteSpace(cleanName) && !string.IsNullOrWhiteSpace(parent.Tag))
+            cleanName = SanitizeRisingText(Of(parent.Tag));
+        return (parent.Tag ?? "", cleanName);
+    }
+
+    /// <summary>
+    /// Resolves any <c>rising:...</c> string (including nested and <c>template@regId@regName</c>
+    /// variants) using the innermost country base, never returning raw <c>rising:</c> text.
+    /// </summary>
+    public static bool TryResolveRising(string raw, out string resolved)
+    {
+        resolved = "";
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        var trimmed = raw.Trim();
+        if (!trimmed.StartsWith("rising:", StringComparison.Ordinal)) return false;
+        var parts = trimmed.Split(':', 4);
+        if (parts.Length < 2) return false;
+
+        var country = TryUnwrapRisingBase(trimmed, out var innerTag, out var innerLabel)
+            ? (!string.IsNullOrWhiteSpace(innerLabel) ? innerLabel : !string.IsNullOrWhiteSpace(innerTag) ? Of(innerTag) : "")
+            : "";
+        if (HasRisingRecipe(country)) country = "";
+
+        var templateSpec = parts[1].Trim();
+        var templateParts = templateSpec.Split('@', 3);
+        string candidate;
+        if (templateParts.Length == 3)
+        {
+            var regionKey = templateParts[1].Trim();
+            var regionFallback = SanitizeRisingText(templateParts[2].Trim());
+            var region = !string.IsNullOrEmpty(regionKey) && Loc.Has("region." + regionKey + ".name")
+                ? Loc.Get("region." + regionKey + ".name")
+                : !string.IsNullOrEmpty(regionFallback) ? Loc.Get(regionFallback) : "";
+            if (string.IsNullOrWhiteSpace(country) && string.IsNullOrWhiteSpace(region)) return false;
+            var locKey = "rising." + templateParts[0].Trim();
+            candidate = Loc.Has(locKey)
+                ? Loc.Format(locKey, country, region)
+                : (!string.IsNullOrWhiteSpace(region)
+                    ? (!string.IsNullOrWhiteSpace(country) ? $"{region} ({country})" : region)
+                    : country);
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(country)) return false;
+            var locKey = "rising." + templateSpec;
+            candidate = Loc.Has(locKey) ? Loc.Format(locKey, country) : country;
+        }
+
+        candidate = candidate.Trim();
+        if (string.IsNullOrWhiteSpace(candidate) || HasRisingRecipe(candidate) || NationNaming.LooksLikeKey(candidate))
+            return false;
+        resolved = candidate;
+        return true;
+    }
+
+    /// <summary>
+    /// Strips or unwraps any leading or embedded <c>rising:...</c> text into a clean label,
+    /// never returning raw <c>rising:</c>.
+    /// </summary>
+    public static string SanitizeRisingText(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return raw ?? "";
+        var trimmed = raw.Trim();
+        if (trimmed.StartsWith("rising:", StringComparison.Ordinal))
+        {
+            if (TryUnwrapRisingBase(trimmed, out var tag, out var label))
+            {
+                var clean = !string.IsNullOrWhiteSpace(label) ? label : !string.IsNullOrWhiteSpace(tag) ? Of(tag) : "";
+                return HasRisingRecipe(clean) ? "" : clean;
+            }
+            return "";
+        }
+        var idx = trimmed.IndexOf("rising:", StringComparison.Ordinal);
+        if (idx >= 0 && (idx + 7 == trimmed.Length || !char.IsWhiteSpace(trimmed[idx + 7])))
+        {
+            var tail = trimmed[idx..];
+            if (TryUnwrapRisingBase(tail, out var tag, out var label))
+            {
+                var replacement = !string.IsNullOrWhiteSpace(label) ? label : !string.IsNullOrWhiteSpace(tag) ? Of(tag) : "";
+                if (string.IsNullOrWhiteSpace(replacement) || HasRisingRecipe(replacement)) return "";
+                return (trimmed[..idx] + replacement).Trim();
+            }
+            return "";
+        }
+        return raw;
+    }
+
+    internal static bool HasRisingRecipe(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        var idx = text.IndexOf("rising:", StringComparison.Ordinal);
+        if (idx < 0) return false;
+        return idx == 0 || idx + 7 == text.Length || !char.IsWhiteSpace(text[idx + 7]);
     }
 
     /// <summary>
@@ -328,7 +488,7 @@ public static class CountryNames
         var restored = FormableRestorations.RestoredTag(nation?.FormedNationId);
         if (nation is null || nation.Movement is not null ||
             (!string.IsNullOrEmpty(nation.FormedNationId) && restored is null) ||
-            nation.Name.StartsWith("rising:", StringComparison.Ordinal) ||
+            (nation.Name?.StartsWith("rising:", StringComparison.Ordinal) == true) ||
             string.IsNullOrEmpty(nation.StartGovernment)) return "";
         static string RowKey(string key) => Loc.Has(key) ? key : "";
         if (nation.Ideology != nation.StartIdeology)

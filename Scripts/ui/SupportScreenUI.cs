@@ -326,8 +326,12 @@ public partial class DealOrForceGame
     /// <summary>Shown only for a selection of formations alone, with the panel closed: armies keep their own bar.</summary>
     private void RefreshFormationBar()
     {
-        if (_formationBar is null || _campaign?.Player is null) return;
-        var player = _campaign.Player;
+        if (_formationBar is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player)
+        {
+            _formationBar.Visible = false;
+            return;
+        }
         var selected = _campaign.SupportFormations.Where(f => f.NationId == player.Id && _supportSelected.Contains(f.Id) &&
                                                               SupportCore.Enabled(_campaign, f.TypeId)).OrderBy(f => f.Id).ToList();
         var show = selected.Count > 0 && _hudLayer.Visible && _supportLayer is not { Visible: true } &&
@@ -415,7 +419,9 @@ public partial class DealOrForceGame
 
     private void OpenSupportScreen()
     {
-        if (_campaign is null || !SupportTypeCatalog.All.Any(t => SupportCore.Enabled(_campaign, t))) return;
+        if (_campaign?.Player is null || ObserverUiRules.IsObserving(_campaign, _observerMode) ||
+            !SupportTypeCatalog.All.Any(t => SupportCore.Enabled(_campaign, t)))
+            return;
         EnsureScreen("support", BuildSupportScreen);
         EndDrawing();
         CloseFleetPanel();

@@ -376,12 +376,16 @@ void fragment() {
                     var outward = mover % 2 == 0;
                     var at = outward ? travelled : lane.Length - travelled;
                     var (position, heading) = OnLane(lane, at, outward);
+                    if (!GlobeLineSanity.IsValidEmittedVertex(ToNum(position), _flatMap, _flatX)) continue;
                     var up = _flatMap ? Vector3.Back : position.Normalized();
-                    var forward = (heading - up * heading.Dot(up)).Normalized();
-                    if (forward.LengthSquared() < 0.5f) forward = up.Cross(Vector3.Up).Normalized();
-                    var side = forward.Cross(up).Normalized();
+                    if (!GlobeLineSanity.TrySafeNormalize(ToNum(heading - up * heading.Dot(up)), out var forwardNum) &&
+                        !GlobeLineSanity.TrySafeCrossAxis(ToNum(up), out forwardNum))
+                        continue;
+                    var forward = ToGd(forwardNum);
+                    if (!GlobeLineSanity.TrySafeNormalize(ToNum(forward.Cross(up)), out var sideNum)) continue;
+                    var side = ToGd(sideNum);
                     // One scale for every ship and one for every lorry: a tanker stays shorter than a box ship.
-                    var scale = (model.Ship ? ShipDisplayLength / 300f : LorryDisplayLength / 16f) * zoom;
+                    var scale = GlobeLineSanity.SafeClamp((model.Ship ? ShipDisplayLength / 300f : LorryDisplayLength / 16f) * zoom, 1e-5f, 0.05f, ShipDisplayLength / 300f);
                     layer.SetInstanceTransform(counts[pick]++, new Transform3D(new Basis(forward, up, side).Scaled(Vector3.One * scale), position));
                 }
             }
@@ -445,13 +449,17 @@ void fragment() {
     /// <summary>Where on its lane a mover is, and which way it is facing, in the scene.</summary>
     private (Vector3 Position, Vector3 Heading) OnLane(TradeLane lane, float at, bool outward)
     {
+        if (lane.Points.Count < 2 || lane.Along.Count < 2 || !float.IsFinite(at))
+            return (Vector3.Zero, Vector3.Right);
         var index = lane.Along.BinarySearch(at);
         if (index < 0) index = ~index;
         index = Math.Clamp(index, 1, lane.Points.Count - 1);
         var from = lane.Points[index - 1];
         var to = lane.Points[index];
-        var span = MathF.Max(0.0001f, lane.Along[index] - lane.Along[index - 1]);
-        var t = Math.Clamp((at - lane.Along[index - 1]) / span, 0f, 1f);
+        if (!GlobeLineSanity.IsValidGeo(from.X, from.Y) || !GlobeLineSanity.IsValidGeo(to.X, to.Y))
+            return (Vector3.Zero, Vector3.Right);
+        var span = MathF.Max(0.0001f, GlobeLineSanity.FiniteOr(lane.Along[index] - lane.Along[index - 1], 1f));
+        var t = Math.Clamp((at - GlobeLineSanity.FiniteOr(lane.Along[index - 1], 0f)) / span, 0f, 1f);
         var latitude = from.X + (to.X - from.X) * t;
         var longitude = from.Y + WrapDegrees(to.Y - from.Y) * t;
         var radius = GlobeRadius * 1.0016f;
@@ -467,6 +475,7 @@ void fragment() {
     /// </summary>
     private void DrawTradeLanes(float zoom)
     {
+        zoom = GlobeLineSanity.SafeClamp(zoom, 0.05f, 8f, 1f);
         var economy = _mapMode == StrategicMapMode.Economy;
         var focus = economy ? -1 : _tradeFocusNationId;
         var fingerprint = HashCode.Combine(_tradeLanes.Count, _tradeLanesMonth, _flatMap, _flatMap ? (int)MathF.Floor(_flatX) : 0, (int)(zoom * 6f), economy, focus);
@@ -481,59 +490,82 @@ void fragment() {
         _tradeLaneColors.Clear();
         _tradeLaneIndices.Clear();
         var drawn = 0;
+        var maxSegLen = _flatMap ? GlobeLineSanity.MaxFlatSegmentLength : GlobeLineSanity.MaxGlobeSegmentLength;
         for (var li = 0; li < _tradeLanes.Count && drawn < TradeLinesDrawn; li++)
         {
             var lane = _tradeLanes[li];
             if (!economy && lane.A != focus && lane.B != focus) continue;
             drawn++;
-            var weight = Math.Clamp(lane.Share, 0f, 1f);
+            var weight = GlobeLineSanity.SafeClamp(lane.Share, 0f, 1f, 0f);
             var halfWidth = LaneHalfWidth * zoom * (0.50f + 0.40f * weight);
+            if (!float.IsFinite(halfWidth) || halfWidth <= 1e-6f) continue;
             var alpha = 0.16f + 0.24f * weight;
             var colour = lane.Sea ? Ui.Colour("text.accent", alpha) : Ui.Colour("production.focus", alpha);
             _tradeDrawPoints.Clear();
+            var validPoints = true;
             for (var i = 0; i < lane.Points.Count; i++)
             {
                 var point = lane.Points[i];
-                _tradeDrawPoints.Add(_flatMap
+                if (!GlobeLineSanity.IsValidGeo(point.X, point.Y)) { validPoints = false; break; }
+                var worldPt = _flatMap
                     ? LocalFlatPoint(point.X, point.Y, FlatLineZ)
-                    : LocalSurfacePoint(point.X, point.Y, GlobeRadius * 1.0013f));
+                    : LocalSurfacePoint(point.X, point.Y, GlobeRadius * 1.0013f);
+                if (!GlobeLineSanity.IsValidEmittedVertex(ToNum(worldPt), _flatMap, _flatX)) { validPoints = false; break; }
+                _tradeDrawPoints.Add(worldPt);
             }
+            if (!validPoints || _tradeDrawPoints.Count < 2) continue;
             // A lane across the date line breaks at the sheet edge. One point on a
             // side cannot open a ribbon, so it is skipped.
-            CollectDateLineRuns(_tradeDrawPoints);
+            CollectValidLineRuns(_tradeDrawPoints, maxSegLen, _dateLineRuns);
             foreach (var run in _dateLineRuns)
             {
-                var baseVert = _tradeLaneVerts.Count;
+                var prevPair = -1;
                 var endIndex = run.Start + run.Count - 1;
                 for (var i = run.Start; i <= endIndex; i++)
                 {
                     var here = _tradeDrawPoints[i];
                     var before = _tradeDrawPoints[Math.Max(run.Start, i - 1)];
                     var ahead = _tradeDrawPoints[Math.Min(endIndex, i + 1)];
-                    var tangent = (ahead - before).Normalized();
-                    if (tangent == Vector3.Zero) tangent = Vector3.Right;
-                    var normal = _flatMap ? Vector3.Back : here.Normalized();
-                    var side = normal.Cross(tangent).Normalized() * halfWidth;
+                    if (!GlobeLineSanity.TrySafeRibbonFrame(ToNum(here), ToNum(before), ToNum(ahead),
+                            _flatMap, flatPositiveZNormal: true, out _, out _, out var sideAxis))
+                    {
+                        prevPair = -1;
+                        continue;
+                    }
+                    var side = ToGd(sideAxis) * halfWidth;
+                    var left = here + side;
+                    var right = here - side;
+                    if (!GlobeLineSanity.IsValidEmittedEdge(ToNum(left), ToNum(right), _flatMap, _flatX))
+                    {
+                        prevPair = -1;
+                        continue;
+                    }
+                    if (prevPair >= 0 &&
+                        (!GlobeLineSanity.IsValidEmittedEdge(ToNum(_tradeLaneVerts[prevPair]), ToNum(left), _flatMap, _flatX) ||
+                         !GlobeLineSanity.IsValidEmittedEdge(ToNum(_tradeLaneVerts[prevPair + 1]), ToNum(right), _flatMap, _flatX)))
+                    {
+                        prevPair = -1;
+                    }
                     // The ends fade in and out, so a lane begins at a port rather than at a full stop.
-                    var fade = Math.Clamp(MathF.Min(lane.Along[i], lane.Length - lane.Along[i]) / 1.5f, 0f, 1f);
+                    var fade = GlobeLineSanity.SafeClamp(MathF.Min(lane.Along[i], lane.Length - lane.Along[i]) / 1.5f, 0f, 1f, 1f);
                     var shade = colour with { A = colour.A * fade };
-                    _tradeLaneVerts.Add(here + side);
+                    var curr = _tradeLaneVerts.Count;
+                    _tradeLaneVerts.Add(left);
                     _tradeLaneUvs.Add(new Vector2(lane.Along[i], 0f));
                     _tradeLaneColors.Add(shade);
-                    _tradeLaneVerts.Add(here - side);
+                    _tradeLaneVerts.Add(right);
                     _tradeLaneUvs.Add(new Vector2(lane.Along[i], 1f));
                     _tradeLaneColors.Add(shade);
-                    if (i > run.Start)
+                    if (prevPair >= 0)
                     {
-                        var prev = baseVert + (i - run.Start - 1) * 2;
-                        var curr = prev + 2;
-                        _tradeLaneIndices.Add(prev);
-                        _tradeLaneIndices.Add(prev + 1);
+                        _tradeLaneIndices.Add(prevPair);
+                        _tradeLaneIndices.Add(prevPair + 1);
                         _tradeLaneIndices.Add(curr);
-                        _tradeLaneIndices.Add(prev + 1);
+                        _tradeLaneIndices.Add(prevPair + 1);
                         _tradeLaneIndices.Add(curr + 1);
                         _tradeLaneIndices.Add(curr);
                     }
+                    prevPair = curr;
                 }
             }
         }
@@ -551,12 +583,7 @@ void fragment() {
         }
     }
 
-    private static float WrapDegrees(float delta)
-    {
-        while (delta > 180f) delta -= 360f;
-        while (delta < -180f) delta += 360f;
-        return delta;
-    }
+    private static float WrapDegrees(float delta) => GlobeLineSanity.WrapDeltaDegrees(delta);
 
     /// <summary>
     /// Once a month: the largest trading pairs of the world, then their lanes worked out two a

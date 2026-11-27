@@ -526,11 +526,15 @@ public static class Factions
             {
                 var parts = participant.Name.Split(':', 4);
                 var parentTag = parts.Length >= 3 ? parts[2] : "";
-                var parent = campaign.NationByTag(parentTag) ?? campaign.NationById(participant.SecededFromId);
+                var hasUnwrapped = CountryNames.TryUnwrapRisingBase(participant.Name, out var innerParentTag, out var cleanFallback);
+                var parent = campaign.NationByTag(parentTag) ?? campaign.NationById(participant.SecededFromId) ??
+                             (!string.IsNullOrEmpty(innerParentTag) ? campaign.NationByTag(innerParentTag) : null);
                 if (war.WinnerId == participant.Id && parent is not null && !campaign.HasOwnedLand(parent) &&
                     RoseOnHomelandOf(campaign, participant, parent))
                 {
-                    var formerName = parts.Length >= 4 ? parts[3] : participant.Name;
+                    var formerName = hasUnwrapped && !string.IsNullOrWhiteSpace(cleanFallback)
+                        ? cleanFallback
+                        : CountryNames.SanitizeRisingText(parts.Length >= 4 ? parts[3] : participant.Name);
                     participant.Name = parent.Name;
                     participant.NameProclaimed = true;
                     participant.CustomName = NationNaming.TakeoverName(campaign, participant, parent);
@@ -555,9 +559,9 @@ public static class Factions
                     campaign.LocateCapitals(preserveExisting: true);
                     campaign.Chronicle.Record(campaign, "regime_change", participant.Id, parent.Id, place: formerName);
                 }
-                else if (parts.Length >= 4)
+                else
                 {
-                    SecessionEvents.AssignDistinctSurvivorIdentity(campaign, participant, parent, parts[3]);
+                    SecessionEvents.AssignDistinctSurvivorIdentity(campaign, participant, parent, cleanFallback);
                 }
                 if (participant.Government == "provisional_government")
                     participant.Government = participant.Ideology switch

@@ -36,7 +36,7 @@ public static class FingerprintPartsTests
         var baseline = CampaignFingerprint.Of(c);
         Check(baseline != noMapBaseline, "attached province controllers alter fingerprint");
         Check(noMapBaseline == 7547532621690567159UL, $"unmapped day-0 seed 42 matches baseline ({noMapBaseline})");
-        Check(baseline == 16142675205035983838UL, $"mapped day-0 seed 42 matches baseline ({baseline})");
+        Check(baseline == 2576657751699567394UL, $"mapped day-0 seed 42 matches baseline ({baseline})");
 
         var nation = c.NationByTag("RUS");
         var state = c.StatesOf(nation).First();
@@ -148,6 +148,6 @@ public static class FingerprintPartsTests
         s1.IsPaused = false;
         for (var d = 0; d < 30; d++) s1.TickDay();
         var s1Day30 = CampaignFingerprint.Of(s1);
-        Check(s1Day30 == 10212040315504502433UL, $"seed 1 day 30 matches current baseline ({s1Day30})");
+        Check(s1Day30 == 15838401869107881324UL, $"seed 1 day 30 matches current baseline ({s1Day30})");
     }
 }

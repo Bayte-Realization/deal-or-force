@@ -120,12 +120,31 @@ public partial class DealOrForceGame
         if (_sidePanel is { Visible: true }) CloseSidePanel(dropRegionSelection: false);
         if (_armyPanel is { Visible: true }) SetArmyPanelVisible(false);
         if (_countryCard is { Visible: true }) HideMapSelection(false);
+        _shell?.WorkPanel.Close();
         _movementSideSeen = false;
         _movementShown = nation;
         ShiftHudDock(_movementPanel);
         _movementPanel.Visible = true;
+        _movementPanel.MoveToFront();
+        if (IsNewShellActive) SyncNewShellLeftAndBottomDock();
         _movementBuiltFrom = "";
-        RefreshMovementPanel();
+        var entered = _campaign?.AccessGate.TryEnterPriorityRead(60) ?? false;
+        try
+        {
+            RefreshMovementPanel();
+        }
+        finally
+        {
+            if (entered) _campaign.ExitRead();
+        }
+    }
+
+    internal void OpenObservedMovement(int nationId)
+    {
+        if (_campaign is null) return;
+        var target = _campaign.NationById(nationId);
+        if (target?.Movement is not null) ShowMovement(target);
+        else if (ObserverUiRules.IsObserving(_campaign, _observerMode)) ToggleMovementPanel();
     }
 
     /// <summary>Whether a dossier or the army panel stood open on the last frame.</summary>
@@ -140,7 +159,8 @@ public partial class DealOrForceGame
     private void KeepMovementPanelInItsPlace()
     {
         var player = _campaign?.Player;
-        if (player?.Movement is { Landless: true } && _sidePanel is { Visible: true } && _openScreen == "Nation")
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        if (!observing && player?.Movement is { Landless: true } && _sidePanel is { Visible: true } && _openScreen == "Nation")
             ShowMovement(player);
         var sideOpen = _sidePanel is { Visible: true } || _armyPanel is { Visible: true };
         if (_movementPanel.Visible)
@@ -148,7 +168,7 @@ public partial class DealOrForceGame
             if (sideOpen && !_movementSideSeen) CloseMovementPanel();
             else if (_countryCard is { Visible: true })
             {
-                if (_movementShown == player) _countryCard.Visible = false;
+                if (!observing && _movementShown == player) _countryCard.Visible = false;
                 else CloseMovementPanel();
             }
         }
@@ -160,11 +180,13 @@ public partial class DealOrForceGame
         if (_movementPanel is null) return;
         if (_movementPanel.Visible) { CloseMovementPanel(); return; }
         var campaign = _campaign;
-        if (campaign is null || !campaign.TryEnterRead(50, true)) return;
+        if (campaign is null || !campaign.AccessGate.TryEnterPriorityRead(60)) return;
         try
         {
-            var own = campaign.Player;
-            ShowMovement(own?.Movement is not null ? own : _movementShown ?? Movements.Of(campaign).FirstOrDefault());
+            var observing = ObserverUiRules.IsObserving(campaign, _observerMode);
+            var target = ObserverUiRules.PickMovementForPanel(campaign, _movementShown, observing);
+            if (target is not null) ShowMovement(target);
+            else if (observing) ShowEmptyObserverMovementPanel();
         }
         finally
         {
@@ -172,12 +194,58 @@ public partial class DealOrForceGame
         }
     }
 
+    private void ShowEmptyObserverMovementPanel()
+    {
+        if (_movementPanel is null) return;
+        if (_sidePanel is { Visible: true }) CloseSidePanel(dropRegionSelection: false);
+        if (_armyPanel is { Visible: true }) SetArmyPanelVisible(false);
+        if (_countryCard is { Visible: true }) HideMapSelection(false);
+        _shell?.WorkPanel.Close();
+        _movementSideSeen = false;
+        _movementShown = null;
+        ShiftHudDock(_movementPanel);
+        _movementPanel.Visible = true;
+        _movementPanel.MoveToFront();
+        if (IsNewShellActive) SyncNewShellLeftAndBottomDock();
+        _movementBuiltFrom = "";
+        RefreshEmptyObserverMovementPanel();
+    }
+
+    private void RefreshEmptyObserverMovementPanel()
+    {
+        if (_movementRows is null || _campaign is null) return;
+        var sig = $"obs_empty|{_campaign.ElapsedDays}|{_campaign.MovementRevision}|{Simulation.Loc.Language}";
+        if (sig == _movementBuiltFrom) return;
+        _movementBuiltFrom = sig;
+        ClearChildren(_movementRows);
+
+        var header = new HBoxContainer();
+        header.AddThemeConstantOverride("separation", 10);
+        _movementRows.AddChild(header);
+        var title = Fixed(Title(Simulation.Loc.Get("obs.ui.movements.short_heading"), 20, Ui.Colour("text.accent")));
+        title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        header.AddChild(title);
+        var isTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var close = ActionButton("×", CloseMovementPanel, isTouch ? 42 : 32, isTouch ? 42 : 32);
+        close.Name = "CloseMovementPanel";
+        close.AddThemeFontSizeOverride("font_size", isTouch ? 20 : 16);
+        close.TooltipText = Ui.Tip(Tr("Close"));
+        header.AddChild(close);
+
+        _movementRows.AddChild(MovementNotice("movement_headquarters", Simulation.Loc.Get("obs.ui.movements.empty_world"), "text.muted"));
+    }
+
     /// <summary>Everything the panel shows, as one string: when it has not moved, nothing is rebuilt.</summary>
     private string MovementSnapshot(Nation nation)
     {
         var state = nation.Movement;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        var worldSig = observing
+            ? string.Join(",", ObserverUiRules.ObservedLandlessMovements(_campaign).Select(m => $"{m.Id}:{m.Movement.Legitimacy:0.00}"))
+            : "";
         return string.Join("|", nation.Id, _campaign.ElapsedDays, _campaign.MovementRevision, Simulation.Loc.Language,
-            _selectedState?.MapIndex ?? -1, _selectedNation?.Id ?? -1, nation == _campaign.Player,
+            _selectedState?.MapIndex ?? -1, _selectedNation?.Id ?? -1,
+            ObserverUiRules.CanIssueMovementOrders(_campaign, _observerMode, nation), observing, worldSig,
             nation.Treasury.ToString("0.0000"), state.Cadres.ToString("0"), state.Heat.ToString("0.000"),
             state.Legitimacy.ToString("0.000"), string.Join(",", state.RecognisedBy.OrderBy(id => id)), state.MovingToStateMapIndex,
             state.HeadquartersStateMapIndex, state.LastReport, state.Support.Count, state.Dissolved,
@@ -185,15 +253,31 @@ public partial class DealOrForceGame
             state.Infiltrated.Count, _campaign.Player?.Id ?? -1);
     }
 
-    private void RefreshMovementPanel()
+    private Nation ResolveShownMovementLocked(Campaign campaign)
     {
         var nation = _movementShown;
+        if (nation?.Movement is not null && campaign.NationById(nation.Id) == nation) return nation;
+        nation = ObserverUiRules.PickMovementForPanel(campaign, null, ObserverUiRules.IsObserving(campaign, _observerMode));
+        _movementShown = nation;
+        return nation;
+    }
+
+    private void HandleEmptyMovementLocked(Campaign campaign)
+    {
+        if (ObserverUiRules.IsObserving(campaign, _observerMode) && _movementPanel is { Visible: true })
+            RefreshEmptyObserverMovementPanel();
+    }
+
+    private void RefreshMovementPanel()
+    {
         var campaign = _campaign;
-        if (_movementRows is null || nation?.Movement is null || campaign is null) return;
+        if (_movementRows is null || campaign is null) return;
         if (!campaign.TryEnterRead(0, true)) return;
         try
         {
-            RefreshMovementPanelCore(nation);
+            var nation = ResolveShownMovementLocked(campaign);
+            if (nation?.Movement is not null) RefreshMovementPanelCore(nation);
+            else HandleEmptyMovementLocked(campaign);
         }
         finally
         {
@@ -212,7 +296,8 @@ public partial class DealOrForceGame
 
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
-        var mine = nation == _campaign.Player;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        var mine = ObserverUiRules.CanIssueMovementOrders(_campaign, _observerMode, nation);
         var defines = _campaign.Defines;
         var host = Movements.HostOf(_campaign, nation);
 
@@ -262,6 +347,9 @@ public partial class DealOrForceGame
         close.TooltipText = Ui.Tip(Tr("Close"));
         close.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         header.AddChild(close);
+
+        if (observing)
+            AddObservedMovementsSelector(nation);
 
         var chips = new HFlowContainer();
         chips.AddThemeConstantOverride("h_separation", 5);
@@ -435,8 +523,62 @@ public partial class DealOrForceGame
     }
 
     /// <summary>What the player's own country can do about a movement it is looking at.</summary>
+    private void AddObservedMovementsSelector(Nation selected)
+    {
+        var observed = ObserverUiRules.ObservedLandlessMovements(_campaign);
+        _movementRows.AddChild(MovementHeading(Simulation.Loc.Format("obs.ui.movements.world_list_fmt", observed.Count)));
+        if (observed.Count == 0)
+        {
+            _movementRows.AddChild(MovementNotice("movement_headquarters",
+                Simulation.Loc.Get("obs.ui.movements.empty_world"), "text.muted"));
+            return;
+        }
+        var flow = new HFlowContainer { Name = "ObservedMovementsDirectory", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        flow.AddThemeConstantOverride("h_separation", 4);
+        flow.AddThemeConstantOverride("v_separation", 4);
+        _movementRows.AddChild(flow);
+        foreach (var entry in observed)
+        {
+            var captured = entry;
+            var host = Movements.HostOf(_campaign, entry);
+            var text = host is not null
+                ? $"{entry.DisplayName} ({host.Tag}) · {Fmt.Percent(entry.Movement.Legitimacy)}"
+                : $"{entry.DisplayName} · {Fmt.Percent(entry.Movement.Legitimacy)}";
+            var btn = ActionButton(text, () => ShowMovement(captured), 0, 28, primary: entry.Id == selected?.Id);
+            btn.Name = "ObservedMovement_" + entry.Tag;
+            ListFlag(btn, entry, 18);
+            btn.TooltipText = Ui.Tip(Simulation.Loc.Format("obs.ui.movements.row_tip_fmt",
+                entry.DisplayName, host?.DisplayName ?? Tr("nobody"),
+                Fmt.People(entry.Movement.Cadres), Fmt.Percent(entry.Movement.Legitimacy)));
+            flow.AddChild(btn);
+        }
+    }
+
     private void BuildDealings(Nation movement)
     {
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode))
+        {
+            _movementRows.AddChild(MovementHeading("obs.ui.movements.observer_heading"));
+            var host = Movements.HostOf(_campaign, movement);
+            _movementRows.AddChild(MovementNotice("movement_legitimacy",
+                Simulation.Loc.Get("obs.ui.movements.readonly_note"), "state.info"));
+            var movState = movement.Movement;
+            var sponsors = movState.SponsoredBy
+                .Select(p => (Sponsor: _campaign.NationById(p.Key), Amount: p.Value))
+                .Where(x => x.Sponsor is not null && x.Amount > 0f)
+                .OrderByDescending(x => x.Amount)
+                .Select(x => $"{x.Sponsor.DisplayName} ({Fmt.Money(x.Amount)}/yr)")
+                .ToArray();
+            var hostLine = host is not null
+                ? Simulation.Loc.Format("obs.ui.movements.host_fmt", host.DisplayName)
+                : Simulation.Loc.Get("obs.ui.movements.no_host");
+            _movementRows.AddChild(Title(hostLine, 12, Ui.Colour("text.body_soft")));
+            if (sponsors.Length > 0)
+                _movementRows.AddChild(Title(
+                    Simulation.Loc.Format("obs.ui.movements.sponsors_fmt", string.Join(", ", sponsors)),
+                    12, Ui.Colour("text.body_soft")));
+            return;
+        }
         var player = _campaign.Player;
         if (player is null || player.Movement is not null || _campaign.StatesOf(player).Length == 0)
         {
@@ -964,11 +1106,13 @@ public partial class DealOrForceGame
             if (campaign is null || _game._movementPanel is null) return;
             if (_game._movementPanel.Visible)
                 _game._movementRefresh += delta;
-            if (!campaign.TryEnterRead(0, requestWindowOnMiss: false)) return;
+            var needsInitialBuild = _game._movementPanel.Visible && _game._movementBuiltFrom.Length == 0;
+            if (!campaign.TryEnterRead(0, requestWindowOnMiss: needsInitialBuild)) return;
             try
             {
                 var player = campaign.Player;
-                if (player?.Movement is not null && _game._hudLayer.Visible &&
+                if (!ObserverUiRules.IsObserving(campaign, _game._observerMode) &&
+                    player?.Movement is not null && _game._hudLayer.Visible &&
                     !ReferenceEquals(_game._movementOpenedFor, campaign))
                 {
                     _game._movementOpenedFor = campaign;
@@ -988,8 +1132,12 @@ public partial class DealOrForceGame
 
         public override void _UnhandledInput(InputEvent inputEvent)
         {
-            if (inputEvent is not InputEventKey { Pressed: true, Echo: false, Keycode: Key.O }) return;
+            if (inputEvent is not InputEventKey { Pressed: true, Echo: false } key) return;
             if (_game?._campaign is null || !_game._hudLayer.Visible) return;
+            if (_game.GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit) return;
+            if (_game.IsNewShellActive && _game.IsAnyShellModalOpen()) return;
+            if (!key.ShiftPressed || key.CtrlPressed || key.AltPressed || key.MetaPressed) return;
+            if (DealOrForceGame.Letter(key) != Key.O) return;
             _game.ToggleMovementPanel();
             GetViewport().SetInputAsHandled();
         }

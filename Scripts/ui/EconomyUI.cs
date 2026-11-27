@@ -18,7 +18,7 @@ public partial class DealOrForceGame
     /// <summary>Pull one down in the selected region, and show the region again.</summary>
     private void DemolishBuilding(BuildingKind kind)
     {
-        var player = _campaign.Player;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player) return;
         if (_selectedState is null || _selectedState.NationMapIndex != player.MapIndex) return;
         if (_selectedState.Buildings.GetValueOrDefault(kind) <= 0) return;
         _campaign.Commands.Enqueue(new DemolishBuildingCommand
@@ -34,8 +34,7 @@ public partial class DealOrForceGame
     /// <summary>Call a site off. What was spent stays spent; the rest is never taken.</summary>
     private void CancelConstruction(int projectId)
     {
-        var player = _campaign.Player;
-        if (player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player) return;
         _campaign.Commands.Enqueue(new CancelConstructionCommand
         {
             IssuerId = player.Id, ProjectId = projectId
@@ -47,7 +46,7 @@ public partial class DealOrForceGame
 
     private void QueueBuilding(BuildingKind kind)
     {
-        var player = _campaign.Player;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player) return;
         if (_selectedState is null || _selectedState.NationMapIndex != player.MapIndex) return;
         _campaign.Commands.Enqueue(new QueueConstructionCommand
         {
@@ -66,7 +65,7 @@ public partial class DealOrForceGame
     /// </summary>
     private void ShowEconomyScreen()
     {
-        var player = _campaign.Player;
+        if (InspectedEconomyWorkbenchNation() is not { } player) return;
         if (_selectedState is null || _selectedState.NationMapIndex != player.MapIndex)
             _selectedState = _campaign.States.FirstOrDefault(state => state.NationMapIndex == player.MapIndex);
         var state = _selectedState;

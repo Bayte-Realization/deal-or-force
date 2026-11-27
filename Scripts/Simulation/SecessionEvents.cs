@@ -1125,21 +1125,42 @@ public static class SecessionEvents
     {
         if (campaign is null || survivor is null) return;
         var seat = campaign.StatesOf(survivor).OrderByDescending(s => s.Population).FirstOrDefault();
-        var cleanSeat = StripAdministrativeSuffix(seat?.Name ?? survivor.CapitalName ?? "");
-        var preferred = !string.IsNullOrWhiteSpace(fallbackLabel) && !NameClashesWithLiving(campaign, survivor, fallbackLabel)
-            ? fallbackLabel
+        var cleanSeat = CountryNames.SanitizeRisingText(StripAdministrativeSuffix(seat?.Name ?? survivor.CapitalName ?? ""));
+        if (CountryNames.HasRisingRecipe(cleanSeat) || NationNaming.LooksLikeKey(cleanSeat)) cleanSeat = "";
+
+        var cleanFallback = (fallbackLabel ?? "").Trim();
+        if (cleanFallback.StartsWith("rising:", StringComparison.Ordinal))
+            cleanFallback = CountryNames.TryUnwrapRisingBase(cleanFallback, out _, out var unwrapped) ? unwrapped : "";
+        else if (CountryNames.HasRisingRecipe(cleanFallback))
+            cleanFallback = CountryNames.SanitizeRisingText(cleanFallback);
+        if (string.IsNullOrWhiteSpace(cleanFallback) ||
+            CountryNames.HasRisingRecipe(cleanFallback) ||
+            NationNaming.LooksLikeKey(cleanFallback))
+            cleanFallback = "";
+
+        var preferred = !string.IsNullOrWhiteSpace(cleanFallback) && !NameClashesWithLiving(campaign, survivor, cleanFallback)
+            ? cleanFallback
             : cleanSeat;
         if (string.IsNullOrWhiteSpace(preferred) || NameClashesWithLiving(campaign, survivor, preferred))
             preferred = !string.IsNullOrWhiteSpace(cleanSeat)
                 ? $"{IdeologyPrefix(survivor.Ideology)} {cleanSeat}".Trim()
                 : $"{IdeologyPrefix(survivor.Ideology)} {survivor.Tag}".Trim();
         if (NameClashesWithLiving(campaign, survivor, preferred))
-            preferred = $"{cleanSeat} ({survivor.Tag})".Trim();
+            preferred = !string.IsNullOrWhiteSpace(cleanSeat)
+                ? $"{cleanSeat} ({survivor.Tag})".Trim()
+                : $"{IdeologyPrefix(survivor.Ideology)} {survivor.Tag} ({survivor.Tag})".Trim();
+
+        preferred = CountryNames.SanitizeRisingText(preferred);
+        if (string.IsNullOrWhiteSpace(preferred) || CountryNames.HasRisingRecipe(preferred) || NationNaming.LooksLikeKey(preferred))
+            preferred = !string.IsNullOrWhiteSpace(cleanSeat)
+                ? cleanSeat
+                : $"{IdeologyPrefix(survivor.Ideology)} {survivor.Tag}".Trim();
 
         survivor.Name = preferred;
         survivor.CustomName = "";
         survivor.NameProclaimed = true;
-        survivor.FoundNameKind = "region";
+        survivor.FoundNameKind = seat is { Id.Length: > 0 } ? "region" : "literal";
+        survivor.FoundNameId = seat is { Id.Length: > 0 } ? seat.Id : "";
         survivor.FoundNameBase = preferred;
         if (parent is not null &&
             (string.Equals(survivor.Color, parent.Color, StringComparison.OrdinalIgnoreCase) ||

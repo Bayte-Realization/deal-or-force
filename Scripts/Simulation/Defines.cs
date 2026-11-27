@@ -50,6 +50,9 @@ public sealed partial class Defines
 
 	/// <summary>Cadence in days for calm peacetime AI nations and calm landless movements to evaluate heavy scans.</summary>
 	public int AiCalmCadenceDays { get; set; } = 7;
+
+	/// <summary>Diplomatic LOD tiering policy: full, world (player-independent significance), balanced, or player_focus.</summary>
+	public string AiDiplomacyLodMode { get; set; } = "balanced";
 	/// <summary>
 	/// How long a formation is left to reach the post it was sent to before the front
 	/// planner may send it somewhere else.

@@ -80,11 +80,12 @@ public partial class DealOrForceGame
     /// </summary>
     private void ShowPacts(Nation nation)
     {
-        var mine = nation.Id == _campaign.Player.Id
+        var playerId = _campaign.Player?.Id ?? -1;
+        var mine = playerId <= 0 || nation.Id == playerId
             ? null
-            : CampaignDiplomacy.Peek(_campaign, _campaign.Player.Id, nation.Id);
+            : CampaignDiplomacy.Peek(_campaign, playerId, nation.Id);
         var allies = AllianceSystem.AlliesOf(_campaign, nation);
-        var offered = nation.Id == _campaign.Player.Id
+        var offered = playerId > 0 && nation.Id == playerId
             ? AllianceSystem.OfferedTo(_campaign, nation)
             : null;
         var guarantees = new List<string>();
@@ -204,7 +205,8 @@ public partial class DealOrForceGame
                                          Simulation.Loc.Format("of its taxes, {0} last week",
                                              Fmt.Money(nation.TributePaidWeekly)));
             }
-            if (nation.AnswersTo(_campaign.Player.Id) || CanInspectNation(nation.Id))
+            var player = _campaign.Player;
+            if ((player is not null && nation.AnswersTo(player.Id)) || CanInspectNation(nation.Id))
                 DetailRow("Wants out", $"{nation.LibertyDesire:P0}",
                     Tr("What it wants this week is worked out from how large it has grown, whether " +
                        "its overlord can govern itself, and whether that overlord is at war. At a " +
@@ -215,7 +217,7 @@ public partial class DealOrForceGame
         foreach (var subject in subjects.OrderByDescending(other => other.Population).Take(8))
         {
             var kind = SubjectCatalog.Of(subject.SubjectType);
-            var wants = nation.Id == _campaign.Player.Id || CanInspectNation(subject.Id)
+            var wants = (_campaign.Player is { } viewer && nation.Id == viewer.Id) || CanInspectNation(subject.Id)
                 ? $" · {Simulation.Loc.Format("wants out {0}", $"{subject.LibertyDesire:P0}")}"
                 : "";
             DetailRow(subject.DisplayName, $"{kind?.Name ?? subject.SubjectType}{wants}",
@@ -235,9 +237,9 @@ public partial class DealOrForceGame
     /// </summary>
     private void RefreshPactButtons(Nation nation)
     {
-        if (nation == _campaign.Player) return;
-        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, _campaign.Player.Id, nation.Id);
-        var offered = AllianceSystem.OfferedTo(_campaign, _campaign.Player);
+        if (_campaign?.Player is not { } player || nation == player || _observerMode) return;
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
+        var offered = AllianceSystem.OfferedTo(_campaign, player);
 
         if (relation.Stance == DiplomaticStance.Allied)
         {
@@ -303,20 +305,21 @@ public partial class DealOrForceGame
 
     private void ShowCountryInteraction(Nation nation, string location)
     {
-        if (nation is null || _campaign?.Player is null) return;
+        if (nation is null || _campaign is null) return;
         ReturnCountryActions();
         PrepareDossierTabs("Diplomacy");
         ApplyDossierTab();
         ClearDetail();
         _selectedNation = nation;
         _sideTitle.Text = nation.DisplayName;
-        var relation = nation == _campaign.Player ? null : CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, nation.Id);
+        var player = _campaign.Player;
+        var relation = player is null || nation == player ? null : CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
         // The number, and then what it is made of. An opinion nobody can account for is a
         // number the player has no way to act on: "they dislike you" is not a fact you can
         // do anything with, and "they have not forgotten the war, and the trade agreement
         // is not making up for it" is.
-        var war = nation == _campaign.Player ? null : _campaign.Wars.Find(candidate =>
-            !candidate.Ended && candidate.Involves(_campaign.Player.Id) && candidate.Involves(nation.Id));
+        var war = player is null || nation == player ? null : _campaign.Wars.Find(candidate =>
+            !candidate.Ended && candidate.Involves(player.Id) && candidate.Involves(nation.Id));
         _sideBody.Text = Tr(location);
         DetailHeading("COUNTRY");
         DetailRow(CountryNames.CapitalTitle(_campaign, nation), CountryNames.Capital(nation, _campaign));
@@ -329,7 +332,8 @@ public partial class DealOrForceGame
         }
         else DetailRow("Intelligence", Tr("Unknown (fog of war)"));
         DetailHeading("RELATIONS");
-        if (relation is null) DetailRow("Status", Tr("Your country"));
+        if (player is null) DetailRow("Status", Tr("Run by the computer · you are watching"));
+        else if (relation is null) DetailRow("Status", Tr("Your country"));
         else
         {
             Simulation.OpinionSystem.Explain(_campaign, relation);
@@ -339,7 +343,7 @@ public partial class DealOrForceGame
             foreach (var entry in relation.OpinionDrivers.Entries.OrderByDescending(item => System.Math.Abs(item.Value)).Take(5))
                 DetailRow(entry.Source, $"{entry.Value:+0;-0;0}");
         }
-        if (war is not null) DetailRow("War score", $"{(war.AttackerId == _campaign.Player.Id ? war.WarScore : -war.WarScore):+0.0;-0.0;0.0}");
+        if (war is not null) DetailRow("War score", $"{(war.AttackerId == player.Id ? war.WarScore : -war.WarScore):+0.0;-0.0;0.0}");
         ShowPacts(nation);
         ShowDependencies(nation);
         RefreshCountryActions(nation);
@@ -351,15 +355,18 @@ public partial class DealOrForceGame
     /// </summary>
     private void RefreshCountryActions(Nation nation)
     {
-        _countryActions.Visible = nation != _campaign.Player;
+        var player = _campaign?.Player;
+        var canAct = player is not null && !ObserverUiRules.IsObserving(_campaign, _observerMode);
+        _countryActions.Visible = canAct && nation != player;
+        _subjectActions.Visible = canAct && nation.AnswersTo(player.Id);
+        if (!canAct) return;
         RefreshPactButtons(nation);
         RefreshAgreementButtons(nation);
         RefreshSubmissionButtons(nation);
         RefreshCountryDiplomaticActButtons(nation);
-        _subjectActions.Visible = nation.AnswersTo(_campaign.Player.Id);
         if (_subjectActions.Visible)
         {
-            var may = SubjectSystem.MayAnnex(_campaign, _campaign.Player, nation, out var why);
+            var may = SubjectSystem.MayAnnex(_campaign, player, nation, out var why);
             _integrateButton.Disabled = !may;
             _integrateButton.TooltipText = Ui.Tip(may
                 ? Tr("Take it into your country. Its regions become yours.")
@@ -369,7 +376,7 @@ public partial class DealOrForceGame
         RefreshOutreachButton(_countryImproveButton, nation);
         RefreshDiplomaticPeaceButton(_negotiatePeaceButton, nation);
         _declareWarButton.Visible = !_negotiatePeaceButton.Visible;
-        var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, nation.Id, out var reason);
+        var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, player.Id, nation.Id, out var reason);
         _declareWarButton.Disabled = !canDeclare;
         _quickUltimatumButton.Visible = !_negotiatePeaceButton.Visible;
         _quickUltimatumButton.Disabled = !canDeclare || nation.IsHuman;

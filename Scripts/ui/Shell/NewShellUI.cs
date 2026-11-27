@@ -173,12 +173,14 @@ public partial class DealOrForceGame
         ctx.GetObservedNation = () => _observerWatched;
         ctx.IsWatchingWorld = () => WatchingWorld;
         ctx.GetObserverTransientNote = () => _observerTransientNote;
+        ctx.OpenObservedMovement = id => { if (id >= 0) OpenObservedMovement(id); else ToggleMovementPanel(); };
         ctx.OpenGrandProjects = OpenNewShellGrandProjects;
     }
 
     private void UndoLastBatchForShell()
     {
-        if (_campaign?.Player is null || !BatchActionUndo.TryUndo(_campaign, _campaign.Player.Id, out _)) return;
+        if (!ObserverUiRules.CanIssuePlayerOrders(_campaign, _observerMode) ||
+            !BatchActionUndo.TryUndo(_campaign, _campaign.Player.Id, out _)) return;
         EconomySystem.Explain(_campaign);
         Refresh();
         RefreshNewShell(force: true);
@@ -306,7 +308,12 @@ public partial class DealOrForceGame
     {
         if (!IsNewShellActive) return false;
         if (screen == "Economy") { OpenNewShellEconomyWorkspace(); UpdateScreenButtons(); return true; }
-        if (screen == "Nation") { OpenNewShellCountryDossier(_selectedNation ?? _campaign.Player); UpdateScreenButtons(); return true; }
+        if (screen == "Nation")
+        {
+            OpenNewShellCountryDossier(ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation));
+            UpdateScreenButtons();
+            return true;
+        }
         return false;
     }
 
@@ -347,7 +354,8 @@ public partial class DealOrForceGame
         }
 
         var anyLeft = !modalOpen && ((_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
-                      (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) || _shell.WorkPanel.IsVisible);
+                      (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) ||
+                      (_movementPanel is { Visible: true }) || _shell.WorkPanel.IsVisible);
         var pbarW = _planningBar is not null && IsInstanceValid(_planningBar) ? Math.Max(340f, _planningBar.GetCombinedMinimumSize().X) : 520f;
         var dock = ShellDockRules.ComputeLeftAndBottomDock(profile, anyLeft, modalOpen, pbarW);
         var leftRect = dock.LeftPanel with { X = profile.LeftPanel.X };
@@ -471,7 +479,8 @@ public partial class DealOrForceGame
         if (_lastModalSyncFrame != Engine.GetProcessFrames())
             SyncNewShellModalState(verifiedActive: true);
         var anyLegacyLeft = (_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
-                            (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true });
+                            (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) ||
+                            (_movementPanel is { Visible: true });
         var anyLeft = anyLegacyLeft || _shell.WorkPanel.IsVisible;
         var leftDrifted = false;
         if (anyLegacyLeft)

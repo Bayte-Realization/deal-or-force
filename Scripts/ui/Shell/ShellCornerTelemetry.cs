@@ -228,6 +228,50 @@ internal static class ShellCornerTelemetry
         return res;
     }
 
+    public static void FitWorldCrest(TextureRect flagTex, Texture2D worldIcon, Control edgeOverlay, float wellW, float wellH, bool compact)
+    {
+        if (flagTex is null) return;
+        flagTex.Texture = worldIcon;
+        var pad = compact ? 8f : 10f;
+        var sz = MathF.Min(Math.Max(8f, wellW - pad), Math.Max(8f, wellH - pad));
+        flagTex.Position = new Vector2((wellW - sz) * 0.5f, (wellH - sz) * 0.5f);
+        flagTex.Size = new Vector2(sz, sz);
+        if (edgeOverlay is not null) edgeOverlay.Visible = false;
+    }
+
+    public static string BuildWorldFlagTooltip(ObserverWorldSummary world)
+    {
+        var sb = BorrowSb();
+        sb.Append(Loc.Get("shell.obs.badge_world"));
+        sb.Append('\n').Append(Loc.Format("obs.ui.corner.world_tip_fmt",
+            world.CountryCount.ToString("N0", Loc.Culture),
+            Fmt.Money((float)world.WorldGdp),
+            Fmt.People(world.WorldPopulation),
+            world.OpenWarCount.ToString("N0", Loc.Culture),
+            world.LandlessMovementCount.ToString("N0", Loc.Culture)));
+        sb.Append('\n').Append(Loc.Get("shell.obs.badge_tip_world"));
+        return sb.ToString();
+    }
+
+    public static (string CapKey, string Fig, string Unit, string ColorTok, string Tip, bool Active) ResolveWorldCell(
+        string id, ObserverWorldSummary summary, string openScreen)
+    {
+        var (gdpFig, gdpUnit) = SplitMoney((float)summary.WorldGdp);
+        var (popFig, popUnit) = SplitPeople(summary.WorldPopulation);
+        return id switch
+        {
+            "Treasury" => ("Countries", summary.CountryCount.ToString(System.Globalization.CultureInfo.InvariantCulture), "", "shell.paper", Loc.Get("Countries"), openScreen == "Economy"),
+            "GDP" => ("World GDP", gdpFig, gdpUnit, "shell.paper", $"{Loc.Get("World GDP")}: {Fmt.MoneyExact((float)summary.WorldGdp)}", openScreen == "Ledger"),
+            "Population" => ("World population", popFig, popUnit, "shell.paper", $"{Loc.Get("World population")}: {Fmt.PeopleExact(summary.WorldPopulation)}", openScreen == "Nation"),
+            "Debt" => ("obs.ui.movements.cap", summary.LandlessMovementCount.ToString(System.Globalization.CultureInfo.InvariantCulture), "", "shell.state.info", Loc.Get("obs.ui.movements.short_heading"), false),
+            "Inflation" => ("Wars", summary.OpenWarCount.ToString(System.Globalization.CultureInfo.InvariantCulture), "", summary.OpenWarCount > 0 ? "shell.state.warning_text" : "shell.paper", Loc.Get("Wars"), openScreen == "Wars"),
+            "Stability" => ("Average stability", $"{(int)MathF.Round(summary.AverageStability * 100f)}%", "", summary.AverageStability < 0.45f ? "shell.state.warning_text" : "shell.paper", Loc.Get("Average stability"), false),
+            "Manpower" => ("Divisions", $"{(int)MathF.Round(summary.TotalDivisions)}", "", "shell.paper", Loc.Get("Divisions"), false),
+            "Capital" => ("obs.ui.outliner.standoffs", summary.FlashpointCount.ToString(System.Globalization.CultureInfo.InvariantCulture), "", summary.FlashpointCount > 0 ? "shell.state.warning_text" : "shell.paper", Loc.Get("obs.ui.outliner.standoffs"), openScreen == "Conflicts"),
+            _ => ("shell.cap_war", summary.OpenWarCount.ToString(System.Globalization.CultureInfo.InvariantCulture), "", "shell.paper", Loc.Get("Wars"), openScreen == "Wars")
+        };
+    }
+
     public static void DrawSeamlessLCorner(Control backdrop, ShellLayoutProfile p)
     {
         if (backdrop is null || p.ViewportWidth <= 0f) return;
@@ -263,5 +307,37 @@ internal static class ShellCornerTelemetry
         backdrop.DrawPolyline(CloseRing(poly), Ui.Colour("shell.border"), 1.2f, antialiased: true);
         backdrop.DrawPolyline(CloseRing(InsetPolygon(poly, compact ? 1.8f : 2.2f)), Ui.Colour("shell.brass_hi"), compact ? 2.0f : 2.6f, antialiased: true);
         backdrop.DrawPolyline(CloseRing(InsetPolygon(poly, compact ? 3.5f : 4.2f)), Ui.Colour("shell.paper", 0.14f), 1.0f, antialiased: true);
+    }
+
+    public static void FitFlagVisual(TextureRect flagTex, Control edgeOverlay, Texture2D tex, string tag, ShellLayoutProfile profile)
+    {
+        flagTex.Texture = tex;
+        var pad = profile.Compact ? 8f : 10f;
+        var fitted = ShellLayout.FitFlag(tex?.GetWidth() ?? 300, tex?.GetHeight() ?? 200,
+            Math.Max(8f, profile.FlagWellWidth - pad), Math.Max(8f, profile.FlagWellHeight - pad), tag);
+        var pos = new Vector2((profile.FlagWellWidth - fitted.Width) * 0.5f, (profile.FlagWellHeight - fitted.Height) * 0.5f);
+        flagTex.Position = pos;
+        flagTex.Size = new Vector2(fitted.Width, fitted.Height);
+        edgeOverlay.Visible = !fitted.CutoutSilhouette;
+        edgeOverlay.Position = pos;
+        edgeOverlay.Size = new Vector2(fitted.Width, fitted.Height);
+        edgeOverlay.QueueRedraw();
+    }
+
+    public static void ApplyCellAppearance(
+        Label figLbl, Label unitLbl, Label deltaLbl, ColorRect statusRule,
+        string fig, string unit, string figColorTok, string delta, string deltaColorTok)
+    {
+        figLbl.Text = fig;
+        unitLbl.Text = unit;
+        unitLbl.Visible = unit.Length > 0;
+        figLbl.AddThemeColorOverride("font_color", Ui.Colour(figColorTok));
+        deltaLbl.Text = delta;
+        deltaLbl.Visible = delta.Length > 0;
+        if (delta.Length > 0) deltaLbl.AddThemeColorOverride("font_color", Ui.Colour(deltaColorTok));
+        var warnRule = figColorTok is "shell.state.negative_text" or "shell.state.warning_text";
+        statusRule.Visible = warnRule;
+        if (warnRule)
+            statusRule.Color = Ui.Colour(figColorTok == "shell.state.negative_text" ? "shell.state.negative" : "shell.state.warning", 0.85f);
     }
 }

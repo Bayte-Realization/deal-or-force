@@ -2,7 +2,7 @@ using DealOrForce.Simulation;
 namespace DealOrForce;
 public partial class DealOrForceGame
 {
-    private bool CanInspectNation(int nationId) => CampaignIntel.PlayerCanInspect(_campaign, nationId);
+    private bool CanInspectNation(int nationId) => ObserverUiRules.CanInspectAsViewer(_campaign, _observerMode, nationId);
 
     /// <summary>
     /// Ground you hold is ground you can survey.
@@ -22,6 +22,7 @@ public partial class DealOrForceGame
         // the map. Only military intelligence stays in the fog: whose divisions stand where is
         // counted from what the player can see (CampaignIntel.PlayerCanSeeArmy), and the
         // regional actions stay the owner's.
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode)) return false;
         if (_campaign.Defines.FogHidesRegionStatistics == false) return false;
         var owner = _campaign.Nations.Find(n => n.MapIndex == _selectedState?.NationMapIndex);
         if (owner is null || CanInspectNation(owner.Id)) return false;

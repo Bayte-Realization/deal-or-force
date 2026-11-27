@@ -69,7 +69,8 @@ public partial class DealOrForceGame
         }
         CardRow(_regionCardRegionRows, "War damage", Fmt.Percent(state.WarDamage), tip,
             state.WarDamage > 0.5f ? "state.negative" : state.WarDamage > 0.2f ? "state.warning" : "text.bright");
-        if (state.NationMapIndex == _campaign.Player.MapIndex && state.WarDamage >= _campaign.Defines.WarDamageRebuildMinimum)
+        if (_campaign.Player is { } warOwner && !ObserverUiRules.IsObserving(_campaign, _observerMode) &&
+            state.NationMapIndex == warOwner.MapIndex && state.WarDamage >= _campaign.Defines.WarDamageRebuildMinimum)
             ShowRebuild(state);
     }
 
@@ -80,7 +81,7 @@ public partial class DealOrForceGame
     /// </summary>
     private void ShowRebuild(ScenarioState state)
     {
-        var player = _campaign.Player;
+        if (_campaign?.Player is not { } player || ObserverUiRules.IsObserving(_campaign, _observerMode)) return;
         var defines = _campaign.Defines;
         var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         row.AddThemeConstantOverride("separation", 8);
@@ -145,7 +146,7 @@ public partial class DealOrForceGame
     {
         ShowWarDamage(state);
         if (_regionBuildColumn is null || !IsInstanceValid(_regionBuildRows)) return;
-        _regionBuildColumn.Visible = owned && state is not null;
+        _regionBuildColumn.Visible = owned && state is not null && _campaign?.Player is not null && !ObserverUiRules.IsObserving(_campaign, _observerMode);
         if (!_regionBuildColumn.Visible) return;
         ClearChildren(_regionBuildRows);
 

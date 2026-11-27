@@ -151,7 +151,11 @@ public partial class DealOrForceGame
 
     private void RefreshSituationRoom(bool force = false)
     {
-        if (_campaign?.Player is not { } nation || !_hudLayer.Visible) return;
+        if (_campaign?.Player is not { } nation || !_hudLayer.Visible)
+        {
+            if (_situationLayer is { Visible: true }) CloseSituationRoom();
+            return;
+        }
         var now = Time.GetTicksMsec();
         if (!force && now - _situationCheckedAt < 750) return;
         _situationCheckedAt = now;
@@ -298,11 +302,13 @@ public partial class DealOrForceGame
     private void FollowSituation()
     {
         // Re-read on click: an army can disappear and an offer can expire while a page is open.
-        var item = SituationReport.Read(_campaign, _campaign.Player, _observerMode).FirstOrDefault(i => i.Id == _situationSelected);
+        if (_campaign?.Player is not { } player) { CloseSituationRoom(); return; }
+        var item = SituationReport.Read(_campaign, player, _observerMode).FirstOrDefault(i => i.Id == _situationSelected);
         if (item is null || !SituationDestinationEnabled(item)) { RefreshSituationRoom(force: true); return; }
         if (item.Id == "detached_land")
         {
-            var note = Corridors.ProposeBuy(_campaign, _campaign.Player);
+            if (_observerMode) return;
+            var note = Corridors.ProposeBuy(_campaign, player);
             if (note.Length == 0)
             {
                 SetArmyFeedback(Tr("The ask has been sent."));
@@ -336,9 +342,9 @@ public partial class DealOrForceGame
         if (item.Id.StartsWith("standoff:", StringComparison.Ordinal) && !_observerMode)
         {
             var rival = _campaign.NationById(item.TargetId);
-            if (rival is not null && Escalation.TalksBlock(_campaign, _campaign.Player, rival).Length == 0)
+            if (rival is not null && Escalation.TalksBlock(_campaign, player, rival).Length == 0)
             {
-                var command = new HoldTalksCommand { IssuerId = _campaign.Player.Id, TargetId = rival.Id };
+                var command = new HoldTalksCommand { IssuerId = player.Id, TargetId = rival.Id };
                 Submit(command);
                 if (command.Started)
                 {
@@ -370,7 +376,8 @@ public partial class DealOrForceGame
         }
         if (item.Id == "enclave_swap")
         {
-            var note = Corridors.ProposeSwap(_campaign, _campaign.Player);
+            if (_observerMode) return;
+            var note = Corridors.ProposeSwap(_campaign, player);
             if (note.Length == 0)
             {
                 SetArmyFeedback(Tr("The exchange has been offered."));
@@ -384,7 +391,8 @@ public partial class DealOrForceGame
         }
         if (item.Id == "border_pore")
         {
-            var note = Corridors.ProposePore(_campaign, _campaign.Player);
+            if (_observerMode) return;
+            var note = Corridors.ProposePore(_campaign, player);
             if (note.Length == 0)
             {
                 SetArmyFeedback(Tr("The ask has been sent."));
@@ -414,7 +422,7 @@ public partial class DealOrForceGame
                 OpenEconomyTab("Market"); _marketSearch.Text = Tr(CommodityCatalog.Get(item.Good.Value).Name);
                 _shortagesOnly.ButtonPressed = false; ShowEconomyScreen(); _situationReturn = "Economy"; break;
             case SituationRoute.Army:
-                var army = _campaign.Armies.FirstOrDefault(a => a.Id == item.TargetId && a.NationId == _campaign.Player.Id);
+                var army = _campaign.Armies.FirstOrDefault(a => a.Id == item.TargetId && a.NationId == player.Id);
                 if (army is not null) { FocusArmy(army); _situationReturn = "Army"; }
                 break;
             case SituationRoute.Construction:

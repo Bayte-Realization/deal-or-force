@@ -12,7 +12,7 @@ public partial class DealOrForceGame
 
     private void ShowDomesticCrisisWorkspace()
     {
-        if (_campaign?.Player is not { } nation) return;
+        if (ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true) is not { } nation) return;
         ClearPolicyRows(_policyList); ClearPolicyRows(_policyOptions); ClearPolicyRows(_policyPreview);
         _policyEnact = null;
         var situation = DomesticCrises.Read(_campaign, nation);

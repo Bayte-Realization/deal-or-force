@@ -8,7 +8,7 @@ public partial class DealOrForceGame
 {
     private void AddThirdPartyCrisisActions(Nation a, Nation b)
     {
-        var player = _campaign.Player;
+        if (_campaign?.Player is not { } player || _observerMode) return;
         _conflictsPage.AddChild(Caption("WHAT YOU CAN DO"));
         _conflictsPage.AddChild(WrappedUltimatumText(
             "A Great Power can mediate this crisis or deter an aggressor by backing either side. Intervention is not a declaration of war.", 14));

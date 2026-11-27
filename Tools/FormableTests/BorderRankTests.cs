@@ -478,10 +478,11 @@ static class BorderRankTests
 
         var plate = File.ReadAllText(Path.Combine(scripts, "gfx", "GlobePlateRepaint.cs"));
         Check(globe.Contains("Simulation.PoliticalPlate.Paint(plateSource, plateOwners, plateOwners, colors, shades)") &&
-              plate.Contains("Simulation.PoliticalPlate.Paint(source, owners, authoredOwners, colors, shades)") &&
+              plate.Contains("Simulation.PoliticalPlate.PaintInto(") &&
+              plate.Contains("source, owners, authoredOwners, colors, shades, ref _platePixelScratch)") &&
               !globe.Contains("0.34f") && !plate.Contains("0.34f"),
             "the opening plate and every repaint are painted by the one painter, with no second set of shades");
-        Check(Regex.IsMatch(globe, @"SetShaderParameter\(""owners_moved"".*\r?\n(\s*//.*\r?\n)*\s*RequestPlateRepaint\(topology\);"),
+        Check(Regex.IsMatch(globe, @"SetShaderParameter\(""owners_moved"".*\r?\n(?:\s*\}\r?\n)?(\s*//.*\r?\n)*\s*RequestPlateRepaint\(topology\);"),
             "the plate is asked for on every map refresh, not only when owners differ from the authored world");
     }
 }

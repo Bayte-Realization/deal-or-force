@@ -345,11 +345,22 @@ internal sealed class ShellNavRailView
 
     public void Refresh(Campaign world, Nation player, IReadOnlyList<StrategicWar> openWars, string openScreen)
     {
-        var hs = _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId == player.Id ? snap : null;
+        if (world is null) return;
+        var hs = player is not null && _ctx.HudSnapshot is { Version: > 0 } snap && snap.PlayerId == player.Id ? snap : null;
         int incomingDeals, pendingEvents, idleArmies, idleSupport;
         bool researchIdle, supportEnabled, doctrineReady;
-        var warCount = hs?.OpenPlayerWars.Length ?? openWars.Count;
-        if (hs is not null)
+        var warCount = hs?.OpenPlayerWars.Length ?? (openWars?.Count ?? 0);
+        if (player is null)
+        {
+            incomingDeals = 0;
+            pendingEvents = 0;
+            researchIdle = false;
+            idleArmies = 0;
+            idleSupport = 0;
+            supportEnabled = MechanicFeatures.ScreenEnabled(world, "Support");
+            doctrineReady = false;
+        }
+        else if (hs is not null)
         {
             incomingDeals = hs.IncomingDiplomaticCount;
             pendingEvents = hs.PendingEventCount;
@@ -480,6 +491,7 @@ internal sealed class ShellNavRailView
 
     private int ResolveAvailableDecisionsCount(Campaign world, Nation player, CampaignHudSnapshot hs = null)
     {
+        if (world is null || player is null) return 0;
         var ppFloor = (int)MathF.Floor(hs?.PoliticalPoints ?? player.PoliticalPoints);
         var week = (hs?.ElapsedDays ?? world.ElapsedDays) / 7;
         var mapRev = hs?.MapRevision ?? world.MapRevision;

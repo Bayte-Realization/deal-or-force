@@ -8,8 +8,9 @@ public partial class DealOrForceGame
 {
     private void ListTerritorialDisputes()
     {
+        var playerId = _campaign.Player?.Id ?? -1;
         var disputes = TerritorialClaims.Disputes(_campaign)
-            .OrderByDescending(d => d.Claimant.Id == _campaign.Player.Id || d.Holder.Id == _campaign.Player.Id)
+            .OrderByDescending(d => playerId > 0 && (d.Claimant.Id == playerId || d.Holder.Id == playerId))
             .ThenBy(d => d.Title == TerritorialTitle.Homeland ? 0 : 1)
             .ThenByDescending(d => d.Region.Population).ToArray();
         _conflictsList.AddChild(Caption("TITLE IS NOT MILITARY CONTROL"));
@@ -60,10 +61,10 @@ public partial class DealOrForceGame
             CloseConflictsScreen(); var (lat, lon) = StateCentre(region); _globe.FocusOn(lat, lon, 6.8f);
         }, 0, 36, iconPath: "res://game/gfx/interface/icons/icon_nation.png"));
         _conflictsPage.AddChild(ActionButton("Open diplomacy", () => {
-            _selectedNation = holder.Id == _campaign.Player.Id ? nation : holder;
+            _selectedNation = (_campaign.Player is { } player && holder.Id == player.Id) ? nation : holder;
             CloseConflictsScreen(); OpenDiplomacyScreen();
         }, 0, 36, iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png"));
-        if (nation.Id == _campaign.Player.Id)
+        if (_campaign.Player is { } claimant && nation.Id == claimant.Id && !_observerMode)
             _conflictsPage.AddChild(ActionButton("Propose a peaceful deal", () => OpenDealComposer(holder), 0, 36,
                 iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png"));
     }

@@ -141,7 +141,8 @@ public sealed partial class GlobePresentation
         if (ReducedMap) return;
         if (_terrainImages is not null) return;
         var definitions = TerrainCatalog.All.ToArray();
-        var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var activeProfile = Platform.PlatformProfile.Current;
+        var isTouchPrimary = activeProfile?.IsTouchPrimary == true || ShouldUseHalfResMobileMapTextures(activeProfile);
         var cacheDir = Path.Combine(GamePaths.Root, "cache");
         var shippedCache = GameDataLoader.FindDataFile("cache", MobileTerrainCacheFile);
         _terrainImages = Task.Run(() => PrepareTerrainImages(definitions, isTouchPrimary, cacheDir, shippedCache));
@@ -493,7 +494,9 @@ public sealed partial class GlobePresentation
         }
         if (TerrainCatalog.LoadError.Length > 0) GD.PushWarning("[dof] terrain catalog: " + TerrainCatalog.LoadError);
         var definitions = TerrainCatalog.All;
-        var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var activeProfile = Platform.PlatformProfile.Current;
+        var halfResGpuMaps = ShouldUseHalfResMobileMapTextures(activeProfile);
+        var isTouchPrimary = activeProfile?.IsTouchPrimary == true || halfResGpuMaps;
         var prepared = TakeTerrainImages(definitions, isTouchPrimary);
         var images = new Godot.Collections.Array<Image>();
         var slots = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
@@ -518,7 +521,12 @@ public sealed partial class GlobePresentation
             topology.AttachTerrain();
         if (topology.TerrainSurfaceSlots is { Length: > 0 } slotsData && slotsData.Length == topology.Width * topology.Height)
         {
-            var surfaceImg = Image.CreateFromData(topology.Width, topology.Height, false, Image.Format.R8, slotsData);
+            var surfW = topology.Width;
+            var surfH = topology.Height;
+            var surfBytes = halfResGpuMaps
+                ? DownsampleMobileTerrainSlotsHalfRes(slotsData, topology.Width, topology.Height, out surfW, out surfH)
+                : slotsData;
+            using var surfaceImg = Image.CreateFromData(surfW, surfH, false, Image.Format.R8, surfBytes);
             UpdateTerrainTexture(ref _terrainSurfaceTexture, "terrain_surface", surfaceImg);
         }
         else
@@ -589,5 +597,54 @@ public sealed partial class GlobePresentation
         // Colour/height are presentation data, never province identity. Filtering is safe.
         image.GenerateMipmaps();
         return image;
+    }
+
+    internal static byte[] DownsampleMobileTerrainSlotsHalfRes(
+        byte[] source, int sourceWidth, int sourceHeight, out int halfWidth, out int halfHeight)
+    {
+        if (source is null || sourceWidth < 2 || sourceHeight < 2 || source.Length != sourceWidth * sourceHeight)
+        {
+            halfWidth = sourceWidth;
+            halfHeight = sourceHeight;
+            return source;
+        }
+
+        halfWidth = sourceWidth / 2;
+        halfHeight = sourceHeight / 2;
+        var dst = new byte[halfWidth * halfHeight];
+        var dstW = halfWidth;
+        var srcW = sourceWidth;
+
+        Parallel.For(0, halfHeight, hy =>
+        {
+            var sy0 = hy * 2;
+            var row0 = sy0 * srcW;
+            var row1 = (sy0 + 1) * srcW;
+            var dstRow = hy * dstW;
+            for (var hx = 0; hx < dstW; hx++)
+            {
+                var sx0 = hx * 2;
+                var a = source[row0 + sx0];
+                var b = source[row0 + sx0 + 1];
+                var c = source[row1 + sx0];
+                var d = source[row1 + sx0 + 1];
+                if (a == b && a == c && a == d)
+                {
+                    dst[dstRow + hx] = a;
+                    continue;
+                }
+                var c0 = 1 + (a == b ? 1 : 0) + (a == c ? 1 : 0) + (a == d ? 1 : 0);
+                var c1 = 1 + (b == a ? 1 : 0) + (b == c ? 1 : 0) + (b == d ? 1 : 0);
+                var c2 = 1 + (c == a ? 1 : 0) + (c == b ? 1 : 0) + (c == d ? 1 : 0);
+                var c3 = 1 + (d == a ? 1 : 0) + (d == b ? 1 : 0) + (d == c ? 1 : 0);
+                var best = a;
+                var bestCount = c0;
+                if (c1 > bestCount) { bestCount = c1; best = b; }
+                if (c2 > bestCount) { bestCount = c2; best = c; }
+                if (c3 > bestCount) best = d;
+                dst[dstRow + hx] = best;
+            }
+        });
+        return dst;
     }
 }

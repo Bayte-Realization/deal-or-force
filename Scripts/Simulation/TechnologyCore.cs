@@ -705,7 +705,10 @@ public static partial class ResearchSystem
         return best;
     }
 
-    /// <summary>Once a week, with the economy: every country puts its week into what it is researching.</summary>
+    /// <summary>Day-of-week slot (ElapsedDays % 7) on which weekly research advances (day 2).</summary>
+    internal const int WeeklySlot = 2;
+
+    /// <summary>Once a week, offset off market day 0: every country puts its week into what it is researching.</summary>
     public static void Tick(Campaign campaign)
     {
         foreach (var _ in TickStages(campaign)) { }
@@ -715,7 +718,7 @@ public static partial class ResearchSystem
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(ResearchSystem))) yield break;
-        if (campaign is null || campaign.ElapsedDays == 0 || campaign.ElapsedDays % 7 != 0 || TechnologyCatalog.All.Count == 0) yield break;
+        if (campaign is null || campaign.ElapsedDays <= 0 || campaign.ElapsedDays % 7 != WeeklySlot || TechnologyCatalog.All.Count == 0) yield break;
         var survey = Survey.Take(campaign);
         var tick = 0;
         foreach (var nation in campaign.Nations)

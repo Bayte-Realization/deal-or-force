@@ -50,6 +50,12 @@ public static partial class CampaignFingerprint
             Mix(ref hash, diplomacyRules.DiplomaticMissionDays); Mix(ref hash, diplomacyRules.DiplomaticMissionLimit);
             MixFloat(ref hash, diplomacyRules.DiplomaticMissionWeeklyOpinion); MixFloat(ref hash, diplomacyRules.DiplomaticMissionOpinionCap);
         }
+        var lodMode = AiStatecraft.NormalizeDiplomaticLodMode(diplomacyRules.AiDiplomacyLodMode);
+        if (!string.Equals(lodMode, "balanced", StringComparison.Ordinal))
+        {
+            MixText(ref hash, "ai_diplomacy_lod_mode");
+            MixText(ref hash, lodMode);
+        }
     }
 
     private static void MixUltimatums(Campaign campaign, ref ulong hash)

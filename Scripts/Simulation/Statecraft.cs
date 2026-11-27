@@ -72,6 +72,9 @@ public static class Statecraft
     /// <summary>How much notoriety a year of quiet removes.</summary>
     public const float NotorietyYearlyDecay = 11f;
 
+    /// <summary>Canonical weekday (`ElapsedDays % 7`) on which weekly notoriety and coalition reviews run.</summary>
+    public const int WeeklySlot = 5;
+
     private static readonly List<int> Candidates = new();
     private static readonly List<Coalition> Dissolved = new();
 
@@ -107,7 +110,7 @@ public static class Statecraft
         yield return 0;
 
         // The rest is a weekly question. Coalitions are not formed on a Tuesday afternoon.
-        if (campaign.ElapsedDays % 7 != 0) yield break;
+        if (campaign.ElapsedDays % 7 != WeeklySlot) yield break;
         foreach (var _ in RememberNotorietyStages(campaign)) yield return 0;
         foreach (var _ in ReviewCoalitionsStages(campaign)) yield return 0;
     }
@@ -163,6 +166,8 @@ public static class Statecraft
             }
         }
 
+        var lodSnap = AiStatecraft.AcquireDiplomaticLod(campaign);
+        var today = campaign.ElapsedDays;
         var tick = 0;
         using var relations = campaign.Relations.Values.GetEnumerator();
         while (true)
@@ -195,12 +200,19 @@ public static class Statecraft
                             }
                             else
                             {
-                                var notorious = a.Notoriety >= b.Notoriety ? a : b;
-                                var observer = notorious == a ? b : a;
-                                var concern = OpinionWitnesses.Concern(campaign, observer, notorious, null);
-                                var scale = M.Clamp(worst / 60f, 0.1f, 1.5f) * MathF.Min(1f, concern);
-                                if (scale < campaign.Defines.WitnessThreshold) OpinionSystem.Forget(campaign, relation, "notoriety");
-                                else OpinionSystem.Remember(campaign, relation, "notoriety", scale);
+                                var checkDue = AiStatecraft.IsActiveDiplomacyTier(campaign, a, b, relation,
+                                                   bordersKnown: false, borders: false, lodSnapshot: lodSnap) ||
+                                               AiStatecraft.IsBackgroundSlotDueForWeek(today >= 0 ? today / 7 : 0,
+                                                   relation.A, relation.B);
+                                if (checkDue)
+                                {
+                                    var notorious = a.Notoriety >= b.Notoriety ? a : b;
+                                    var observer = notorious == a ? b : a;
+                                    var concern = OpinionWitnesses.Concern(campaign, observer, notorious, null);
+                                    var scale = M.Clamp(worst / 60f, 0.1f, 1.5f) * MathF.Min(1f, concern);
+                                    if (scale < campaign.Defines.WitnessThreshold) OpinionSystem.Forget(campaign, relation, "notoriety");
+                                    else OpinionSystem.Remember(campaign, relation, "notoriety", scale);
+                                }
                             }
                         }
                     }
@@ -209,6 +221,7 @@ public static class Statecraft
             }
             if (!yielded) break;
             yield return 0;
+            lodSnap = AiStatecraft.AcquireDiplomaticLod(campaign);
         }
     }
 

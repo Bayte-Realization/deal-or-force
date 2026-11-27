@@ -52,7 +52,9 @@ public partial class DealOrForceGame
         var rows = PanelRows(panel, 22, 16, 9);
         var playerView = ActionButton("Player nation", () =>
         {
-            _ledgerViewedNationId = _campaign.Player.Id;
+            var nation = _campaign?.Player ?? ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+            if (nation is null) return;
+            _ledgerViewedNationId = nation.Id;
             RefreshLedger();
         }, 116, 32, true);
         playerView.SetMeta("atlas_tab_button", true);
@@ -60,7 +62,9 @@ public partial class DealOrForceGame
         playerView.TooltipText = Ui.Tip(Tr("Return every chart to the country you currently control."));
         var selectedView = ActionButton("Map selection", () =>
         {
-            _ledgerViewedNationId = (_selectedNation ?? _campaign.Player).Id;
+            var nation = _selectedNation ?? ObserverUiRules.ResolveInspectedNation(_campaign, null, preferLanded: true);
+            if (nation is null) return;
+            _ledgerViewedNationId = nation.Id;
             RefreshLedger();
         }, 124, 32);
         selectedView.SetMeta("atlas_tab_button", true);
@@ -182,7 +186,8 @@ public partial class DealOrForceGame
         EnsureScreen("ledger", BuildLedgerInterface);
         _openScreen = "Ledger";
         _sidePanel.Visible = false;
-        _ledgerViewedNationId = _ledgerViewedNationId < 0 ? _campaign.Player.Id : _ledgerViewedNationId;
+        if (_ledgerViewedNationId < 0)
+            _ledgerViewedNationId = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true)?.Id ?? -1;
         // The ledger is a modal analysis workspace. It is authored before the
         // strategic outliner, so explicitly bring it above later HUD siblings.
         RaiseWorkspaceLayer(_ledgerLayer);
@@ -205,7 +210,9 @@ public partial class DealOrForceGame
 
 
 
-    private Nation ViewedLedgerNation() => _campaign?.NationById(_ledgerViewedNationId) ?? _campaign?.Player;
+    private Nation ViewedLedgerNation() =>
+        _campaign?.NationById(_ledgerViewedNationId)
+        ?? ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
 
     /// <summary>Active national modifiers, newest first, with how long each has left.</summary>
     private string DescribeModifiers(Nation nation)
@@ -228,7 +235,7 @@ public partial class DealOrForceGame
 
     private void RefreshLedger()
     {
-        if (_campaign?.Player is null || _ledgerLayer is null || !_ledgerLayer.Visible) return;
+        if (_campaign is null || _ledgerLayer is null || !_ledgerLayer.Visible) return;
         if (!_ledgerTabButtons.ContainsKey(_ledgerTab))
             _ledgerTab = _ledgerTabButtons.Keys.FirstOrDefault() ?? "";
         if (_ledgerTab.Length == 0)
@@ -237,7 +244,14 @@ public partial class DealOrForceGame
             _ledgerSummary.Text = _ledgerPolicyLine.Text = "";
             return;
         }
-        var nation = ViewedLedgerNation() ?? _campaign.Player;
+        var nation = ViewedLedgerNation();
+        if (nation is null)
+        {
+            _ledgerGrid.Visible = _ledgerReportScroll.Visible = false;
+            _ledgerLineA.Visible = _ledgerLineB.Visible = _ledgerBarsA.Visible = _ledgerBarsB.Visible = false;
+            _ledgerSummary.Text = _ledgerPolicyLine.Text = "";
+            return;
+        }
         var known = CanInspectNation(nation.Id);
         var report = _ledgerTab is "Chronicle" or "Vulnerabilities";
         _ledgerGrid.Visible = known && !report;

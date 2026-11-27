@@ -14,7 +14,7 @@ public partial class DealOrForceGame
     private void AddSocialMemoryDiplomacy(Nation nation, Nation player,
         Func<string, string, Color?, VBoxContainer> field)
     {
-        var own = nation.Id == player.Id;
+        var own = player is not null && nation.Id == player.Id;
         var positive = Ui.Colour("state.positive");
         var negative = Ui.Colour("state.negative");
         var muted = Ui.Colour("text.muted");
@@ -49,13 +49,13 @@ public partial class DealOrForceGame
             var reputation = field("PUBLIC REPUTATION", "", null);
             reputation.Name = "SocialMemoryPanel";
             reputation.AddChild(Note(Loc.Get("A society's view, not a universal verdict. Public facts leave a gradually fading memory.")));
-            if (!own)
+            if (player is not null && !own)
             {
                 Belief(reputation, Loc.Get("Our society's view of them"), SocialMemory.Image(player, SocialMemory.NationKey(nation)), "ReputationOurView");
                 Belief(reputation, Loc.Get("Their society's view of us"), SocialMemory.Image(nation, SocialMemory.NationKey(player)), "ReputationTheirView");
                 AddPublicOutreach(reputation, nation, player);
             }
-            else
+            else if (own || player is null)
             {
                 Belief(reputation, Loc.Get("Domestic standing"), nation.DomesticImage, "DomesticStanding");
                 var audiences = _campaign.Nations.Where(n => n.Id != nation.Id)

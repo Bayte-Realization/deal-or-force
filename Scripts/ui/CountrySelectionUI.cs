@@ -811,6 +811,10 @@ public partial class DealOrForceGame
         if (_campaign is null) return;
         foreach (var nation in _campaign.Nations) nation.IsHuman = false;
         _campaign.HumanSeats.Clear();
+        _campaign.SetPlayer(-1);
+        _campaign.ObserverMode = true;
+        _observerWatched = null;
+        _observerReturnNationId = -1;
         Simulation.FrontPlanner.AssignAi(_campaign);
         _campaignInProgress = true;
         BeginSession();

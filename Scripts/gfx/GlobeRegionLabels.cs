@@ -222,6 +222,11 @@ public sealed partial class GlobePresentation
     private void UpdateRegionLabels(double delta)
     {
         if (!IsInstanceValid(_regionLabelRoot) || !IsInstanceValid(_camera)) return;
+        var frame = Engine.GetProcessFrames();
+        if (_regionLastProcessFrame == frame && _regionLastCityLayoutVersion == _cityLayoutVersion)
+            return;
+        _regionLastProcessFrame = frame;
+
         var wanted = _mapLookAtlas && _regionBucketsReady && CountryLabelsEnabled &&
             Simulation.WorldLayers.On("country_labels") &&
             _mapMode is not (StrategicMapMode.Terrain or StrategicMapMode.Relief);
@@ -241,7 +246,7 @@ public sealed partial class GlobePresentation
         var camStable = _flatMap
             ? (float.IsFinite(_regionLastFlatX) && float.IsFinite(_regionLastFlatY) &&
                MathF.Abs(_flatX - _regionLastFlatX) <= 0.02f && MathF.Abs(_flatY - _regionLastFlatY) <= 0.02f)
-            : camPos.DistanceSquaredTo(_regionLastCamPos) <= 0.0001f;
+            : camPos.DistanceSquaredTo(_regionLastCamPos) <= 1e-6f;
         if (_regionVisSettled &&
             _regionLastFlatMap == _flatMap &&
             _regionLastMapMode == _mapMode &&
@@ -253,32 +258,13 @@ public sealed partial class GlobePresentation
 
         var cameraNormal = _flatMap ? Vector3.Zero : camPos.Normalized();
         var rootBasis = _regionLabelRoot.GlobalTransform.Basis;
-        var horizon = _flatMap ? -1f : Math.Max(0.28f, CityHorizon() + 0.06f);
+        var horizon = _flatMap ? -1f : Math.Clamp(CityHorizon() + 0.06f, 0.28f, 0.992f);
         var tier = CurrentShaderQualityTier();
         var mobileTier = tier >= 0.5f;
         var inMotion = _flatMap ? FlatViewInMotion : GlobeViewInMotion;
-        if (mobileTier && inMotion && _regionLastUsed > 0 && _regionLastAlpha > 0.01f &&
-            (!_flatMap || (float.IsFinite(_regionLastFlatX) && MathF.Abs(_flatX - _regionLastFlatX) < FlatMapWidth * 0.25f)))
+        if (ShouldDeferMobileRegionLayout(mobileTier, inMotion, measure, cameraNormal))
         {
-            // Keep existing mobile region labels steady while panning/zooming instead of
-            // reshuffling pool slots and triggering Label3D Text/Modulate mesh rebuilds.
-            if (!_flatMap)
-            {
-                var anyVisible = false;
-                for (var i = 0; i < _regionLastUsed && i < _regionLabelPool.Count; i++)
-                {
-                    var slotState = _regionSlotStates[i];
-                    if (!slotState.Visible) continue;
-                    if ((rootBasis * slotState.Normal).Dot(cameraNormal) <= horizon)
-                    {
-                        slotState.Visible = false;
-                        _regionLabelPool[i].Visible = false;
-                    }
-                    else
-                        anyVisible = true;
-                }
-                if (_regionLabelRoot.Visible != anyVisible) _regionLabelRoot.Visible = anyVisible;
-            }
+            if (!_flatMap) CullRegionLabelsPastHorizon();
             _regionVisSettled = false;
             return;
         }
@@ -290,7 +276,8 @@ public sealed partial class GlobePresentation
         var outlineHex = _mapLookAtlas ? _cachedCountryOutlineHex : "";
         var modulateThreshold = mobileTier ? 0.06f : 0.01f;
         var scale = _flatMap ? Math.Clamp(_flatZoom * 0.55f, 0.45f, 1.35f) : Math.Clamp(_distance / 9.0f, 0.72f, 1.25f);
-        var stepDt = (float)Math.Max(0.016, delta);
+        var stepDt = _regionLastDeltaFrame == frame ? 0f : (float)Math.Max(0.016, delta);
+        _regionLastDeltaFrame = frame;
         var rootTransform = _regionLabelRoot.GlobalTransform;
         var lang = Simulation.Loc.Language ?? "";
         if (!string.Equals(_regionUpperLanguage, lang, StringComparison.Ordinal))
@@ -488,6 +475,7 @@ public sealed partial class GlobePresentation
         _regionLastFlatY = _flatY;
         _regionLastMeasure = measure;
         _regionLastCamPos = camPos;
+        _regionLastLayoutCamNormal = cameraNormal;
         _regionLastMapMode = _mapMode;
         _regionLastFlatMap = _flatMap;
         _regionLastViewport = viewport;

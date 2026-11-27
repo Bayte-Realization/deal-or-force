@@ -305,8 +305,9 @@ public static class CivilWarOutbreak
             "socialism" or "communism" => "revolutionary_front",
             _ => "salvation_front"
         };
-        var parentTag = nation.Tag;
-        var parentName = nation.Name;
+        var (parentTag, parentName) = CountryNames.RisingParent(nation);
+        parentTag = (parentTag ?? "").Replace(':', ' ').Trim();
+        parentName = (parentName ?? "").Replace(':', ' ').Trim();
         var rebelFaith = BeliefDynamics.RebelFaith(c, nation, regions);
         SecessionReport report = null;
         foreach (var _ in SecessionEvents.UprisingStages(c, nation, regions, r => report = r, born =>

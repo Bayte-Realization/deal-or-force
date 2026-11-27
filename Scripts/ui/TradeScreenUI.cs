@@ -267,8 +267,12 @@ public partial class DealOrForceGame
         BuildTradeInstructions(instructionRows);
     }
 
+    private Nation InspectedTradeNation() =>
+        ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+
     private void OpenTradeScreen()
     {
+        if (InspectedTradeNation() is null) return;
         EnsureScreen("trade", BuildTradeScreen);
         _openScreen = "Trade";
         _sidePanel.Visible = false;
@@ -287,8 +291,9 @@ public partial class DealOrForceGame
 
     private void RefreshTradeScreen()
     {
-        if (_tradeScreenLayer is null || !_tradeScreenLayer.Visible || _campaign?.Player is null) return;
-        var player = _campaign.Player;
+        if (_tradeScreenLayer is null || !_tradeScreenLayer.Visible) return;
+        if (InspectedTradeNation() is not { } player) { CloseTradeScreen(); return; }
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         var settled = _campaign.ElapsedDays >= _campaign.Defines.EconomyTickDays;
 
         _tradeScreenSummary.Text = Simulation.Loc.Format("{0} · {1}", player.DisplayName,
@@ -303,7 +308,10 @@ public partial class DealOrForceGame
         RefreshStrategicCover(player);
 
         foreach (var (policy, button) in _tradePolicyButtons)
+        {
+            button.Disabled = observing;
             ApplyLedgerButtonState(button, policy == player.TradePolicy);
+        }
 
         RefreshTradeMatrix(settled);
         RefreshTradePartners();
@@ -326,8 +334,7 @@ public partial class DealOrForceGame
 
     private void RefreshTradeMatrix(bool settled)
     {
-        if (_campaign?.Player is null) return;
-        var player = _campaign.Player;
+        if (InspectedTradeNation() is not { } player) return;
 
         // The rows are built once and repainted for the rest of the campaign: the order is
         // the catalogue's own, and a list torn down every week is a list whose tooltip a

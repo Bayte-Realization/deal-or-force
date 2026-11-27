@@ -166,7 +166,10 @@ public sealed partial class GlobePresentation
                 }
             }
             _labelOwner = snapshot;
-            _nextCountryLabelPlaceMsec = nowMsec + (Platform.PlatformProfile.Current?.IsTouchPrimary == true ? 1200UL : 500UL);
+            var fastForward = campaign is { IsPaused: false, Speed: >= 4 };
+            _nextCountryLabelPlaceMsec = nowMsec + (Platform.PlatformProfile.Current?.IsTouchPrimary == true
+                ? 1200UL
+                : (fastForward ? 1500UL : 500UL));
             var cells = _provinceTopology.CellToProvince;
             var width = _provinceTopology.Width;
             var height = _provinceTopology.Height;
@@ -203,21 +206,59 @@ public sealed partial class GlobePresentation
         return BuildTerritoryLabelAnchors(buffer, downWidth, downHeight, scale);
     }
 
+    private readonly record struct CountryLabelCacheEntry(
+        TerritoryLabelAnchor Anchor,
+        string Text,
+        int FontSize,
+        int Outline,
+        float PixelSize,
+        Font Font,
+        float ReliefDisplacement,
+        bool HasReliefGrid,
+        Vector3 CenterNormal,
+        (Label3D Node, float Latitude, float Longitude, Basis SurfaceBasis, float FlatRotation, float FootprintRadius)[] Glyphs);
+
+    private readonly Dictionary<int, CountryLabelCacheEntry> _countryLabelCache = new();
     private readonly List<Label3D> _glyphBuildScratch = new();
+
+    private static bool CountryLabelCacheMatches(
+        in CountryLabelCacheEntry cached,
+        in TerritoryLabelAnchor anchor,
+        string text,
+        int fontSize,
+        int outline,
+        float pixelSize,
+        Font font,
+        float reliefDisplacement,
+        bool hasReliefGrid,
+        int existingGlyphCount) =>
+        existingGlyphCount == cached.Glyphs.Length &&
+        string.Equals(cached.Text, text, StringComparison.Ordinal) &&
+        ReferenceEquals(cached.Font, font) &&
+        cached.FontSize == fontSize &&
+        cached.Outline == outline &&
+        MathF.Abs(cached.PixelSize - pixelSize) <= 1e-6f &&
+        MathF.Abs(cached.ReliefDisplacement - reliefDisplacement) <= 1e-5f &&
+        cached.HasReliefGrid == hasReliefGrid &&
+        MathF.Abs(cached.Anchor.CenterX - anchor.CenterX) <= 0.5f &&
+        MathF.Abs(cached.Anchor.CenterY - anchor.CenterY) <= 0.5f &&
+        MathF.Abs(cached.Anchor.HalfSpanPixels - anchor.HalfSpanPixels) <= 0.5f &&
+        MathF.Abs(cached.Anchor.ThicknessPixels - anchor.ThicknessPixels) <= 0.5f &&
+        MathF.Abs(cached.Anchor.AxisX - anchor.AxisX) <= 0.005f &&
+        MathF.Abs(cached.Anchor.AxisY - anchor.AxisY) <= 0.005f &&
+        Math.Abs(cached.Anchor.Cells - anchor.Cells) <= Math.Max(4, cached.Anchor.Cells / 100);
 
     private void BuildCountryLabels(Dictionary<int, TerritoryLabelAnchor> anchors, NationLabelSnapshot[] nations = null)
     {
         if (!IsInstanceValid(_countryLabelRoot)) return;
+        var initialBuild = _lastLabelAnchors is null;
         _lastLabelAnchors = anchors;
         _lastLabelNames.Clear();
         _countryLabels.Clear();
         _countryGlyphs.Clear();
-        _countryAppliedVisible.Clear();
-        _countryAppliedScale.Clear();
-        _countryAppliedAlpha.Clear();
-        _countryVisNeedsInitialSync = true;
-        _countryVisAllSettled = false;
-        _countryGlyphScale = -1f;
+        var anyCountryChanged = initialBuild;
+        var reliefDisplacement = _reliefDisplacement;
+        var hasReliefGrid = _reliefHeightGrid is not null;
         var activeGroups = _activeCountryGroupsScratch;
         activeGroups.Clear();
         if (nations is not null)
@@ -262,18 +303,18 @@ public sealed partial class GlobePresentation
             // Retain the glyph instances when names or borders change. Replacing every
             // Label3D at once overlaps old/new GPU resources with resized render targets,
             // which can exhaust D3D12's descriptor heap during a language/window switch.
-            if (!_countryLabelGroups.TryGetValue(mapIndex, out var group) || !IsInstanceValid(group))
+            var groupValid = _countryLabelGroups.TryGetValue(mapIndex, out var group) && IsInstanceValid(group);
+            if (!groupValid)
             {
                 group = new Node3D { Name = $"CountryLabel_{tag}", Visible = false };
                 _countryLabelRoot.AddChild(group);
                 _countryLabelGroups[mapIndex] = group;
                 _countryGroupGlyphs.Remove(mapIndex);
+                _countryLabelCache.Remove(mapIndex);
             }
             activeGroups.Add(mapIndex);
             if (!_countryGroupGlyphs.TryGetValue(mapIndex, out var existingGlyphs))
                 existingGlyphs = Array.Empty<Label3D>();
-            _glyphBuildScratch.Clear();
-            var usedGlyphs = 0;
 
             // One letter at a time, along the chord.
             //
@@ -343,6 +384,25 @@ public sealed partial class GlobePresentation
             var flatRotation = -Mathf.Atan2(anchor.AxisY, anchor.AxisX);
             var outline = Math.Max(4, (int)Mathf.Round(fontSize * 0.15f));
 
+            // Differential skip: countries whose anchor/text/font/relief stayed identical avoid
+            // touching any Label3D node (preventing Godot 3D text-mesh rebuild stalls).
+            if (groupValid && _countryLabelCache.TryGetValue(mapIndex, out var cached) &&
+                CountryLabelCacheMatches(in cached, in anchor, text, fontSize, outline, pixelSize,
+                    countryFont, reliefDisplacement, hasReliefGrid, existingGlyphs.Length))
+            {
+                for (var g = 0; g < cached.Glyphs.Length; g++)
+                    _countryGlyphs.Add(cached.Glyphs[g]);
+                _countryLabels.Add((mapIndex, group, cached.CenterNormal, anchor.Cells));
+                continue;
+            }
+
+            anyCountryChanged = true;
+            _countryAppliedVisible.Remove(mapIndex);
+            _countryAppliedScale.Remove(mapIndex);
+            _countryAppliedAlpha.Remove(mapIndex);
+            _glyphBuildScratch.Clear();
+            var usedGlyphs = 0;
+
             // Back into map cells: what share of the chord the word actually needs, centred
             // on the chord's own middle.
             var occupied = glyphCount <= 1 ? 0f : Mathf.Min(1f, advance * (glyphCount - 1) / Mathf.Max(0.0001f, span));
@@ -397,6 +457,9 @@ public sealed partial class GlobePresentation
             var wordHeading = CountryLabelSurfaceBasis(
                 latitudes[glyphCount / 2], longitudes[glyphCount / 2], anchor.AxisX, anchor.AxisY).X;
 
+            var cachedGlyphs = new List<(Label3D Node, float Latitude, float Longitude, Basis SurfaceBasis, float FlatRotation, float FootprintRadius)>(glyphCount);
+            var fillCol = CountryFillColour(0.88f);
+            var outlineCol = CountryOutlineColour(0.92f);
             for (var index = 0; index < glyphCount; index++)
             {
                 var character = text[index];
@@ -424,33 +487,42 @@ public sealed partial class GlobePresentation
                 var up = normal.Cross(baseline).Normalized();
                 var surfaceBasis = new Basis(baseline, up, normal).Orthonormalized();
 
-                var glyph = usedGlyphs < existingGlyphs.Length ? existingGlyphs[usedGlyphs]
-                    : new Label3D { Name = $"Glyph{usedGlyphs}" };
+                var isNew = usedGlyphs >= existingGlyphs.Length || !IsInstanceValid(existingGlyphs[usedGlyphs]);
+                var glyph = isNew ? new Label3D { Name = $"Glyph{usedGlyphs}" } : existingGlyphs[usedGlyphs];
                 usedGlyphs++;
                 _glyphBuildScratch.Add(glyph);
-                glyph.Text = character.ToString();
-                glyph.FontSize = fontSize;
-                glyph.Font = countryFont;
-                glyph.PixelSize = pixelSize;
-                glyph.FixedSize = false;
-                glyph.Billboard = BaseMaterial3D.BillboardModeEnum.Disabled;
-                glyph.HorizontalAlignment = HorizontalAlignment.Center;
-                glyph.VerticalAlignment = VerticalAlignment.Center;
-                glyph.OutlineSize = outline;
-                glyph.Modulate = CountryFillColour(0.88f);
-                glyph.OutlineModulate = CountryOutlineColour(0.92f);
-                glyph.NoDepthTest = false;
-                glyph.TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic;
-                glyph.Position = position;
-                glyph.Basis = surfaceBasis;
-                glyph.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                var chStr = character.ToString();
+                if (!string.Equals(glyph.Text, chStr, StringComparison.Ordinal)) glyph.Text = chStr;
+                if (glyph.FontSize != fontSize) glyph.FontSize = fontSize;
+                if (!ReferenceEquals(glyph.Font, countryFont)) glyph.Font = countryFont;
+                if (MathF.Abs(glyph.PixelSize - pixelSize) > 1e-6f) glyph.PixelSize = pixelSize;
+                if (glyph.OutlineSize != outline) glyph.OutlineSize = outline;
+                if (isNew)
+                {
+                    glyph.FixedSize = false;
+                    glyph.Billboard = BaseMaterial3D.BillboardModeEnum.Disabled;
+                    glyph.HorizontalAlignment = HorizontalAlignment.Center;
+                    glyph.VerticalAlignment = VerticalAlignment.Center;
+                    glyph.NoDepthTest = false;
+                    glyph.TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic;
+                    glyph.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                    glyph.Modulate = fillCol;
+                    glyph.OutlineModulate = outlineCol;
+                }
+                if (glyph.Position != position) glyph.Position = position;
+                if (!glyph.Basis.IsEqualApprox(surfaceBasis)) glyph.Basis = surfaceBasis;
                 if (glyph.GetParent() is null) group.AddChild(glyph);
-                _countryGlyphs.Add((glyph, latitude, longitude, surfaceBasis, flatRotation, footprintRadius));
+                var tuple = (glyph, latitude, longitude, surfaceBasis, flatRotation, footprintRadius);
+                _countryGlyphs.Add(tuple);
+                cachedGlyphs.Add(tuple);
             }
             for (var index = usedGlyphs; index < existingGlyphs.Length; index++)
             {
-                group.RemoveChild(existingGlyphs[index]);
-                existingGlyphs[index].QueueFree();
+                if (IsInstanceValid(existingGlyphs[index]))
+                {
+                    group.RemoveChild(existingGlyphs[index]);
+                    existingGlyphs[index].QueueFree();
+                }
             }
             if (existingGlyphs.Length == usedGlyphs)
             {
@@ -463,26 +535,38 @@ public sealed partial class GlobePresentation
             }
 
             var center = LocalSurfaceLabelPoint(centreLatitude, centreLongitude, glyphBaseRadius, footprintRadius);
-            _countryLabels.Add((mapIndex, group, center.Normalized(), anchor.Cells));
+            var centerNormal = center.Normalized();
+            _countryLabels.Add((mapIndex, group, centerNormal, anchor.Cells));
+            _countryLabelCache[mapIndex] = new CountryLabelCacheEntry(
+                anchor, text, fontSize, outline, pixelSize, countryFont,
+                reliefDisplacement, hasReliefGrid, centerNormal, cachedGlyphs.ToArray());
         }
         _staleCountryGroupsScratch.Clear();
         foreach (var id in _countryLabelGroups.Keys)
             if (!activeGroups.Contains(id)) _staleCountryGroupsScratch.Add(id);
         foreach (var id in _staleCountryGroupsScratch)
         {
+            anyCountryChanged = true;
             var group = _countryLabelGroups[id];
             if (IsInstanceValid(group)) { _countryLabelRoot.RemoveChild(group); group.QueueFree(); }
             _countryLabelGroups.Remove(id);
             _countryGroupGlyphs.Remove(id);
+            _countryLabelCache.Remove(id);
             _countryAppliedVisible.Remove(id);
             _countryAppliedScale.Remove(id);
             _countryAppliedAlpha.Remove(id);
         }
-        // Refreshes may run after this frame's normal visibility/projection pass.
-        // Never briefly render every country, or globe-space glyphs on the flat map.
-        _lastFlatGlyphsRef = null;
-        if (_flatMap) UpdateFlatWorldPositions();
-        UpdateCountryLabelVisibility();
+        if (anyCountryChanged)
+        {
+            _countryVisNeedsInitialSync = true;
+            _countryVisAllSettled = false;
+            _countryGlyphScale = -1f;
+            // Refreshes may run after this frame's normal visibility/projection pass.
+            // Never briefly render every country, or globe-space glyphs on the flat map.
+            _lastFlatGlyphsRef = null;
+            if (_flatMap) UpdateFlatWorldPositions();
+            UpdateCountryLabelVisibility();
+        }
     }
 
     private bool AnyCountryAlphaVisible()
@@ -506,9 +590,9 @@ public sealed partial class GlobePresentation
     /// </summary>
     public bool CountryLabelsEnabled { get; set; } = true;
 
-    private void UpdateCountryLabelVisibility(double delta = 0)
+    private void UpdateCountryLabelVisibility(double delta = 0, int? snapPlayerMapIndex = null)
     {
-        if (!IsInstanceValid(_countryLabelRoot) || !IsInstanceValid(_camera)) return;
+        if (!ShouldRunCountryVisibilityThisFrame()) return;
         if (!CountryLabelsEnabled || !Simulation.WorldLayers.On("country_labels"))
         {
             if (_countryLabelRoot.Visible) _countryLabelRoot.Visible = false;
@@ -548,7 +632,7 @@ public sealed partial class GlobePresentation
             if (!_countryLabelRoot.Visible) _countryLabelRoot.Visible = true;
         }
 
-        var playerMapIndex = _campaign?.Player?.MapIndex ?? -1;
+        var playerMapIndex = snapPlayerMapIndex ?? (_campaign?.Player?.MapIndex ?? -1);
         var stateChanged = _countryVisCachedFlat != _flatMap ||
                            _countryVisCachedAtlas != _mapLookAtlas ||
                            _countryVisCachedMapMode != _mapMode ||
@@ -557,7 +641,7 @@ public sealed partial class GlobePresentation
         var measureTol = _flatMap ? 0.004f : 0.02f;
         var measureChanged = MathF.Abs(measure - _countryVisCachedMeasure) > measureTol;
         var camPos = _flatMap ? _countryVisCachedCamPos : _camera.GlobalPosition;
-        var camChanged = !_flatMap && camPos.DistanceSquaredTo(_countryVisCachedCamPos) > 0.0001f;
+        var camChanged = !_flatMap && camPos.DistanceSquaredTo(_countryVisCachedCamPos) > 1e-6f;
         if (_countryVisAllSettled && !stateChanged && !measureChanged && (_flatMap || !camChanged))
             return;
 
@@ -572,7 +656,7 @@ public sealed partial class GlobePresentation
             ? _flatZoom > 8.8f ? 26000 : _flatZoom > 6.2f ? 6500 : _flatZoom > 4.0f ? 1500 : _flatZoom > 2.6f ? 150 : 40
             : _distance > 11.5f ? 26000 : _distance > 9.5f ? 6500 : _distance > 7.4f ? 1500 : 150;
         var viewNormal = _flatMap ? Vector3.Zero : camPos.Normalized();
-        var horizonThreshold = _distance > 11.5f ? 0.72f : _distance > 9.5f ? 0.62f : _distance > 7.4f ? 0.50f : 0.38f;
+        var horizonThreshold = MathF.Max(CityHorizon(), _distance > 11.5f ? 0.72f : _distance > 9.5f ? 0.62f : _distance > 7.4f ? 0.50f : 0.38f);
         var rootBasis = _flatMap ? Basis.Identity : _countryLabelRoot.GlobalTransform.Basis;
         var stepDt = (float)Math.Max(0.016, delta);
         var atlasFill = _mapLookAtlas ? CountryFillColour(1f) : default;
@@ -588,7 +672,8 @@ public sealed partial class GlobePresentation
                 // Stored normals are globe-local. Use the label root's inherited
                 // rotation before comparing with the camera; otherwise rotating the
                 // globe leaves labels from the old hemisphere visible at its rim.
-                var horizonOk = _flatMap || (rootBasis * label.Normal).Normalized().Dot(viewNormal) > horizonThreshold;
+                var horizonOk = _flatMap || !MapOverlaySyncRules.IsBeyondGlobeHorizon(
+                    ToNum(rootBasis * label.Normal), ToNum(viewNormal), horizonThreshold);
                 if (!_mapLookAtlas)
                 {
                     var visible = label.Cells >= minimumCells && horizonOk;

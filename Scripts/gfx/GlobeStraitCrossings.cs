@@ -113,6 +113,10 @@ void fragment() {
 
     private void AppendStraitCrossing(Simulation.CrossingLink link)
     {
+        if (!GlobeLineSanity.IsValidGeo(link.FromLatitude, link.FromLongitude) ||
+            !GlobeLineSanity.IsValidGeo(link.ToLatitude, link.ToLongitude))
+            return;
+
         var colour = link.Closed
             ? new Color(0.96f, 0.34f, 0.28f, 0.92f)
             : link.Contested
@@ -124,43 +128,55 @@ void fragment() {
         // Walked a quarter of a degree at a time so the line lies on the globe; a crossing is
         // a few tens of kilometres, so this is a handful of points.
         _straitCrossingPoints.Clear();
-        var deltaLongitude = link.ToLongitude - link.FromLongitude;
-        while (deltaLongitude > 180f) deltaLongitude -= 360f;
-        while (deltaLongitude < -180f) deltaLongitude += 360f;
-        var steps = Math.Max(2, (int)MathF.Ceiling(MathF.Max(MathF.Abs(link.ToLatitude - link.FromLatitude),
-            MathF.Abs(deltaLongitude)) * 4f));
+        var deltaLongitude = GlobeLineSanity.WrapDeltaDegrees(link.ToLongitude - link.FromLongitude);
+        var steps = Math.Clamp((int)MathF.Ceiling(MathF.Max(MathF.Abs(link.ToLatitude - link.FromLatitude),
+            MathF.Abs(deltaLongitude)) * 4f), 2, 256);
         for (var step = 0; step <= steps; step++)
         {
             var t = step / (float)steps;
-            _straitCrossingPoints.Add(PresentationPoint(link.FromLatitude + (link.ToLatitude - link.FromLatitude) * t,
-                link.FromLongitude + deltaLongitude * t, SurfaceLineRadius));
+            if (TryPresentationPoint(link.FromLatitude + (link.ToLatitude - link.FromLatitude) * t,
+                    link.FromLongitude + deltaLongitude * t, SurfaceLineRadius, out var pt))
+                _straitCrossingPoints.Add(pt);
         }
 
         // The same thin strip a supply line is, a little narrower; broken at the date line on
         // the flat map rather than streaked across it.
         const float halfWidth = 0.0011f;
-        CollectDateLineRuns(_straitCrossingPoints);
+        CollectValidLineRuns(_straitCrossingPoints,
+            _flatMap ? GlobeLineSanity.MaxFlatSegmentLength : GlobeLineSanity.MaxGlobeSegmentLength,
+            _dateLineRuns);
         foreach (var run in _dateLineRuns)
         {
             var cumulative = 0f;
             var endIndex = run.Start + run.Count - 1;
             Vector3 lastLeft = default, lastRight = default;
             var lastAlong = 0f;
+            var hasLast = false;
             for (var index = run.Start; index <= endIndex; index++)
             {
                 var point = _straitCrossingPoints[index];
                 if (index > run.Start) cumulative += point.DistanceTo(_straitCrossingPoints[index - 1]) * 260f;
                 var before = _straitCrossingPoints[Math.Max(run.Start, index - 1)];
                 var after = _straitCrossingPoints[Math.Min(endIndex, index + 1)];
-                var tangent = (after - before).Normalized();
-                if (tangent == Vector3.Zero) tangent = Vector3.Right;
-                var normal = _flatMap ? Vector3.Forward : point.Normalized();
-                var side = normal.Cross(tangent).Normalized() * halfWidth;
-                var left = OnOrderSurface(point + side);
-                var right = OnOrderSurface(point - side);
+                if (!GlobeLineSanity.TrySafeRibbonFrame(ToNum(point), ToNum(before), ToNum(after),
+                        _flatMap, flatPositiveZNormal: false, out _, out _, out var sideAxis))
+                {
+                    hasLast = false;
+                    continue;
+                }
+                var side = ToGd(sideAxis) * halfWidth;
+                if (!TryOnOrderSurface(point + side, SurfaceLineRadius, FlatLineZ, out var left) ||
+                    !TryOnOrderSurface(point - side, SurfaceLineRadius, FlatLineZ, out var right) ||
+                    !GlobeLineSanity.IsValidEmittedEdge(ToNum(left), ToNum(right), _flatMap, _flatX))
+                {
+                    hasLast = false;
+                    continue;
+                }
                 // Two triangles for the stretch since the previous point; the first point of a
                 // run only opens it.
-                if (index > run.Start)
+                if (hasLast &&
+                    GlobeLineSanity.IsValidEmittedEdge(ToNum(lastLeft), ToNum(left), _flatMap, _flatX) &&
+                    GlobeLineSanity.IsValidEmittedEdge(ToNum(lastRight), ToNum(right), _flatMap, _flatX))
                 {
                     StraitCrossingCorner(lastLeft, lastAlong, 0f, colour);
                     StraitCrossingCorner(lastRight, lastAlong, 1f, colour);
@@ -170,6 +186,7 @@ void fragment() {
                     StraitCrossingCorner(left, cumulative, 0f, colour);
                 }
                 lastLeft = left; lastRight = right; lastAlong = cumulative;
+                hasLast = true;
             }
         }
     }

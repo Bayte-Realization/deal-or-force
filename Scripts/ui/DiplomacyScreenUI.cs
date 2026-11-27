@@ -114,13 +114,16 @@ public partial class DealOrForceGame
 
         var rows = PanelRows(panel, 22, 16, 9);
 
-        var ownCountry = ActionButton("My country", () => SelectDiplomacyNation(_campaign.Player), 0, 32,
+        var ownCountry = ActionButton("My country", () =>
+        {
+            if (_campaign?.Player is { } player) SelectDiplomacyNation(player);
+        }, 0, 32,
             iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png");
         ownCountry.Name = "DiplomacyMyCountry";
         ownCountry.TooltipText = Ui.Tip(Tr("Open your own country's diplomacy dossier."));
         _diplomacyInboxButton = ActionButton("Diplomatic inbox", OpenDealInbox, 0, 32);
         _diplomacyInboxButton.Name = "DiplomacyInbox";
-        _diplomacyInboxButton.Disabled = _observerMode;
+        _diplomacyInboxButton.Disabled = ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null;
         var organizations = ActionButton("Organizations", () => { CloseDiplomacyScreen(); _conflictTab = 4; OpenScreen("Conflicts"); }, 0, 32,
             iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png");
         var toConflicts = ActionButton("Conflicts", () => { CloseDiplomacyScreen(); OpenConflictsScreen(); }, 0, 32,
@@ -445,7 +448,8 @@ public partial class DealOrForceGame
         {
             try
             {
-                if (_selectedNation is null || _selectedNation.Id == _campaign.Player.Id)
+                var player = _campaign.Player;
+                if (_selectedNation is null || (player is not null && _selectedNation.Id == player.Id))
                     _selectedNation = DiplomacyDefaultPartner() ?? _selectedNation;
                 _diplomacySelectedId = _selectedNation?.Id ?? -1;
                 RebuildDiplomacyList(force: true);
@@ -466,7 +470,9 @@ public partial class DealOrForceGame
     /// so it can be tested without a scene; this only asks for it.
     /// </summary>
     private Nation DiplomacyDefaultPartner() =>
-        CampaignDiplomacy.DefaultPartner(_campaign, _campaign?.Player);
+        _campaign?.Player is { } player
+            ? CampaignDiplomacy.DefaultPartner(_campaign, player)
+            : ObserverUiRules.DefaultObservedNation(_campaign);
 
     private void CloseDiplomacyScreen()
     {
@@ -486,11 +492,22 @@ public partial class DealOrForceGame
     private bool DiplomacyListShows(Nation nation, HashSet<int> neighbours)
     {
         var player = _campaign.Player;
-        if (nation.Id == player.Id) return false;
+        if (player is not null && nation.Id == player.Id) return false;
         // Only a save from before the map source's reefs and glaciers stopped being made
         // countries still carries one, and nobody can be written to there (CountryMerges).
         if (Simulation.CountryMerges.IsLegacyEntry(_campaign, nation)) return false;
         if (_diplomacyFilter == DiplomacyFilter.All) return true;
+        if (player is null)
+        {
+            return _diplomacyFilter switch
+            {
+                DiplomacyFilter.Allies => AllianceSystem.AlliesOf(_campaign, nation).Count > 0,
+                DiplomacyFilter.Rivals => _campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)),
+                DiplomacyFilter.AtWar => _campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)),
+                DiplomacyFilter.Neighbours => neighbours is not null && neighbours.Contains(nation.MapIndex),
+                _ => true
+            };
+        }
         var relation = CampaignDiplomacy.Peek(_campaign, player.Id, nation.Id);
         return _diplomacyFilter switch
         {
@@ -511,10 +528,8 @@ public partial class DealOrForceGame
         try
         {
             var player = _campaign.Player;
-            if (player is null) return;
-
             var query = _diplomacySearch.Text?.Trim() ?? "";
-            var key = $"{_diplomacyFilter}|{query}|{_campaign.ElapsedDays}|{Loc.Language}";
+            var key = $"{player?.Id ?? -1}|{_diplomacyFilter}|{query}|{_campaign.ElapsedDays}|{Loc.Language}";
             // The list is rebuilt when what it is made of changes - a filter, a search, a new
             // day - and only has its figures repainted the rest of the time. A list torn down
             // and remade between a mouse going down and coming up is a list that cannot be
@@ -527,8 +542,10 @@ public partial class DealOrForceGame
             if (_diplomacyFilter == DiplomacyFilter.Neighbours)
             {
                 neighbours = new HashSet<int>();
-                foreach (var mapIndex in CampaignDiplomacy.Neighbours(_campaign, player.MapIndex))
-                    neighbours.Add(mapIndex);
+                var anchor = player ?? _campaign.NationById(_diplomacySelectedId) ?? ObserverUiRules.DefaultObservedNation(_campaign);
+                if (anchor is not null)
+                    foreach (var mapIndex in CampaignDiplomacy.Neighbours(_campaign, anchor.MapIndex))
+                        neighbours.Add(mapIndex);
             }
 
             var matches = _campaign.Nations
@@ -714,7 +731,8 @@ public partial class DealOrForceGame
         row.Select.TooltipText = Ui.Tip(nation.DisplayName + " · " + nation.Tag + "\n" + identity);
         row.Name.Text = nation.DisplayName;
         FitDiplomacyName(row);
-        var relation = CampaignDiplomacy.Peek(_campaign, _campaign.Player.Id, nation.Id);
+        var player = _campaign.Player;
+        var relation = player is null ? null : CampaignDiplomacy.Peek(_campaign, player.Id, nation.Id);
         var opinion = relation?.Opinion ?? 0;
         row.Opinion.Text = opinion == 0 ? "·" : opinion.ToString("+0;-0;0");
         row.Opinion.AddThemeColorOverride("font_color",
@@ -910,8 +928,17 @@ public partial class DealOrForceGame
     private void RefreshDiplomacyScreenLocked()
     {
         var player = _campaign.Player;
-        if (player is null) return;
-        var nation = _campaign.Nations.Find(candidate => candidate.Id == _diplomacySelectedId) ?? player;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        if (_diplomacyLayer.FindChild("DiplomacyMyCountry", true, false) is Button ownBtn)
+            ownBtn.Disabled = player is null || WatchingWorld;
+        if (_diplomacyInboxButton is not null)
+            _diplomacyInboxButton.Disabled = observing || player is null;
+
+        var nation = _campaign.Nations.Find(candidate => candidate.Id == _diplomacySelectedId)
+                     ?? player
+                     ?? _selectedNation
+                     ?? ObserverUiRules.DefaultObservedNation(_campaign);
+        if (nation is null) return;
         _diplomacySelectedId = nation.Id;
 
         if (_diplomacyEraBadge is not null && _diplomacyEraLabel is not null)
@@ -925,9 +952,9 @@ public partial class DealOrForceGame
 
         RebuildDiplomacyList();
         MarkDiplomacySelection();
-        var relPeek = nation.Id != player.Id ? CampaignDiplomacy.Peek(_campaign, player.Id, nation.Id) : null;
+        var relPeek = player is not null && nation.Id != player.Id ? CampaignDiplomacy.Peek(_campaign, player.Id, nation.Id) : null;
         var truceUntil = relPeek?.TruceUntil ?? 0;
-        var key = $"{nation.Id}|{_campaign.ElapsedDays}|{_campaign.WarRevision}|{truceUntil}|{_diplomacyPendingWarTarget}|{_diplomacyPendingPartitionTarget}|{_diplomacyDossierPage}|{Loc.Language}";
+        var key = $"{player?.Id ?? -1}|{nation.Id}|{_campaign.ElapsedDays}|{_campaign.WarRevision}|{truceUntil}|{_diplomacyPendingWarTarget}|{_diplomacyPendingPartitionTarget}|{_diplomacyDossierPage}|{observing}|{Loc.Language}";
         if (key == _diplomacyPageKey) return;
         _diplomacyPageKey = key;
         var scrollY = _diplomacyDossierScroll.ScrollVertical;
@@ -987,12 +1014,12 @@ public partial class DealOrForceGame
             MarkerColour = Ui.Colour("war.front_line")
         };
 
-        var ourColour = WarSideColour(player);
+        var ourColour = player is not null ? WarSideColour(player) : Ui.Colour("text.muted");
         var theirColour = WarSideColour(nation);
         var positive = Ui.Colour("state.positive");
         var negative = Ui.Colour("state.negative");
-        var own = nation.Id == player.Id;
-        var canSee = own || CanInspectNation(nation.Id);
+        var own = player is not null && nation.Id == player.Id;
+        var canSee = own || observing || CanInspectNation(nation.Id);
 
         // ---- who they are, and what they think of us.
         RefreshDiplomacyDossierChrome(nation, canSee);
@@ -1010,7 +1037,7 @@ public partial class DealOrForceGame
         // reputation "has not formed yet" and its habit of its institutions stood at 0%.
         void Society()
         {
-            AddSocialMemoryDiplomacy(nation, player, Field);
+            if (player is not null) AddSocialMemoryDiplomacy(nation, player, Field);
             if (_campaign.FeatureEnabled("national_courses") && nation.NationalCourse.Initialized)
                 Field("National agenda", Tr(NationalCourseCatalog.Find(nation.NationalCourse.Dominant)?.Name ?? nation.NationalCourse.Dominant));
         }
@@ -1029,21 +1056,82 @@ public partial class DealOrForceGame
                     CardRow(institutions, portfolio.Name,
                         $"{Rulers.MinisterPersonName(nation, portfolio.Id)} ({Simulation.Loc.Format("{0} yrs", Rulers.MinisterPersonAge(_campaign, nation, portfolio.Id))}) · {Tr(min.Name)}");
             if (canSee) AddSpiritRows(Field("NATIONAL SPIRITS"), nation);
-            _diplomacyActionColumn.Visible = _diplomacyActionRows.Visible = !own;
-            if (!own) RefreshDiplomacyActions(player, nation);
+            var showGovActions = !own && player is not null && !observing;
+            _diplomacyActionColumn.Visible = _diplomacyActionRows.Visible = showGovActions;
+            if (showGovActions) RefreshDiplomacyActions(player, nation);
+            return;
+        }
+        if (player is null)
+        {
+            _diplomacyActionColumn.Visible = false;
+            _diplomacyActionRows.Visible = false;
+            aside.AddChild(Right(RowLabel(Tr("shell.obs.badge_world"), 11, Ui.Colour("text.accent"))));
+            if (_diplomacyDossierPage == "Overview")
+                RefreshOwnDiplomacy(nation, Field, Text, Giving, Bar);
+            else if (_diplomacyDossierPage == "Comparison")
+            {
+                var balance = Field("THE BALANCE OF POWER", Tr("obs.ui.diplomacy.compare_need_player"));
+                var divisions = DivisionsByNation();
+                var readouts = new HBoxContainer();
+                readouts.AddThemeConstantOverride("separation", 18);
+                balance.AddChild(readouts);
+                foreach (var (caption, value) in new[]
+                         {
+                             ("GDP", Fmt.Money(nation.Gdp)),
+                             ("Divisions", divisions.GetValueOrDefault(nation.Id).ToString("0.#")),
+                             ("Population", Fmt.People(nation.Population)),
+                             ("Stability", Fmt.Percent(nation.Stability))
+                         })
+                {
+                    var readout = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+                    readout.AddThemeConstantOverride("separation", 0);
+                    readout.AddChild(RowLabel(caption, 10, Ui.Colour("text.caption"), upper: true));
+                    readout.AddChild(Text(value, 20, Ui.Colour("text.bright")));
+                    readouts.AddChild(readout);
+                }
+            }
+            else if (_diplomacyDossierPage == "Relations")
+            {
+                AddWorldStanding(nation, Field, Text, Bar);
+                var ties = Field("TIES");
+                _diplomacyPactRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+                _diplomacyPactRows.AddThemeConstantOverride("separation", 5);
+                ties.AddChild(_diplomacyPactRows);
+                var allies = AllianceSystem.AlliesOf(_campaign, nation);
+                if (allies.Count > 0)
+                {
+                    var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 6);
+                    _diplomacyPactRows.AddChild(row);
+                    var label = Title(Tr("Allied to"), 13, Ui.Colour("text.body_soft"));
+                    Fixed(label, 150); label.SizeFlagsVertical = SizeFlags.ShrinkBegin; row.AddChild(label);
+                    row.AddChild(DiplomacyChips(allies, ""));
+                }
+                var subjects = SubjectSystem.SubjectsOf(_campaign, nation);
+                if (subjects.Count > 0)
+                {
+                    var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 6);
+                    _diplomacyPactRows.AddChild(row);
+                    var label = Title(Tr("Subjects"), 13, Ui.Colour("text.body_soft"));
+                    Fixed(label, 150); label.SizeFlagsVertical = SizeFlags.ShrinkBegin; row.AddChild(label);
+                    row.AddChild(DiplomacyChips(subjects, ""));
+                }
+                if (_diplomacyPactRows.GetChildCount() == 0)
+                    _diplomacyPactRows.AddChild(Text(Tr("obs.ui.diplomacy.no_world_ties"), 12, Ui.Colour("text.muted")));
+                Society();
+            }
             return;
         }
         if (own)
         {
             _diplomacyActionColumn.Visible = false;
             _diplomacyActionRows.Visible = false;
-            aside.AddChild(Right(RowLabel("YOUR COUNTRY", 11, Ui.Colour("text.accent"))));
+            aside.AddChild(Right(RowLabel(observing ? Tr("shell.obs.badge_world") : Tr("YOUR COUNTRY"), 11, Ui.Colour("text.accent"))));
             RefreshOwnDiplomacy(player, Field, Text, Giving, Bar);
             Society();
             return;
         }
-        _diplomacyActionColumn.Visible = true;
-        _diplomacyActionRows.Visible = true;
+        _diplomacyActionColumn.Visible = !observing;
+        _diplomacyActionRows.Visible = !observing;
 
         var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
         var opinionColour = relation.Opinion > 0 ? positive : relation.Opinion < 0 ? negative : Ui.Colour("text.body_soft");
@@ -1368,7 +1456,7 @@ public partial class DealOrForceGame
                 terms.AutowrapMode = TextServer.AutowrapMode.WordSmart; agenda.AddChild(terms);
                 agenda.AddChild(new ProgressBar { MinValue = 0, MaxValue = Math.Max(1, relation.AllianceProgramDuration),
                     Value = progress, ShowPercentage = false, CustomMinimumSize = new Vector2(0, 8) });
-                if (sponsor?.Id == player.Id)
+                if (!ObserverUiRules.IsObserving(_campaign, _observerMode) && sponsor?.Id == player.Id)
                 {
                     var cancel = ActionButton(Tr("End contribution"), () =>
                     {
@@ -1379,7 +1467,7 @@ public partial class DealOrForceGame
                     agenda.AddChild(cancel);
                 }
             }
-            else foreach (var programme in AllianceProgramCatalog.All)
+            else if (!ObserverUiRules.IsObserving(_campaign, _observerMode)) foreach (var programme in AllianceProgramCatalog.All)
             {
                 var button = ActionButton(Tr(programme.Name), () =>
                 {
@@ -1444,6 +1532,7 @@ public partial class DealOrForceGame
 
     private void RefreshDiplomacyActions(Nation player, Nation nation)
     {
+        if (player is null || _observerMode) return;
         RefreshAgreementButtons(nation, _diplomacyTradeButton, _diplomacyPactButton, _diplomacyAidButton, _diplomacyEmbargoButton);
         RefreshDiplomaticActButtons(nation);
         RefreshAssistanceAction(nation);
@@ -1530,6 +1619,7 @@ public partial class DealOrForceGame
 
     private bool ValidDiplomacyTarget()
     {
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode)) return false;
         var target = DiplomacyTarget();
         return target is not null && target != _campaign.Player;
     }

@@ -192,13 +192,6 @@ public static class FrontDisengagement
         private int _battleCount;
         private int _attacker;
         private int _defender;
-        private ProvinceTopology _compMap;
-        private ushort[] _compControllers;
-        private int _compMapRevision;
-        private int _compWarRevision;
-        private int _compAllianceRevision;
-        private int _compNation;
-        private bool _componentsValid;
         private readonly HashSet<int> _attackerAllies = new();
         private readonly HashSet<int> _defenderAllies = new();
         private readonly HashSet<int> _enemies = new();
@@ -213,11 +206,52 @@ public static class FrontDisengagement
         private readonly List<int> _routeSlab = new();
         private readonly Dictionary<int, RouteInfo> _holeRoutes = new();
         private readonly Dictionary<int, int> _retreats = new();
-        // Bounded origins; arrays belong only to this arrangement, not the campaign.
-        private readonly Dictionary<int, RouteTree> _searches = new();
-        private readonly Queue<int> _searchOrder = new();
+        private const int MaxPooledRouteSlots = 8;
+
+        private sealed class RouteGraphSlot : IDisposable
+        {
+            public ProvinceTopology Map;
+            public ushort[] Controllers;
+            public int MapRevision;
+            public int OwnershipRevision;
+            public int RouteAllowedCount;
+            public ulong RouteAllowedHash;
+            public ulong ControllersHash;
+            public int LastUseTick;
+            public bool Valid;
+            public FriendlyRouteComponents Components;
+            public readonly Dictionary<int, RouteTree> Searches = new();
+            public readonly Queue<int> SearchOrder = new();
+
+            public bool Matches(ProvinceTopology map, ushort[] controllers, int mapRev, int ownershipRev,
+                ulong controllersHash, int routeAllowedCount, ulong routeAllowedHash) =>
+                Valid && ReferenceEquals(Map, map) && ReferenceEquals(Controllers, controllers) &&
+                MapRevision == mapRev && OwnershipRevision == ownershipRev &&
+                ControllersHash == controllersHash &&
+                RouteAllowedCount == routeAllowedCount && RouteAllowedHash == routeAllowedHash;
+
+            public void ClearSearches(Stack<RouteTree> spareTrees)
+            {
+                foreach (var search in Searches.Values)
+                    if (spareTrees is not null) spareTrees.Push(search);
+                    else search.Dispose();
+                Searches.Clear();
+                SearchOrder.Clear();
+            }
+
+            public void Dispose()
+            {
+                ClearSearches(null);
+                Components?.Dispose();
+                Components = null;
+                Valid = false;
+            }
+        }
+
+        private readonly List<RouteGraphSlot> _routeSlots = new();
+        private RouteGraphSlot _activeSlot;
+        private int _routeSlotUseSeq;
         private readonly Stack<RouteTree> _spareTrees = new();
-        private FriendlyRouteComponents _components;
         private readonly Dictionary<int, int> _crowding = new();
         // This country's formations in campaign order, so the crowding census walks them and
         // not the whole world. Counts do not depend on order. Kept exact: built with the
@@ -389,20 +423,6 @@ public static class FrontDisengagement
             _routeSlab.Clear(); _holeRoutes.Clear(); _retreats.Clear();
             _crowding.Clear(); _excludedCrowding.Clear(); _crowdingReady = false;
             Occupied.Clear(); _own.Clear();
-            var keepRouteGraph = ReferenceEquals(_compMap, _map) && ReferenceEquals(_compControllers, _controllers) &&
-                _compMapRevision == _mapRevision && _compWarRevision == _warRevision &&
-                _compAllianceRevision == _allianceRevision && _compNation == nation;
-            if (!keepRouteGraph)
-            {
-                foreach (var search in _searches.Values) _spareTrees.Push(search);
-                _searches.Clear(); _searchOrder.Clear();
-                if (_components is not null && !_isPooled) { _components.Dispose(); _components = null; }
-                _compMap = _map; _compControllers = _controllers;
-                _compMapRevision = _mapRevision; _compWarRevision = _warRevision;
-                _compAllianceRevision = _allianceRevision; _compNation = nation;
-            }
-            if (_components is not null && _isPooled && !keepRouteGraph)
-                _componentsValid = false;
             var own = c.NationById(nation);
             _ownMapIndex = own?.MapIndex ?? -1;
             if (own is not null) _friendly.Add((ushort)own.MapIndex);
@@ -424,6 +444,11 @@ public static class FrontDisengagement
             else WarCoalition.FillControllers(c, war, war.IsAttacking(nation), _routeAllowed);
             MilitaryAccess.FillControllers(c, nation, _passage);
             _friendly.UnionWith(_passage); _routeAllowed.UnionWith(_passage);
+
+            var ownershipRev = c.OwnershipRevision;
+            var routeAllowedHash = HashUShortSet(_routeAllowed);
+            var controllersHash = HashControllersSmall(_controllers);
+            _activeSlot = ObtainRouteSlot(ownershipRev, controllersHash, _routeAllowed.Count, routeAllowedHash);
             var battles = c.Battles;
             for (var bi = 0; bi < battles.Count; bi++)
             {
@@ -506,34 +531,70 @@ public static class FrontDisengagement
             return _totals[key] = new(divisions, power, covering, pressure);
         }
 
+        private RouteGraphSlot ObtainRouteSlot(int ownershipRev, ulong controllersHash, int routeAllowedCount, ulong routeAllowedHash)
+        {
+            for (var i = 0; i < _routeSlots.Count; i++)
+            {
+                var slot = _routeSlots[i];
+                if (slot.Matches(_map, _controllers, _mapRevision, ownershipRev, controllersHash, routeAllowedCount, routeAllowedHash))
+                {
+                    slot.LastUseTick = ++_routeSlotUseSeq;
+                    return slot;
+                }
+            }
+
+            RouteGraphSlot chosen;
+            var limit = _isPooled ? MaxPooledRouteSlots : 1;
+            if (_routeSlots.Count < limit)
+            {
+                chosen = new RouteGraphSlot();
+                _routeSlots.Add(chosen);
+            }
+            else
+            {
+                chosen = _routeSlots[0];
+                for (var i = 1; i < _routeSlots.Count; i++)
+                    if (_routeSlots[i].LastUseTick < chosen.LastUseTick) chosen = _routeSlots[i];
+                chosen.ClearSearches(_isPooled ? _spareTrees : null);
+            }
+
+            chosen.Map = _map;
+            chosen.Controllers = _controllers;
+            chosen.MapRevision = _mapRevision;
+            chosen.OwnershipRevision = ownershipRev;
+            chosen.ControllersHash = controllersHash;
+            chosen.RouteAllowedCount = routeAllowedCount;
+            chosen.RouteAllowedHash = routeAllowedHash;
+            chosen.LastUseTick = ++_routeSlotUseSeq;
+            chosen.Valid = true;
+            chosen.Components?.Dispose();
+            chosen.Components = null;
+            return chosen;
+        }
+
         internal RouteInfo InspectRoute(int from)
         {
             if (from == _hole) return new(0, 0, 0, true);
             // Materialize once for stacked candidates; continue the same forward BFS
             // for the next hole instead of traversing the country from scratch.
             if (_holeRoutes.TryGetValue(from, out var found)) return found;
-            if (_components is null)
+            var slot = _activeSlot;
+            if (slot.Components is null)
+                slot.Components = new FriendlyRouteComponents(_map, _controllers, _routeAllowed);
+            if (!slot.Components.MayReach(from, _hole)) return _holeRoutes[from] = new(0, 0, 0, true);
+            var searches = slot.Searches;
+            var searchOrder = slot.SearchOrder;
+            if (!searches.TryGetValue(from, out var tree))
             {
-                _components = new FriendlyRouteComponents(_map, _controllers, _routeAllowed);
-                _componentsValid = true;
-            }
-            else if (!_componentsValid)
-            {
-                _components.Rebuild(_map, _controllers, _routeAllowed);
-                _componentsValid = true;
-            }
-            if (!_components.MayReach(from, _hole)) return _holeRoutes[from] = new(0, 0, 0, true);
-            if (!_searches.TryGetValue(from, out var tree))
-            {
-                if (_searches.Count >= 8)
+                if (searches.Count >= 8)
                 {
-                    var oldest = _searchOrder.Dequeue();
-                    _searches.Remove(oldest, out tree);
+                    var oldest = searchOrder.Dequeue();
+                    searches.Remove(oldest, out tree);
                 }
                 else
                     tree = _spareTrees.Count > 0 ? _spareTrees.Pop() : new RouteTree();
                 tree.Reset(_map, _controllers, _routeAllowed, from);
-                _searches.Add(from, tree); _searchOrder.Enqueue(from);
+                searches.Add(from, tree); searchOrder.Enqueue(from);
             }
             if (!tree.TryFind(_map, _controllers, _routeAllowed, _hole, _routeSlab, out var offset, out var length) ||
                 length == 0)
@@ -564,23 +625,44 @@ public static class FrontDisengagement
             }
         }
 
+        private static ulong HashUShortSet(HashSet<ushort> values)
+        {
+            var xor = 0UL;
+            var sum = (ulong)values.Count * 0x9E3779B97F4A7C15UL;
+            foreach (var v in values)
+            {
+                var mixed = ((ulong)v + 0x9E3779B97F4A7C15UL) * 0xBF58476D1CE4E5B9UL;
+                mixed ^= mixed >> 27;
+                xor ^= mixed;
+                sum += mixed;
+            }
+            return xor ^ (sum * 0x94D049BB133111EBUL);
+        }
+
+        private static ulong HashControllersSmall(ushort[] controllers)
+        {
+            if (controllers is null || controllers.Length > 512) return 0UL;
+            var h = 14695981039346656037UL ^ (ulong)controllers.Length;
+            for (var i = 0; i < controllers.Length; i++)
+            {
+                h ^= controllers[i];
+                h *= 1099511628211UL;
+            }
+            return h;
+        }
+
         public void Dispose()
         {
             if (_isPooled)
+                _activeSlot?.ClearSearches(_spareTrees);
+            _activeSlot = null;
+            if (!_isPooled)
             {
-                foreach (var search in _searches.Values) _spareTrees.Push(search);
-            }
-            else
-            {
-                foreach (var search in _searches.Values) search.Dispose();
+                for (var i = 0; i < _routeSlots.Count; i++) _routeSlots[i].Dispose();
+                _routeSlots.Clear();
                 while (_spareTrees.Count > 0) _spareTrees.Pop().Dispose();
-                _components?.Dispose(); _components = null;
             }
-            // Clear graph cache keys even when pooled so another war or changed access never
-            // reuses stale connectivity results across Obtain()/Dispose() lifetimes.
-            _compMap = null; _compControllers = null;
-            _componentsValid = false;
-            _searches.Clear(); _searchOrder.Clear(); _routeSlab.Clear(); _holeRoutes.Clear(); _retreats.Clear();
+            _routeSlab.Clear(); _holeRoutes.Clear(); _retreats.Clear();
             _units.Clear(); _battles.Clear(); _totals.Clear();
             _crowding.Clear(); _excludedCrowding.Clear(); Occupied.Clear(); _own.Clear();
             _friendly.Clear(); _routeAllowed.Clear(); _hostile.Clear(); _passage.Clear(); _unsafe.Clear();

@@ -184,11 +184,12 @@ public partial class DealOrForceGame
             if (_campaignAlertPopup is { Visible: true }) _campaignAlertPopup.Hide();
             return;
         }
-        if (_campaignAlertsWorld != _campaign || _campaignAlertsSeat != _campaign.Player.Id)
+        var viewerId = _campaign?.Player?.Id ?? -1;
+        if (_campaignAlertsWorld != _campaign || _campaignAlertsSeat != viewerId)
         {
             _campaignAlertSnoozes.Clear(); _campaignAlertPopup.Hide();
             _campaignAlertAnnounced.Clear(); _campaignAlertAnnouncementsArmed = false;
-            _campaignAlertsWorld = _campaign; _campaignAlertsSeat = _campaign.Player.Id;
+            _campaignAlertsWorld = _campaign; _campaignAlertsSeat = viewerId;
         }
         _campaignAlerts = CampaignAlerts.Read(_campaign, _campaign.Player, report, _observerMode);
         _campaignAlertSnoozes.Reconcile(_campaignAlerts, _campaign.ElapsedDays);

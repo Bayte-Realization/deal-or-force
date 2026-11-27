@@ -100,19 +100,20 @@ public partial class DealOrForceGame
     private void RefreshStrategicHud()
     {
         if (IsNewShellActive) { RefreshNuclearAlert(); return; }
-        if (_campaign?.Player is null || _outlinerRows is null) return;
+        if (_campaign is null || _outlinerRows is null) return;
         var player = _campaign.Player;
-        var playerBattles = _campaign.Battles.Count(battle => !battle.Ended &&
+        var watchingWorld = WatchingWorld || player is null;
+        var playerBattles = player is null ? 0 : _campaign.Battles.Count(battle => !battle.Ended &&
             (battle.AttackerId == player.Id || battle.DefenderId == player.Id));
-        var availableDecisions = DecisionCatalog.All.Count(definition =>
+        var availableDecisions = player is null ? 0 : DecisionCatalog.All.Count(definition =>
             DecisionCatalog.BlockReason(_campaign, player, definition).Length == 0);
         var fingerprint = HashCode.Combine(
             _campaign.ElapsedDays,
             _campaign.MapRevision,
-            player.Id,
-            _campaign.Wars.Count(war => !war.Ended && war.Involves(player.Id)),
+            (player?.Id ?? -1, watchingWorld),
+            player is null ? _campaign.Wars.Count(war => !war.Ended) : _campaign.Wars.Count(war => !war.Ended && war.Involves(player.Id)),
             playerBattles,
-            _campaign.Construction.Count(project => project.NationId == player.Id),
+            player is null ? ObserverUiRules.ObservedLandlessMovements(_campaign).Count : _campaign.Construction.Count(project => project.NationId == player.Id),
             _campaign.PendingEvents.Count,
             (availableDecisions, _campaign.FeatureEnabled("navy"), _campaign.FeatureEnabled("construction"), _hudBriefActive ? 1 : 0,
                 _campaign.Chronicle.Entries.Count == 0
@@ -132,7 +133,7 @@ public partial class DealOrForceGame
         _pendingOutlinerHeader = null;
         _outlinerHasRows = false;
 
-        if (_hudBriefActive)
+        if (_hudBriefActive && player is not null && !watchingWorld)
         {
             DrawBriefStrategicHud(player);
             Callable.From(FitOutliner).CallDeferred();
@@ -140,14 +141,14 @@ public partial class DealOrForceGame
         }
         // Nobody's country is being run: the report is about the world, not the last country the
         // picker happened to show (ObserverTopBarUI).
-        if (WatchingWorld)
+        if (watchingWorld)
         {
             DrawObserverOutliner();
             Callable.From(FitOutliner).CallDeferred();
             return;
         }
 
-        var armies = _campaign.Armies.Where(army => army.NationId == player.Id).ToArray();
+        var armies = _campaign.Armies.Where(army => army.NationId == player!.Id).ToArray();
         var lowSupply = armies.Count(army => army.SupplyLevel < StrategicHudBrief.LowSupply || army.CutOff);
         var construction = _campaign.Construction.Where(project => project.NationId == player.Id).ToArray();
 
@@ -406,7 +407,7 @@ public partial class DealOrForceGame
     }
 
     private float PlayerWarSupport(StrategicWar war) =>
-        war.AttackerId == _campaign.Player.Id ? war.AttackerWarSupport : war.DefenderWarSupport;
+        _campaign?.Player is { } player && war.AttackerId == player.Id ? war.AttackerWarSupport : war.DefenderWarSupport;
 
     /// <summary>
     /// How much an alert matters. The order is the order they appear in, because the one
@@ -703,7 +704,8 @@ public partial class DealOrForceGame
     private void FocusWar(StrategicWar war)
     {
         OpenScreen("Wars");
-        var front = war.FriendlyFront(_campaign.Player.Id).FirstOrDefault();
+        var focusSideId = _campaign.Player?.Id ?? war.AttackerId;
+        var front = war.FriendlyFront(focusSideId).FirstOrDefault();
         if (front > 0) FocusProvince(front, 7.0f);
     }
 
@@ -721,8 +723,9 @@ public partial class DealOrForceGame
 
     private void OpenFirstPlayerBattle()
     {
+        var playerId = _campaign.Player?.Id ?? -1;
         var battle = _campaign.Battles.FirstOrDefault(candidate => !candidate.Ended &&
-            (candidate.AttackerId == _campaign.Player.Id || candidate.DefenderId == _campaign.Player.Id));
+            (playerId <= 0 || candidate.AttackerId == playerId || candidate.DefenderId == playerId));
         if (battle is not null) ShowBattleDetails(battle);
     }
 

@@ -60,7 +60,8 @@ static class BrainDrainTests
         return c;
     }
 
-    private static void AtWarWeek(Campaign c) => DomesticCrisesTests.Day(c, 7);
+    private static void AtWarWeek(Campaign c) =>
+        DomesticCrisesTests.Day(c, 7 + BrainDrain.ScheduleSlot(Math.Max(1, c.Defines.EconomyTickDays)));
 
     public static void Run()
     {

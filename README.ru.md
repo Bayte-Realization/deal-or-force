@@ -5,9 +5,9 @@
 **Глобальная стратегия про весь мир — с утра 1 января 2024 года.**
 Играть можно за любую страну на карте. Остальными управляет компьютер, и в большинстве действий
 он отдаёт те же команды, что и игрок; [оставшиеся различия](docs/PLAYER_AI_PARITY_2026_11_18_RU.md)
-убираются по одному, и первыми — те, что касаются мира. Версия **PortAlpha 0.8.7.3**.
+убираются по одному, и первыми — те, что касаются мира. Версия **PortAlpha 0.8.8.2**.
 
-[![PortAlpha 0.8.7.3](https://img.shields.io/badge/PortAlpha-0.8.7.3-2f6fb3)](docs/CHANGELOG_0.8.7.3_RU.md)
+[![PortAlpha 0.8.8.2](https://img.shields.io/badge/PortAlpha-0.8.8.2-2f6fb3)](docs/CHANGELOG_0.8.8.2_RU.md)
 [![Движок](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED_RU.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED_RU.md)
 [![Лицензия](https://img.shields.io/badge/лицензия-GPL--3.0--or--later-3a7f3a)](LICENSE)
@@ -30,22 +30,46 @@
   [itch.io](https://bayte-realization.itch.io/deal-or-force).
   Распакуйте архив целиком и запустите `Deal or Force Launcher.exe`.
 - **Из исходников** — см. [Сборка и запуск](#сборка-и-запуск) ниже.
-- [Список изменений PortAlpha 0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md) охватывает адаптивный
-  темп скоростей 1–5, отзывчивое сенсорное управление Android без дрейфа, оптимизацию GLES3/HUD и
-  кэши симуляции; [накопительный чейнджлог 0.8.5.3](docs/CHANGELOG_0.8.5.3_RU.md) хранит
-  раннюю историю серии 0.8.
+- [Список изменений PortAlpha 0.8.8.2](docs/CHANGELOG_0.8.8.2_RU.md) добавляет нативные Rust SIMD
+  ядра (`dof_kernels` AVX2 + Android ARM64 NEON), разнесение недельных этапов симуляции, Android
+  Turbo Sim, двухуровневый LOD дипломатии ИИ, половинное разрешение / выборочный ETC2/ASTC для
+  снижения VRAM и исправления линий атаки, оверлеев карты и интерфейса наблюдателя; история прошлых
+  релизов — в [0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md) и [0.8.5.3](docs/CHANGELOG_0.8.5.3_RU.md).
 - Игру делает один человек — открыто, с помощью ИИ.
 
 Следить за проектом: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [девлог](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## Новое в PortAlpha 0.8.7.3
+## Новое в PortAlpha 0.8.8.2
 
 Выпуск собран на **Godot 4.8 Beta 3 .NET** и **.NET 10** (активная ветка публикации **PortAlpha**,
 с сохранением исторических `EntertAlpha` и `ReimAlpha`). Подробный разбор изменений — в
-[списке изменений PortAlpha 0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md) и архиве
-[0.8.5.3](docs/CHANGELOG_0.8.5.3_RU.md).
+[списке изменений PortAlpha 0.8.8.2](docs/CHANGELOG_0.8.8.2_RU.md),
+[0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md) и архиве [0.8.5.3](docs/CHANGELOG_0.8.5.3_RU.md).
+
+- **Нативные Rust SIMD-ядра (`dof_kernels`: Win64 AVX2 + Android ARM64 NEON).** Крейт
+  `native/dof_kernels/` расширен побитово-идентичными ядрами расчёта мнений (`OpinionCore`),
+  рыночного клиринга/цен (`MarketCore`) и отсечки дистанций (`1.68×–3.56×` ускорения в
+  `KernelBench`). На Windows поставляется `dof_kernels.dll`, на Android — выровненная по 16 КБ
+  `libdof_kernels.so` (`arm64-v8a` / `x86_64`) с тихим C#-фолбэком.
+- **Разнесение недельных этапов, двухуровневый LOD ИИ-дипломатии и кэш спокойных фронтов.**
+  Тяжёлые недельные проходы (`MarketCore`, `BrainDrain`, `TechnologyCore`, разделы экономики/штатов,
+  `MovementRules`, `Statecraft`) разнесены по разным дням `ElapsedDays % 7`; `WeeklyDiplomacyScan`
+  делит пары на активные и фоновые с кэшированным `StaticSeaGraph`; `FrontManager` пропускает
+  неизменные фронты через `QuietFronts`; `FrontDisengagement` переиспользует 8-слотовый LRU графов
+  маршрутов (в `SimBench 365d` к 365-му дню скорость доходит до `21+ дн/с` при нуле кадров `>33 мс`
+  и полном совпадении детерминизма).
+- **Android Turbo Sim, текстуры карты 0.5× и выборочное сжатие ETC2/ASTC для VRAM.** На 4–5-й
+  скорости без касаний 3D-глобус перерисовывается с шагом ~18 Гц при мгновенном пробуждении по
+  тапу и живом 60 Гц HUD; расширена адаптация рендер-скейла (`0.50f` пол, `0.85f` high-DPI);
+  растровые карты на мобильных уменьшены до `2880×1440`; `compress/mode=2` включён точечно для
+  чисто GPU-текстур без поломки CPU-вызовов `.GetImage()`.
+- **Чистые линии атаки, нулевое отставание оверлеев и панель безземельных движений в наблюдателе.**
+  Исправлены линии, уходившие в бесконечность из-за неинициализированных центров `cell=0` и скачков
+  через линию перемены дат; синхронизированы 2D-города, подписи и значки на Frame 0 с отсечением
+  горизонта (`MapOverlaySyncRules` / `GlobeOverlaySync`), чтобы города обратной стороны Земли не
+  плавали над Атлантикой; починена панель движений без земли и HUD в режиме наблюдателя.
 
 - **Адаптивный темп скоростей 1–5, исправления `ProvinceTopology` / `MovementFall` и снижение GC (волны 1–3).**
   `BackgroundSimRunner.AdaptiveStepPacing` включает плавный адаптивный шаг `1 / 2 / 4 / 8 / 24 ч`
@@ -293,7 +317,7 @@ OpenGL, затем OpenGL через Direct3D 11 (ANGLE), который рис�
 
 | | |
 |---|---|
-| [Изменения PortAlpha 0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md) · [0.8.5.3](docs/CHANGELOG_0.8.5.3_RU.md) · [0.8.3.5](docs/CHANGELOG_0.8.3.5_RU.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_RU.md) | **список изменений PortAlpha 0.8.7.3 и предыдущие выпуски** |
+| [Изменения PortAlpha 0.8.8.2](docs/CHANGELOG_0.8.8.2_RU.md) · [0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md) · [0.8.5.3](docs/CHANGELOG_0.8.5.3_RU.md) · [0.8.3.5](docs/CHANGELOG_0.8.3.5_RU.md) · [0.7.2.3](docs/CHANGELOG_0.7.2.3_RU.md) | **список изменений PortAlpha 0.8.8.2 и предыдущие выпуски** |
 | [Программа переработки](docs/OVERHAUL_PROGRAMME_2026_11_14_RU.md) | пятнадцать фронтов переработки и что значит «сделано» для каждого |
 | [Переработка сделок](docs/DEALS_REWORK_2026_11_14_RU.md) | что не так со сделками сейчас и план по шагам |
 | [TUTORIAL_RU](docs/TUTORIAL_RU.md) | **первая кампания — за руку, с примерами** |

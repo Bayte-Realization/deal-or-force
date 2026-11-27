@@ -28,7 +28,7 @@ public partial class DealOrForceGame
 
     private void KeepHeadlinePopups(double delta)
     {
-        if (_campaign?.Player is null || _hudLayer is not { Visible: true }) return;
+        if (_campaign is null || _hudLayer is not { Visible: true }) return;
         if (IsNewShellActive)
         {
             if (_headlineStack is not null && IsInstanceValid(_headlineStack)) _headlineStack.Visible = false;

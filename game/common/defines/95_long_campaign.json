@@ -67,6 +67,7 @@
   "FoldSliverGroups": true,
   "StaggerWeeklyEconomy": true,
   "AiCalmCadenceDays": 7,
+  "AiDiplomacyLodMode": "balanced",
 
   // A trade's sliver: at most this many people AND at most this share of its region. It joins
   // another trade of the same people and the same faith: the same class in the same sector when

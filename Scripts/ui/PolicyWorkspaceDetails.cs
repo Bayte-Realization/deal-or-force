@@ -16,9 +16,10 @@ public partial class DealOrForceGame
         ClearPolicyRows(_policyOptions);
         _policyChoices.Clear();
         _policyConfirmation = "";
+        if (InspectedPolicyNation() is not { } nation) { RefreshPolicyPreview(); return; }
         if (_policyTab == "Course")
         {
-            ShowNationalCourse(_campaign.Player, _policyOptions);
+            ShowNationalCourse(nation, _policyOptions);
             RefreshPolicyPreview(); return;
         }
         var choices = WorkspacePolicies().Where(p => p.Category == _policyCategory && PolicyMatchesSearch(p)).ToArray();
@@ -27,8 +28,8 @@ public partial class DealOrForceGame
             PolicyText(_policyOptions, "Choose another section or clear your search.");
             _policySelected = ""; RefreshPolicyPreview(); return;
         }
-        var current = PolicyIsAgenda ? PoliticalPolicyCatalog.Find(_campaign.Player.Agenda?.Id, true) :
-            PoliticalPolicies.Effective(_campaign.Player, choices[0], _lawTarget, _lawRegion);
+        var current = PolicyIsAgenda ? PoliticalPolicyCatalog.Find(nation.Agenda?.Id, true) :
+            PoliticalPolicies.Effective(nation, choices[0], _lawTarget, _lawRegion);
         if (!choices.Any(p => p.Id == _policySelected)) _policySelected =
             choices.FirstOrDefault(p => p.Id == current?.Id)?.Id ?? choices[0].Id;
         SectionRule(_policyOptions, _policyCategory, choices.Length.ToString());
@@ -65,11 +66,11 @@ public partial class DealOrForceGame
 
     private void SelectWorkspacePolicy(string id)
     {
-        if (_policySelected == id) return;
+        if (_policySelected == id || InspectedPolicyNation() is not { } nation) return;
         _policySelected = id; _policyConfirmation = ""; _policyWorkspaceFeedback.Visible = false;
         var p = PoliticalPolicyCatalog.Find(id, PolicyIsAgenda);
-        PaintPolicyChoices(PolicyIsAgenda ? PoliticalPolicyCatalog.Find(_campaign.Player.Agenda?.Id, true) :
-            PoliticalPolicies.Effective(_campaign.Player, p, _lawTarget, _lawRegion));
+        PaintPolicyChoices(PolicyIsAgenda ? PoliticalPolicyCatalog.Find(nation.Agenda?.Id, true) :
+            PoliticalPolicies.Effective(nation, p, _lawTarget, _lawRegion));
         _policyPreviewScroll.ScrollVertical = 0; RefreshPolicyPreview();
     }
 
@@ -86,7 +87,7 @@ public partial class DealOrForceGame
 
     private void RefreshPolicyPreview()
     {
-        if (_policyPreview is null || _campaign?.Player is not { } n) return;
+        if (_policyPreview is null || InspectedPolicyNation() is not { } n) return;
         if (_policyTab == "Crises") return;
         var scroll = _policyPreviewScroll.ScrollVertical;
         ClearPolicyRows(_policyPreview);
@@ -149,7 +150,7 @@ public partial class DealOrForceGame
 
     private void EnactWorkspacePolicy()
     {
-        var n = _campaign.Player;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } n) return;
         var p = PoliticalPolicyCatalog.Find(_policySelected, PolicyIsAgenda);
         if (!PoliticalPolicies.CanAdopt(_campaign, n, p, _lawTarget, _lawRegion, PolicyIsAgenda, out var refusal))
         {

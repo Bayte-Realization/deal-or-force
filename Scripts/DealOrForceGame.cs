@@ -187,6 +187,7 @@ public partial class DealOrForceGame : Control
                 Campaign.StageSliceMilliseconds = 1.25;
             _startupComplete = true;
             if (IsInsideTree()) TextureWarmup.StartDeferred(this);
+            GD.Print($"[dof-kernels] available={Simulation.Kernels.NativeKernelsLoader.IsAvailable} abi={Simulation.Kernels.NativeKernelsLoader.AbiVersion} simd={Simulation.Kernels.NativeKernelsLoader.SimdLevel} caps=0x{Simulation.Kernels.NativeKernelsLoader.Capabilities:X} path={Simulation.Kernels.NativeKernelsLoader.LoadedPath}");
             GD.Print($"[dof-boot] total_ms={bootClock.Elapsed.TotalMilliseconds:F0} catalogs_ms={catalogsMs:F0} " +
                      $"ui_ms={uiMs:F0} campaign_ms={campaignMs:F0} map_wait_ms={mapWaitMs:F0}");
         });
@@ -245,15 +246,18 @@ public partial class DealOrForceGame : Control
         {
             var isNewShell = IsNewShellActive;
             var hudSnap = _simRunner.ReadHudSnapshot(_campaign);
+            var fastSim = !(hudSnap?.IsPaused ?? _campaign!.IsPaused) && _speed >= 4;
+            var globeNeedsSync = _globe is not null && _globe.NeedsFencedSync(fastSim);
+            var globeUrgent = _globe is not null && _globe.NeedsUrgentFencedSync(fastSim);
             var flushDue = _interfaceSinceRefresh + delta >= RunningInterfaceInterval || (hudSnap?.IsPaused ?? _campaign!.IsPaused);
-            var needLive = !isNewShell || _bgHudRefreshDue || flushDue || AnyLegacyModalOrScreenVisible() ||
+            var needLive = !isNewShell || _bgHudRefreshDue || flushDue || globeNeedsSync || AnyLegacyModalOrScreenVisible() ||
                            (_shell is not null && _shell.NeedsLiveCampaignRead(hudSnap));
             // At Speed 5 the render snapshot and the clock plate are lock-free and keep full rate,
             // so the routine locked HUD read can wait longer before it asks the worker for a window.
             var liveReadIntervalMs = _speed >= 5 && !(hudSnap?.IsPaused ?? false)
-                ? (ulong)(_isMobileRuntime ? 320 : 180)
-                : (ulong)(_isMobileRuntime ? 180 : 110);
-            var urgentLive = AnyLegacyModalOrScreenVisible() || (hudSnap?.PendingEventCount ?? 0) > 0 ||
+                ? (ulong)(_isMobileRuntime ? 320 : 100)
+                : (ulong)(_isMobileRuntime ? 180 : 75);
+            var urgentLive = globeUrgent || AnyLegacyModalOrScreenVisible() || (hudSnap?.PendingEventCount ?? 0) > 0 ||
                              (hudSnap?.IsPaused ?? false) ||
                              (Time.GetTicksMsec() - _lastBgLiveReadMsec >= liveReadIntervalMs);
             var gotRead = needLive && _campaign!.TryEnterRead(0, requestWindowOnMiss: urgentLive);
@@ -270,6 +274,7 @@ public partial class DealOrForceGame : Control
                         Refresh();
                     }
                     TickNewShell(delta, allowLiveReads: true);
+                    _globe?.SyncWorldVisualsUnderReadLock(_campaign, delta);
                 }
                 finally
                 {
@@ -1335,6 +1340,7 @@ public partial class DealOrForceGame : Control
         ResetControlsSessionState();
         _globe.HighlightNation(-1);
         _globe.ClearSelection();
+        _globe.WakeGlobeRendering();
         _observerMode = _campaign.HumanSeats.Count == 0 && !_campaign.Nations.Any(n => n.IsHuman);
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
         if (_eventLayer is not null) _eventLayer.Visible = false;
@@ -1818,12 +1824,14 @@ public partial class DealOrForceGame : Control
             _networkHudStatus.Text = Tr("Only the host controls campaign time.");
             return;
         }
+        _globe?.WakeGlobeRendering();
         if (_simRunner.IsActive && _campaign is not null && ReferenceEquals(_simRunner.Campaign, _campaign) && !_campaign.AccessGate.IsWriterHeldByCurrentThread)
         {
             _simRunner.RunWrite(_ => TogglePause());
             return;
         }
         _campaign.IsPaused = !_campaign.IsPaused;
+        _globe?.WakeGlobeRendering();
         _frameClock.Reset();
         PlayStrategicCue(_campaign.IsPaused ? "game_pause" : "game_resume");
         _pause.Text = _campaign.IsPaused ? "▶" : "II";
@@ -1860,12 +1868,14 @@ public partial class DealOrForceGame : Control
             _networkHudStatus.Text = Tr("Only the host controls campaign speed.");
             return;
         }
+        _globe?.WakeGlobeRendering();
         if (_simRunner.IsActive && _campaign is not null && ReferenceEquals(_simRunner.Campaign, _campaign) && !_campaign.AccessGate.IsWriterHeldByCurrentThread)
         {
             _simRunner.RunWrite(_ => SetSpeed(speed, resume));
             return;
         }
         _speed = Mathf.Clamp(speed, 1, 5);
+        _globe?.WakeGlobeRendering();
         _frameClock.Reset();
         if (_campaign.IsPaused && resume)
         {
@@ -2041,6 +2051,7 @@ public partial class DealOrForceGame : Control
         if (_campaign is null || _globe is null) return;
         if (!NewsPlace(line.ActorId, line.TargetId, line.Kind, out var latitude, out var longitude)) return;
         _globe.FocusOn(latitude, longitude, 5.5f);
+        _globe.WakeGlobeRendering();
         PlayStrategicCue("map_focus");
     }
 
@@ -2075,6 +2086,7 @@ public partial class DealOrForceGame : Control
         if (!hasCoords) return false;
         var dist = distanceOverride ?? (states <= 2 ? 6.5f : states <= 5 ? 7.3f : 8.4f);
         _globe.FocusOn(lat, lon, dist);
+        _globe.WakeGlobeRendering();
         return true;
     }
 

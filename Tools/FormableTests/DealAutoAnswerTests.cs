@@ -596,8 +596,11 @@ static class DealAutoAnswerTests
             "opening the inbox disarms 'Confirm: sign if beneficial'");
         var refresh = Body(inbox, "private void RefreshDealInbox(");
         var disarm = refresh.IndexOf("_dealAnswerConfirmKind = \"\";", StringComparison.Ordinal);
+        var checksSeat = refresh.Contains("_dealAnswerSeat != _campaign.Player.Id", StringComparison.Ordinal) ||
+            (refresh.Contains("var playerId = player?.Id ?? -1;", StringComparison.Ordinal) &&
+             refresh.Contains("_dealAnswerSeat != playerId", StringComparison.Ordinal));
         Check(disarm >= 0 && disarm < refresh.IndexOf("var key = DealInboxKey();", StringComparison.Ordinal) &&
-              refresh.Contains("_dealAnswerSeat != _campaign.Player.Id", StringComparison.Ordinal) &&
+              checksSeat &&
               refresh.Contains("ReferenceEquals(shown, _campaign)", StringComparison.Ordinal),
             "another seat or another campaign finds the confirmation disarmed");
     }

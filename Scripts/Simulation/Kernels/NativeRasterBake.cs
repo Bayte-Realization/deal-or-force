@@ -73,6 +73,192 @@ public static partial class NativeRasterBake
         byte* outBytes,
         uint outLen);
 
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_raster_pack_overlays_v1(
+        uint provinceCount,
+        ushort* owners,
+        uint ownersLen,
+        ushort* paintedOwners,
+        uint paintedOwnersLen,
+        ushort* controllers,
+        uint controllersLen,
+        uint* paletteRgba,
+        uint paletteLen,
+        byte occupiedAlpha,
+        ushort unownedPaletteIndex,
+        uint fallbackRgba,
+        byte* outControlRgba,
+        uint outControlLen,
+        byte* outOwnerRgba,
+        uint outOwnerLen,
+        byte* outOwnerIdsRgba,
+        uint outOwnerIdsLen,
+        int* outOwnersMoved);
+
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_raster_paint_plate_v1(
+        uint width,
+        uint height,
+        ushort* sourceHolders,
+        ushort* sourceProvinces,
+        byte* sourceGeography,
+        ushort* owners,
+        uint ownersLen,
+        ushort* authoredOwners,
+        uint authoredOwnersLen,
+        uint* paletteRgba,
+        uint paletteLen,
+        float countryShade,
+        float regionShade,
+        float inlandShade,
+        uint threads,
+        byte* outPixelsRgba,
+        uint outPixelsLen);
+
+    /// <summary>
+    /// Packs the dense 256x256 RGBA province overlay tables via native <c>dof_kernels</c>.
+    /// Returns <c>false</c> cleanly when unavailable or inputs fail validation so callers fall back to C#.
+    /// </summary>
+    public static unsafe bool TryPackProvinceOverlays(
+        int provinceCount,
+        ushort[] owners,
+        ushort[]? paintedOwners,
+        ushort[] controllers,
+        uint[] paletteRgba,
+        byte occupiedAlpha,
+        ushort unownedPaletteIndex,
+        uint fallbackRgba,
+        byte[] controlPixels,
+        byte[] ownerPixels,
+        byte[] ownerIdPixels,
+        out bool ownersMoved)
+    {
+        ownersMoved = false;
+        if (!NativeKernelsLoader.EnableRasterDefault ||
+            !NativeKernelsLoader.HasCapability(NativeKernelsLoader.CapRenderPrep))
+        {
+            return false;
+        }
+        if (provinceCount < 0 || owners is null || controllers is null || paletteRgba is null ||
+            controlPixels is null || ownerPixels is null || ownerIdPixels is null)
+        {
+            return false;
+        }
+        if (owners.Length == 0 || controllers.Length == 0) return false;
+
+        int moved = 0;
+        fixed (ushort* ownersPtr = owners)
+        fixed (ushort* paintedPtr = paintedOwners)
+        fixed (ushort* controllersPtr = controllers)
+        fixed (uint* palPtr = paletteRgba)
+        fixed (byte* ctlPtr = controlPixels)
+        fixed (byte* ownPtr = ownerPixels)
+        fixed (byte* oidPtr = ownerIdPixels)
+        {
+            var status = dof_raster_pack_overlays_v1(
+                (uint)provinceCount,
+                ownersPtr,
+                (uint)owners.Length,
+                paintedPtr,
+                paintedOwners is null ? 0u : (uint)paintedOwners.Length,
+                controllersPtr,
+                (uint)controllers.Length,
+                palPtr,
+                (uint)paletteRgba.Length,
+                occupiedAlpha,
+                unownedPaletteIndex,
+                fallbackRgba,
+                ctlPtr,
+                (uint)controlPixels.Length,
+                ownPtr,
+                (uint)ownerPixels.Length,
+                oidPtr,
+                (uint)ownerIdPixels.Length,
+                &moved);
+            if (status != 0) return false;
+        }
+
+        ownersMoved = moved != 0;
+        return true;
+    }
+
+    /// <summary>
+    /// Paints the far political map plate into <paramref name="outPixelsRgba"/> via native <c>dof_kernels</c>.
+    /// Returns <c>false</c> cleanly on fallback or invalid inputs.
+    /// </summary>
+    public static unsafe bool TryPaintPoliticalPlate(
+        int width,
+        int height,
+        ushort[] sourceHolders,
+        ushort[] sourceProvinces,
+        byte[] sourceGeography,
+        ushort[]? owners,
+        ushort[]? authoredOwners,
+        uint[] paletteRgba,
+        float countryShade,
+        float regionShade,
+        float inlandShade,
+        byte[] outPixelsRgba,
+        uint threads = 0)
+    {
+        if (!NativeKernelsLoader.EnableRasterDefault ||
+            !NativeKernelsLoader.HasCapability(NativeKernelsLoader.CapRenderPrep))
+        {
+            return false;
+        }
+        if (width <= 0 || height <= 0 ||
+            sourceHolders is null || sourceProvinces is null || sourceGeography is null ||
+            paletteRgba is null || outPixelsRgba is null)
+        {
+            return false;
+        }
+        if (!float.IsFinite(countryShade) || countryShade < 0f ||
+            !float.IsFinite(regionShade) || regionShade < 0f ||
+            !float.IsFinite(inlandShade) || inlandShade < 0f)
+        {
+            return false;
+        }
+        var cellsLong = (long)width * height;
+        var outNeededLong = cellsLong * 4L;
+        if (cellsLong <= 0 || outNeededLong > int.MaxValue) return false;
+        var cells = (int)cellsLong;
+        if (sourceHolders.Length < cells || sourceProvinces.Length < cells ||
+            sourceGeography.Length < cells || outPixelsRgba.Length < (int)outNeededLong)
+        {
+            return false;
+        }
+
+        fixed (ushort* holdersPtr = sourceHolders)
+        fixed (ushort* provPtr = sourceProvinces)
+        fixed (byte* geoPtr = sourceGeography)
+        fixed (ushort* ownersPtr = owners)
+        fixed (ushort* authoredPtr = authoredOwners)
+        fixed (uint* palPtr = paletteRgba)
+        fixed (byte* outPtr = outPixelsRgba)
+        {
+            return dof_raster_paint_plate_v1(
+                (uint)width,
+                (uint)height,
+                holdersPtr,
+                provPtr,
+                geoPtr,
+                ownersPtr,
+                owners is null ? 0u : (uint)owners.Length,
+                authoredPtr,
+                authoredOwners is null ? 0u : (uint)authoredOwners.Length,
+                palPtr,
+                (uint)paletteRgba.Length,
+                countryShade,
+                regionShade,
+                inlandShade,
+                threads,
+                outPtr,
+                (uint)outPixelsRgba.Length) == 0;
+        }
+    }
+
     /// <summary>
     /// Attempts a persistent native frontier field bake. Returns <c>false</c> cleanly when the
     /// native library is absent or rejects inputs so callers silently fall back to C#.

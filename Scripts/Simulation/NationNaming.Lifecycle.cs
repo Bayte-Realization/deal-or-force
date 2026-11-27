@@ -15,6 +15,148 @@ public static partial class NationNaming
         foreach (var nation in campaign.Nations)
         {
             if (!string.IsNullOrWhiteSpace(nation.CustomName)) continue;
+
+            // Active civil-war fronts legitimately keep a single-level "rising:..." identifier
+            // while fighting, so only flatten nested "rising:...:rising:..." recipes on them.
+            if (string.IsNullOrEmpty(nation.FoundNameKind) &&
+                !string.IsNullOrEmpty(nation.Name) &&
+                nation.Name.StartsWith("rising:", StringComparison.Ordinal))
+            {
+                var parts = nation.Name.Split(':', 4);
+                var frontRepaired = false;
+                if (parts.Length == 4 && CountryNames.HasRisingRecipe(parts[3]) &&
+                    CountryNames.TryUnwrapRisingBase(nation.Name, out var innerTag, out var innerLabel))
+                {
+                    var cleanTag = (!string.IsNullOrEmpty(innerTag) ? innerTag : parts[2]).Replace(':', ' ').Trim();
+                    var cleanLabel = (!string.IsNullOrWhiteSpace(innerLabel) ? innerLabel : CountryNames.Of(cleanTag))
+                        .Replace(':', ' ').Trim();
+                    nation.Name = $"rising:{parts[1]}:{cleanTag}:{cleanLabel}";
+                    frontRepaired = true;
+                }
+                if (CountryNames.HasRisingRecipe(nation.FoundNameId)) { nation.FoundNameId = ""; frontRepaired = true; }
+                if (CountryNames.HasRisingRecipe(nation.FoundNameBase)) { nation.FoundNameBase = ""; frontRepaired = true; }
+                if (frontRepaired) changed++;
+                continue;
+            }
+
+            // Repair settled/region/literal identities holding a leaked "rising:" string or an
+            // unbound "region" identity with empty FoundNameId (which produced "region..name").
+            var hasRisingBase = CountryNames.HasRisingRecipe(nation.FoundNameBase);
+            var hasRisingId = CountryNames.HasRisingRecipe(nation.FoundNameId);
+            var hasRisingName = !string.IsNullOrEmpty(nation.Name) &&
+                (nation.Name.StartsWith("rising:", StringComparison.Ordinal) || CountryNames.HasRisingRecipe(nation.Name));
+            var isUnboundRegion = nation.FoundNameKind == "region" && string.IsNullOrEmpty(nation.FoundNameId);
+            if (hasRisingBase || hasRisingId || hasRisingName || isUnboundRegion)
+            {
+                var repaired = false;
+                var largest = LargestOwnedState(campaign, nation);
+                var risingRecipe = FindRisingRecipe(nation.FoundNameId, nation.FoundNameBase, nation.Name);
+                string innerTag = "", innerLabel = "";
+                var unwrapped = risingRecipe.Length > 0 &&
+                    CountryNames.TryUnwrapRisingBase(risingRecipe, out innerTag, out innerLabel);
+                if (!unwrapped) { innerTag = ""; innerLabel = ""; }
+
+                if (isUnboundRegion)
+                {
+                    if (largest is not null)
+                    {
+                        nation.FoundNameId = largest.Id;
+                        repaired = true;
+                    }
+                    else if (unwrapped && !string.IsNullOrEmpty(innerTag) && Loc.Has("country." + innerTag + ".name"))
+                    {
+                        nation.FoundNameKind = "tag";
+                        nation.FoundNameId = innerTag;
+                        repaired = true;
+                    }
+                    else
+                    {
+                        var fallback = unwrapped && !string.IsNullOrWhiteSpace(innerLabel)
+                            ? innerLabel
+                            : CountryNames.SanitizeRisingText(nation.FoundNameBase ?? "");
+                        if (string.IsNullOrWhiteSpace(fallback))
+                            fallback = CountryNames.SanitizeRisingText(nation.Name ?? "");
+                        if (string.IsNullOrWhiteSpace(fallback))
+                            fallback = CountryNames.Of(nation.Tag);
+                        nation.FoundNameKind = "literal";
+                        nation.FoundNameId = fallback;
+                        repaired = true;
+                    }
+                }
+                else if (hasRisingId ||
+                         (nation.FoundNameKind == "literal" && string.IsNullOrEmpty(nation.FoundNameId) &&
+                          (hasRisingBase || hasRisingName)) ||
+                         (string.IsNullOrEmpty(nation.FoundNameKind) && hasRisingName))
+                {
+                    var tagTaken = unwrapped && !string.IsNullOrEmpty(innerTag) &&
+                        IsLivingNameTaken(campaign, nation, CountryNames.Of(innerTag));
+                    if (largest is not null &&
+                        (tagTaken || !unwrapped || string.IsNullOrEmpty(innerTag) || !Loc.Has("country." + innerTag + ".name")))
+                    {
+                        nation.FoundNameKind = "region";
+                        nation.FoundNameId = largest.Id;
+                        repaired = true;
+                    }
+                    else if (unwrapped && !string.IsNullOrEmpty(innerTag) && Loc.Has("country." + innerTag + ".name"))
+                    {
+                        nation.FoundNameKind = "tag";
+                        nation.FoundNameId = innerTag;
+                        repaired = true;
+                    }
+                    else
+                    {
+                        var fallback = unwrapped && !string.IsNullOrWhiteSpace(innerLabel)
+                            ? innerLabel
+                            : CountryNames.SanitizeRisingText(risingRecipe.Length > 0 ? risingRecipe : nation.Name ?? "");
+                        if (string.IsNullOrWhiteSpace(fallback)) fallback = CountryNames.Of(nation.Tag);
+                        nation.FoundNameKind = "literal";
+                        nation.FoundNameId = fallback;
+                        repaired = true;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(nation.FoundNameKind))
+                {
+                    if (string.IsNullOrEmpty(nation.FoundNameForm))
+                    {
+                        nation.FoundNameForm = FormFor(nation.Government, nation.Ideology,
+                            nation.DeclaredReligion, nation.DeclaredCulture);
+                        repaired = true;
+                    }
+                    var newBase = CountryNames.SanitizeRisingText(BaseName(campaign, nation));
+                    if (!string.Equals(newBase, nation.FoundNameBase, StringComparison.Ordinal))
+                    {
+                        nation.FoundNameBase = newBase;
+                        repaired = true;
+                    }
+                }
+                else if (hasRisingBase)
+                {
+                    nation.FoundNameBase = CountryNames.SanitizeRisingText(nation.FoundNameBase);
+                    repaired = true;
+                }
+
+                if (hasRisingName)
+                {
+                    var rendered = !string.IsNullOrEmpty(nation.FoundNameKind) ? Render(campaign, nation, false) : "";
+                    var cleanName = !string.IsNullOrWhiteSpace(rendered) && !LooksLikeKey(rendered) &&
+                                    !CountryNames.HasRisingRecipe(rendered)
+                        ? rendered
+                        : CountryNames.SanitizeRisingText(nation.Name);
+                    if (string.IsNullOrWhiteSpace(cleanName) || LooksLikeKey(cleanName))
+                        cleanName = !string.IsNullOrWhiteSpace(nation.FoundNameBase)
+                            ? nation.FoundNameBase
+                            : CountryNames.Of(nation.Tag);
+                    if (!string.Equals(cleanName, nation.Name, StringComparison.Ordinal))
+                    {
+                        nation.Name = cleanName;
+                        repaired = true;
+                    }
+                }
+
+                if (repaired) changed++;
+            }
+
             if (nation.FoundNameKind == "tag" && !Loc.Has("country." + nation.FoundNameId + ".name") &&
                 campaign.NationByTag(nation.FoundNameId) is { } source && source != nation)
             {
@@ -78,6 +220,50 @@ public static partial class NationNaming
         }
         if (changed > 0) { campaign.MarkStrategicChange(); campaign.MarkMapChanged(); }
         return changed;
+    }
+
+    private static ScenarioState LargestOwnedState(Campaign campaign, Nation nation)
+    {
+        var states = campaign.StatesOf(nation);
+        ScenarioState best = null;
+        for (var i = 0; i < states.Length; i++)
+        {
+            var s = states[i];
+            if (string.IsNullOrEmpty(s.Id)) continue;
+            if (best is null || s.Population > best.Population ||
+                (s.Population == best.Population && s.MapIndex < best.MapIndex))
+                best = s;
+        }
+        return best;
+    }
+
+    private static string FindRisingRecipe(params string[] candidates)
+    {
+        for (var i = 0; i < candidates.Length; i++)
+        {
+            var candidate = candidates[i];
+            if (string.IsNullOrWhiteSpace(candidate)) continue;
+            if (candidate.StartsWith("rising:", StringComparison.Ordinal)) return candidate.Trim();
+            var idx = candidate.IndexOf("rising:", StringComparison.Ordinal);
+            if (idx >= 0 && (idx + 7 == candidate.Length || !char.IsWhiteSpace(candidate[idx + 7])))
+                return candidate[idx..].Trim();
+        }
+        return "";
+    }
+
+    private static bool IsLivingNameTaken(Campaign campaign, Nation self, string candidateName)
+    {
+        if (campaign is null || string.IsNullOrWhiteSpace(candidateName)) return false;
+        foreach (var other in campaign.Nations)
+        {
+            if (ReferenceEquals(other, self)) continue;
+            var holds = campaign.StatesOf(other).Length > 0;
+            if (!holds && other.Movement is not { Dissolved: false }) continue;
+            if (string.Equals(CountryNames.Resolve(other, false), candidateName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(CountryNames.Resolve(other, true), candidateName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private static readonly (string Prefix, string Direction)[] LegacyDirections =

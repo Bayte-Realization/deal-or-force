@@ -146,7 +146,7 @@ public partial class DealOrForceGame
 
     private void OnEmissionChanged(double percent)
     {
-        if (_updatingCentralBank || _campaign?.Player is null) return;
+        if (_updatingCentralBank || ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetEmissionCommand
         {
             IssuerId = _campaign.Player.Id,
@@ -176,7 +176,7 @@ public partial class DealOrForceGame
 
     private void OnKeyRateChanged(double percent)
     {
-        if (_updatingCentralBank || _campaign?.Player is null) return;
+        if (_updatingCentralBank || ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetKeyRateCommand
         {
             IssuerId = _campaign.Player.Id,
@@ -188,7 +188,7 @@ public partial class DealOrForceGame
 
     private void OnCentralBankControlToggled(bool governmentSets)
     {
-        if (_updatingCentralBank || _campaign?.Player is null) return;
+        if (_updatingCentralBank || ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetCentralBankControlCommand
         {
             IssuerId = _campaign.Player.Id,

@@ -197,12 +197,15 @@ public partial class DealOrForceGame
             reads.TooltipText = Ui.Tip(said);
             row.AddChild(reads);
 
+            var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
             var captured = key;
             var drop = ActionButton("×", () =>
             {
+                if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
                 nation.TradeSettings.Remove(captured);
                 RefreshTradeInstructions();
             }, 24, 20);
+            drop.Disabled = observing;
             drop.TooltipText = Ui.Tip(Tr("Withdraw this instruction."));
             row.AddChild(drop);
             listed++;
@@ -216,7 +219,7 @@ public partial class DealOrForceGame
 
     private void OnTradeDelegationToggled(bool delegated)
     {
-        if (_updatingTradeInstructions || _campaign?.Player is null) return;
+        if (_updatingTradeInstructions || ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetDelegationCommand
         {
             IssuerId = _campaign.Player.Id,
@@ -446,7 +449,7 @@ public partial class DealOrForceGame
 
     private void OnTradeInstructionChanged(string setting, double value)
     {
-        if (_updatingTradeInstructions || _campaign?.Player is null) return;
+        if (_updatingTradeInstructions || ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         var definition = TradeDesk.Of(setting);
         if (definition is null) return;
 
@@ -470,6 +473,7 @@ public partial class DealOrForceGame
     /// <summary>Put one control back to its declared default, which is what "not decided" is.</summary>
     private void ResetTradeSetting(string setting)
     {
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         var definition = TradeDesk.Of(setting);
         if (definition is null) return;
         OnTradeInstructionChanged(setting, definition.Default);
@@ -477,7 +481,7 @@ public partial class DealOrForceGame
 
     private void ClearTradeInstructions()
     {
-        if (_campaign?.Player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new ClearTradeInstructionsCommand { IssuerId = _campaign.Player.Id });
         _campaign.Commands.ApplyAll(_campaign);
         RefreshTradeInstructions();
@@ -492,8 +496,8 @@ public partial class DealOrForceGame
     /// </summary>
     private void RefreshTradeInstructions()
     {
-        if (_tradeInstructionRows is null || _campaign?.Player is null) return;
-        var player = _campaign.Player;
+        if (_tradeInstructionRows is null || InspectedTradeNation() is not { } player) return;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         _updatingTradeInstructions = true;
         try
         {
@@ -505,6 +509,7 @@ public partial class DealOrForceGame
             // Who is running the desk, and everything the desk - or the player - has decided.
             if (_tradeDelegated is not null)
             {
+                _tradeDelegated.Disabled = observing || _campaign?.Player is null;
                 _tradeDelegated.ButtonPressed = Delegation.Holds(player, Delegation.Trade);
                 _tradeDelegated.Text = Tr(Delegation.Holds(player, Delegation.Trade)
                     ? "The trade desk is running itself"
@@ -536,6 +541,7 @@ public partial class DealOrForceGame
                     ? TradeDesk.ForPartner(player, partner, commodity, id)
                     : TradeDesk.ForGood(player, commodity, id);
                 var live = !aboutPartner || partner.Length > 0;
+                var editable = !observing && live;
                 var inForce = live && TradeDesk.InForce(definition, value);
                 if (inForce) { if (aboutPartner) partnerInForce++; else goodInForce++; }
 
@@ -545,12 +551,12 @@ public partial class DealOrForceGame
                     control.Slider.MaxValue = definition.Maximum;
                     control.Slider.Step = definition.Step > 0f ? definition.Step : 0.01f;
                     control.Slider.Value = value;
-                    control.Slider.Editable = live;
+                    control.Slider.Editable = editable;
                 }
                 if (control.Switch is not null)
                 {
                     control.Switch.ButtonPressed = value >= (definition.Minimum + definition.Maximum) * 0.5f;
-                    control.Switch.Disabled = !live;
+                    control.Switch.Disabled = !editable;
                 }
 
                 var reading = TradeValueText(definition, value);

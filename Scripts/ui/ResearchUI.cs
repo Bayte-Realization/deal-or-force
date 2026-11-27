@@ -15,8 +15,9 @@ public partial class DealOrForceGame
     /// <summary>The research block of one's own country panel.</summary>
     private void AddResearchRows(VBoxContainer rows)
     {
-        if (TechnologyCatalog.All.Count == 0 || _campaign?.Player is null) return;
-        var nation = _campaign.Player;
+        if (TechnologyCatalog.All.Count == 0 ||
+            ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true) is not { } nation)
+            return;
         rows.AddChild(Title("RESEARCH", 11, Ui.Colour("text.caption")));
 
         var current = TechnologyCatalog.Of(nation.CurrentResearch);
@@ -43,7 +44,7 @@ public partial class DealOrForceGame
 
     private void ChooseResearch(string technologyId)
     {
-        if (_campaign?.Player is null) return;
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null) return;
         var choose = new SetResearchCommand { IssuerId = _campaign.Player.Id, TechnologyId = technologyId };
         _campaign.Commands.Enqueue(choose);
         _campaign.Commands.ApplyAll(_campaign);
@@ -55,6 +56,8 @@ public partial class DealOrForceGame
     /// <summary>A technology, the way a tooltip reads it: what it is, what it does, what it costs.</summary>
     private string TechnologyTooltip(TechnologyDefinition technology, int weeks)
     {
+        var nation = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+        if (nation is null) return $"{Tr(technology.Name)}\n{Tr(technology.Description)}";
         var effects = NationalModifiers.Lines(technology.Effects);
         var needs = technology.Requires.Count == 0
             ? ""
@@ -63,13 +66,14 @@ public partial class DealOrForceGame
         var time = weeks < 0 ? "" : "\n" + Simulation.Loc.Format("About {0} week(s) at this pace.", weeks);
         return $"{Tr(technology.Name)}\n{Tr(technology.Description)}\n\n{string.Join("\n", effects)}" +
                "\n" + Simulation.Loc.Format("Effective cost: {0} research points.",
-                   ResearchSystem.CostFor(_campaign, _campaign.Player, technology).ToString("0")) +
+                   ResearchSystem.CostFor(_campaign, nation, technology).ToString("0")) +
                "\n" + ResearchPracticeText(technology) + needs + time;
     }
 
     private string ResearchPracticeText(TechnologyDefinition technology)
     {
-        var nation = _campaign.Player;
+        var nation = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+        if (nation is null) return "";
         if (nation.HasTechnology(technology.Id))
             return ResearchSystem.FieldUseLine(_campaign, nation, technology, ResearchSystem.WeeklyPoints(_campaign, nation));
         return ResearchDiffusionText(technology);
@@ -77,7 +81,9 @@ public partial class DealOrForceGame
 
     private string ResearchDiffusionText(TechnologyDefinition technology)
     {
-        var diffusion = ResearchSystem.DiffusionFor(_campaign, _campaign.Player, technology);
+        var nation = ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation, preferLanded: true);
+        if (nation is null) return "";
+        var diffusion = ResearchSystem.DiffusionFor(_campaign, nation, technology);
         return Simulation.Loc.Format("Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}.",
             Fmt.Percent(diffusion.World), Fmt.Percent(diffusion.Neighbours),
             Fmt.Percent(diffusion.Partners), Fmt.Percent(diffusion.Total));

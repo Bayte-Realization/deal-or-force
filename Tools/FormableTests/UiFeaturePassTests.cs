@@ -273,8 +273,8 @@ static class UiFeaturePassTests
     {
         var workPanelCs = Read(root, "Scripts/ui/Shell/ShellWorkPanelView.cs");
         Check(Regex.IsMatch(workPanelCs,
-                @"public void Refresh\(\)\s*\{\s*if \(!IsVisible \|\| _ctx\.World is not \{ \} world\) return;\s*if \(!world\.TryEnterRead\(50, true\)\) return;\s*try\s*\{\s*RefreshLocked\(world\);\s*\}\s*finally\s*\{\s*world\.ExitRead\(\);\s*\}"),
-            "ShellWorkPanelView.Refresh acquires TryEnterRead before computing buildHash or setting _lastBuildSig");
+                @"public void Refresh\(bool priority = false\)\s*\{\s*if \(!IsVisible \|\| _ctx\.World is not \{ \} world\) return;[\s\S]{0,450}var entered = priority\s*\?\s*world\.AccessGate\.TryEnterPriorityRead\(60\)\s*:\s*world\.TryEnterRead\(0, requestWindowOnMiss: false\);\s*if \(!entered\) return;\s*try\s*\{\s*RefreshLocked\(world\);\s*\}\s*finally\s*\{\s*world\.ExitRead\(\);\s*\}"),
+            "ShellWorkPanelView.Refresh acquires priority or non-blocking read fence before RefreshLocked");
         Check(workPanelCs.Contains("private (Campaign World, int Day, int Rev, int WarRev) _rankCacheStamp;") &&
               workPanelCs.Contains("_rankCacheStamp.WarRev != world.WarRevision") &&
               Regex.IsMatch(workPanelCs, @"fbSnap\.RankWeek\s*==\s*week\s*&&\s*fbSnap\.NationRanksById"),

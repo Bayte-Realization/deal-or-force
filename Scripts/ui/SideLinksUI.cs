@@ -9,12 +9,13 @@ public partial class DealOrForceGame
     {
         if (_sideLinks is null) return;
         ClearRuntimeChildren(_sideLinks);
-        if (_campaign?.Player is null) return;
-        var foreign = (screen is "Nation" or "Diplomacy") && _selectedNation is not null && _selectedNation != _campaign.Player;
+        if (_campaign is null) return;
+        var player = _campaign.Player;
+        var foreign = (screen is "Nation" or "Diplomacy") && _selectedNation is not null && _selectedNation != player;
         foreach (var link in CampaignUiCatalog.For(screen).Links)
         {
             if (!CampaignUiCatalog.LinkVisible(link, _dossierTab, foreign)) continue;
-            if (foreign && link.Action == "government") continue;
+            if ((foreign || player is null) && link.Action == "government") continue;
             Action action = link.Action switch
             {
                 "government" => OpenStateAffairs,

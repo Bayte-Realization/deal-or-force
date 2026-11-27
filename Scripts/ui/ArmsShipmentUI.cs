@@ -50,9 +50,11 @@ public partial class DealOrForceGame
         Refresh();
     }
 
-    private string ArmsInboxKey() => _armsInboxSelected + "|" + string.Join(";", _campaign.ArmsShipmentRequests
-        .Where(r => r.RequesterId == _campaign.Player.Id || r.DonorId == _campaign.Player.Id)
-        .Select(r => $"{r.Id}:{r.State}:{r.Share:R}:{r.Days}:{r.Shipped:R}:{r.ExpiresDay}:{r.Pretext}"));
+    private string ArmsInboxKey() => _campaign?.Player is not { } player
+        ? _armsInboxSelected + "|none"
+        : _armsInboxSelected + "|" + string.Join(";", _campaign.ArmsShipmentRequests
+            .Where(r => r.RequesterId == player.Id || r.DonorId == player.Id)
+            .Select(r => $"{r.Id}:{r.State}:{r.Share:R}:{r.Days}:{r.Shipped:R}:{r.ExpiresDay}:{r.Pretext}"));
 
     private static string ArmsStateKey(ArmsShipmentState state) => state switch
     {
@@ -74,7 +76,7 @@ public partial class DealOrForceGame
 
     private bool AddArmsInboxRows(bool showDetail = true)
     {
-        var player = _campaign.Player;
+        if (_campaign?.Player is not { } player) return false;
         var letters = _campaign.ArmsShipmentRequests.Where(r => r.RequesterId == player.Id || r.DonorId == player.Id)
             .OrderBy(r => r.State != ArmsShipmentState.Pending).ThenByDescending(r => r.Id).ToArray();
         foreach (var letter in letters)
@@ -151,8 +153,10 @@ public partial class DealOrForceGame
             _dealInboxDetail.AddChild(WrappedUltimatumText(Tr(assessment.Reason), 14));
         else if (!pending && letter.Reason.Length > 0)
             _dealInboxDetail.AddChild(WrappedUltimatumText(Tr(letter.Reason), 14));
-        _dealInboxActions.Visible = pending;
-        if (pending && letter.DonorId == _campaign.Player.Id)
+        var playerId = _campaign?.Player?.Id ?? -1;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
+        _dealInboxActions.Visible = pending && !observing && playerId >= 0;
+        if (pending && !observing && playerId >= 0 && letter.DonorId == playerId)
         {
             var accept = ActionButton(_armsConfirm == letter.Id ? "Confirm the shipment" : "Send the shipment", () =>
             {
@@ -174,7 +178,7 @@ public partial class DealOrForceGame
             decline.Name = "DeclineArmsShipment";
             _dealInboxActions.AddChild(decline);
         }
-        else if (pending && letter.RequesterId == _campaign.Player.Id)
+        else if (pending && !observing && playerId >= 0 && letter.RequesterId == playerId)
             _dealInboxActions.AddChild(ActionButton("Withdraw request", () => ReplyToArms(letter.Id, ArmsShipmentReply.Withdraw), 180, 36));
         if (_dealInboxMessage.Length > 0 && _dealInboxMessage != Tr(letter.Reason))
             _dealInboxDetail.AddChild(WrappedUltimatumText(_dealInboxMessage, 14));
@@ -182,7 +186,8 @@ public partial class DealOrForceGame
 
     private void ReplyToArms(int id, ArmsShipmentReply reply)
     {
-        var command = new RespondArmsShipmentCommand { IssuerId = _campaign.Player.Id, RequestId = id, Reply = reply };
+        if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { IsHuman: true } player) return;
+        var command = new RespondArmsShipmentCommand { IssuerId = player.Id, RequestId = id, Reply = reply };
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
         _armsConfirm = -1;

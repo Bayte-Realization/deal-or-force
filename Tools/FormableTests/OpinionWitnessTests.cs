@@ -123,7 +123,7 @@ static class OpinionWitnessTests
         w.Actor.Notoriety = 60f;
         CampaignDiplomacy.Get(c, w.Far.Id, w.Actor.Id);
         CampaignDiplomacy.Get(c, w.Victim.Id, w.Actor.Id);
-        DomesticCrisesTests.Day(c, 7);
+        DomesticCrisesTests.Day(c, 7 + Statecraft.WeeklySlot);
         Statecraft.Tick(c);
         var far = Held(c, w.Far, w.Actor, "notoriety");
         var near = Held(c, w.Victim, w.Actor, "notoriety");

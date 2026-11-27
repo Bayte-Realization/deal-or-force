@@ -268,7 +268,12 @@ public partial class DealOrForceGame
             return;
         }
         var player = _campaign?.Player;
-        if (player is null) return;
+        if (player is null || WatchingWorld)
+        {
+            if (_deskPanel is { Visible: true } && GodotObject.IsInstanceValid(_deskPanel)) _deskPanel.Visible = false;
+            if (_deskTab is { Visible: true } && GodotObject.IsInstanceValid(_deskTab)) _deskTab.Visible = false;
+            return;
+        }
         if (_deskPanel is null || !GodotObject.IsInstanceValid(_deskPanel)) BuildSituationDesk();
         if (_deskPanel is null) return;
 

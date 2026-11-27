@@ -647,3 +647,438 @@ fn parallel_chamfer(
     });
 }
 
+#[inline(always)]
+fn lookup_palette_rgba(palette_rgba: &[u32], map_index: u16, fallback_rgba: u32) -> u32 {
+    let idx = map_index as usize;
+    if idx < palette_rgba.len() {
+        let packed = palette_rgba[idx];
+        if packed != 0 {
+            return packed;
+        }
+    }
+    fallback_rgba
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn pack_province_overlays(
+    province_count: usize,
+    owners: &[u16],
+    painted_owners: &[u16],
+    controllers: &[u16],
+    palette_rgba: &[u32],
+    occupied_alpha: u8,
+    unowned_palette_index: u16,
+    fallback_rgba: u32,
+    out_control_rgba: &mut [u8],
+    out_owner_rgba: &mut [u8],
+    out_owner_ids_rgba: &mut [u8],
+) -> Result<bool, i32> {
+    const OVERLAY_BUFFER_SIZE: usize = 256 * 256 * 4;
+    let ctl_clear = out_control_rgba.len().min(OVERLAY_BUFFER_SIZE);
+    let own_clear = out_owner_rgba.len().min(OVERLAY_BUFFER_SIZE);
+    let oid_clear = out_owner_ids_rgba.len().min(OVERLAY_BUFFER_SIZE);
+    out_control_rgba[..ctl_clear].fill(0);
+    out_owner_rgba[..own_clear].fill(0);
+    out_owner_ids_rgba[..oid_clear].fill(0);
+
+    let max_slot = out_control_rgba
+        .len()
+        .min(out_owner_rgba.len())
+        .min(out_owner_ids_rgba.len())
+        / 4;
+    let count = province_count
+        .min(owners.len().saturating_sub(1))
+        .min(controllers.len().saturating_sub(1))
+        .min(max_slot.saturating_sub(1));
+
+    if count == 0 {
+        return Ok(false);
+    }
+
+    let mut owners_moved = false;
+    let has_painted = !painted_owners.is_empty();
+    for province in 1..=count {
+        let owner = owners[province];
+        let write = province * 4;
+        if has_painted && province < painted_owners.len() && painted_owners[province] != owner {
+            let owner_packed = lookup_palette_rgba(palette_rgba, owner, fallback_rgba);
+            out_owner_rgba[write] = ((owner_packed >> 24) & 0xFF) as u8;
+            out_owner_rgba[write + 1] = ((owner_packed >> 16) & 0xFF) as u8;
+            out_owner_rgba[write + 2] = ((owner_packed >> 8) & 0xFF) as u8;
+            out_owner_rgba[write + 3] = 255;
+
+            let drawn_owner = if owner == 0 { unowned_palette_index } else { owner };
+            out_owner_ids_rgba[write] = (drawn_owner & 0xFF) as u8;
+            out_owner_ids_rgba[write + 1] = ((drawn_owner >> 8) & 0xFF) as u8;
+            out_owner_ids_rgba[write + 2] = 255;
+            out_owner_ids_rgba[write + 3] = 255;
+            owners_moved = true;
+        }
+
+        let controller = controllers[province];
+        if controller == owner {
+            continue;
+        }
+        let packed = lookup_palette_rgba(palette_rgba, controller, fallback_rgba);
+        out_control_rgba[write] = ((packed >> 24) & 0xFF) as u8;
+        out_control_rgba[write + 1] = ((packed >> 16) & 0xFF) as u8;
+        out_control_rgba[write + 2] = ((packed >> 8) & 0xFF) as u8;
+        out_control_rgba[write + 3] = occupied_alpha;
+    }
+
+    Ok(owners_moved)
+}
+
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn paint_plate_row_range(
+    y0: usize,
+    y1: usize,
+    band_y0: usize,
+    w: usize,
+    h: usize,
+    source_holders: &[u16],
+    source_provinces: &[u16],
+    source_geography: &[u8],
+    prov_lut: &[u16],
+    has_override: bool,
+    palette_rgba: &[u32],
+    country_shade: f32,
+    region_shade: f32,
+    inland_shade: f32,
+    out_pixels_rgba: &mut [u8],
+) {
+    let pal_len = palette_rgba.len();
+    for y in y0..y1 {
+        let row = y * w;
+        let out_row = (y - band_y0) * w;
+        let has_up = y > 0;
+        let has_down = y + 1 < h;
+        for x in 0..w {
+            let cell = row + x;
+            let write = (out_row + x) * 4;
+            let holder = effective_holder(source_holders, source_provinces, prov_lut, has_override, cell);
+            if holder == 0 {
+                out_pixels_rgba[write] = 0;
+                out_pixels_rgba[write + 1] = 0;
+                out_pixels_rgba[write + 2] = 0;
+                out_pixels_rgba[write + 3] = 0;
+                continue;
+            }
+
+            let geo = unsafe { *source_geography.get_unchecked(cell) };
+            let shade = if (geo & 1) != 0 {
+                country_shade
+            } else {
+                let east_x = if x + 1 == w { 0 } else { x + 1 };
+                let west_x = if x == 0 { w - 1 } else { x - 1 };
+                let east = effective_holder(source_holders, source_provinces, prov_lut, has_override, row + east_x);
+                let west = effective_holder(source_holders, source_provinces, prov_lut, has_override, row + west_x);
+                let is_foreign_ew = (east != 0 && east != holder) || (west != 0 && west != holder);
+                let is_foreign_ns = (has_up && {
+                    let north = effective_holder(source_holders, source_provinces, prov_lut, has_override, cell - w);
+                    north != 0 && north != holder
+                }) || (has_down && {
+                    let south = effective_holder(source_holders, source_provinces, prov_lut, has_override, cell + w);
+                    south != 0 && south != holder
+                });
+                if is_foreign_ew || is_foreign_ns {
+                    country_shade
+                } else if (geo & 2) != 0 {
+                    region_shade
+                } else {
+                    inland_shade
+                }
+            };
+
+            let packed = if (holder as usize) < pal_len {
+                unsafe { *palette_rgba.get_unchecked(holder as usize) }
+            } else {
+                0x6E7B8BFFu32
+            };
+            out_pixels_rgba[write] = (((packed >> 24) & 0xFF) as f32 * shade) as u8;
+            out_pixels_rgba[write + 1] = (((packed >> 16) & 0xFF) as f32 * shade) as u8;
+            out_pixels_rgba[write + 2] = (((packed >> 8) & 0xFF) as f32 * shade) as u8;
+            out_pixels_rgba[write + 3] = 255u8;
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn paint_political_plate(
+    width: usize,
+    height: usize,
+    source_holders: &[u16],
+    source_provinces: &[u16],
+    source_geography: &[u8],
+    owners: &[u16],
+    authored_owners: &[u16],
+    palette_rgba: &[u32],
+    country_shade: f32,
+    region_shade: f32,
+    inland_shade: f32,
+    threads: u32,
+    out_pixels_rgba: &mut [u8],
+) -> Result<(), i32> {
+    if width == 0 || height == 0 {
+        return Err(-2);
+    }
+    let cells = width.checked_mul(height).ok_or(-2)?;
+    if cells > 64_000_000 {
+        return Err(-2);
+    }
+    if source_holders.len() < cells
+        || source_provinces.len() < cells
+        || source_geography.len() < cells
+    {
+        return Err(-2);
+    }
+    let needed_bytes = cells.checked_mul(4).ok_or(-3)?;
+    if out_pixels_rgba.len() < needed_bytes {
+        return Err(-3);
+    }
+    if !country_shade.is_finite()
+        || country_shade < 0.0
+        || !region_shade.is_finite()
+        || region_shade < 0.0
+        || !inland_shade.is_finite()
+        || inland_shade < 0.0
+    {
+        return Err(-2);
+    }
+
+    let mut prov_lut = vec![0u16; 65_536];
+    let mut has_override = false;
+    if !owners.is_empty() && !authored_owners.is_empty() {
+        let limit = owners.len().min(authored_owners.len()).min(65_536);
+        for p in 1..limit {
+            if authored_owners[p] != owners[p] {
+                prov_lut[p] = if owners[p] == 0 { 65_535 } else { owners[p] };
+                has_override = true;
+            }
+        }
+    }
+
+    let n_threads = if cells < 32_768 || threads == 1 {
+        1
+    } else {
+        resolve_threads(threads, height)
+    };
+
+    if n_threads <= 1 {
+        paint_plate_row_range(
+            0,
+            height,
+            0,
+            width,
+            height,
+            source_holders,
+            source_provinces,
+            source_geography,
+            &prov_lut,
+            has_override,
+            palette_rgba,
+            country_shade,
+            region_shade,
+            inland_shade,
+            &mut out_pixels_rgba[..needed_bytes],
+        );
+        return Ok(());
+    }
+
+    let chunk_rows = (height + n_threads - 1) / n_threads;
+    let chunk_bytes = chunk_rows * width * 4;
+    let lut_ref: &[u16] = &prov_lut;
+    std::thread::scope(|s| {
+        for (t, band) in out_pixels_rgba[..needed_bytes].chunks_mut(chunk_bytes).enumerate() {
+            let y0 = t * chunk_rows;
+            let y1 = ((t + 1) * chunk_rows).min(height);
+            s.spawn(move || {
+                paint_plate_row_range(
+                    y0,
+                    y1,
+                    y0,
+                    width,
+                    height,
+                    source_holders,
+                    source_provinces,
+                    source_geography,
+                    lut_ref,
+                    has_override,
+                    palette_rgba,
+                    country_shade,
+                    region_shade,
+                    inland_shade,
+                    band,
+                );
+            });
+        }
+    });
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pack_province_overlays_handles_moves_null_painted_and_fallback() {
+        let owners = [0u16, 2, 0, 5, 3];
+        let painted = [0u16, 1, 1, 5, 3];
+        let controllers = [0u16, 2, 4, 99, 3];
+        let mut palette = vec![0u32; 16];
+        palette[2] = 0x11223344;
+        palette[4] = 0xAABBCCDD;
+        palette[5] = 0x55667788;
+        let fallback = 0xFEDCBA98u32;
+
+        let mut ctl = vec![0x77u8; 64];
+        let mut own = vec![0x77u8; 64];
+        let mut oid = vec![0x77u8; 64];
+
+        let moved = pack_province_overlays(
+            4,
+            &owners,
+            &painted,
+            &controllers,
+            &palette,
+            180,
+            65535,
+            fallback,
+            &mut ctl,
+            &mut own,
+            &mut oid,
+        )
+        .unwrap();
+        assert!(moved);
+        // Province 1: moved to owner 2 (alpha 255), controller == owner (cleared)
+        assert_eq!(&own[4..8], &[0x11, 0x22, 0x33, 255]);
+        assert_eq!(&oid[4..8], &[2, 0, 255, 255]);
+        assert_eq!(&ctl[4..8], &[0, 0, 0, 0]);
+        // Province 2: moved to owner 0 -> fallback RGBA + unowned_palette_index 65535; controller 4 != 0
+        assert_eq!(&own[8..12], &[0xFE, 0xDC, 0xBA, 255]);
+        assert_eq!(&oid[8..12], &[0xFF, 0xFF, 255, 255]);
+        assert_eq!(&ctl[8..12], &[0xAA, 0xBB, 0xCC, 180]);
+        // Province 3: unchanged owner, controller 99 (oob) != 5 -> fallback
+        assert_eq!(&own[12..16], &[0, 0, 0, 0]);
+        assert_eq!(&ctl[12..16], &[0xFE, 0xDC, 0xBA, 180]);
+
+        // Empty painted_owners -> no owner move, control diff still packed
+        let moved2 = pack_province_overlays(
+            4,
+            &owners,
+            &[],
+            &controllers,
+            &palette,
+            180,
+            65535,
+            fallback,
+            &mut ctl,
+            &mut own,
+            &mut oid,
+        )
+        .unwrap();
+        assert!(!moved2);
+        assert_eq!(&ctl[8..12], &[0xAA, 0xBB, 0xCC, 180]);
+        assert_eq!(&own[8..12], &[0, 0, 0, 0]);
+
+        // Count 0 clears and returns Ok(false)
+        let moved0 = pack_province_overlays(
+            0,
+            &owners,
+            &painted,
+            &controllers,
+            &palette,
+            180,
+            65535,
+            fallback,
+            &mut ctl,
+            &mut own,
+            &mut oid,
+        )
+        .unwrap();
+        assert!(!moved0);
+        assert!(ctl.iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn paint_political_plate_edge_cases_and_mt_exactness() {
+        // Test width = 1 + sea + region + unowned 65535
+        let holders1 = [0u16, 2, 2];
+        let provs1 = [0u16, 1, 2];
+        let geo1 = [0u8, 0, 2];
+        let owners1 = [0u16, 0, 2];
+        let auth1 = [0u16, 2, 2];
+        let mut pal = vec![0x6E7B8BFFu32; 65_536];
+        pal[2] = 0x4080C0FF;
+        let mut px1 = vec![0u8; 12];
+        paint_political_plate(
+            1,
+            3,
+            &holders1,
+            &provs1,
+            &geo1,
+            &owners1,
+            &auth1,
+            &pal,
+            0.34,
+            0.70,
+            0.92,
+            1,
+            &mut px1,
+        )
+        .unwrap();
+        // Row 0 = Sea -> transparent
+        assert_eq!(&px1[0..4], &[0, 0, 0, 0]);
+        // Row 1 = unowned 65535 adjacent south to holder 2 -> country shade (0.34)
+        assert_eq!(px1[7], 255);
+        assert_eq!(px1[4], (0x6Eu8 as f32 * 0.34) as u8);
+        // Row 2 = holder 2 adjacent north to 65535 -> country shade (0.34)
+        assert_eq!(px1[8], (0x40u8 as f32 * 0.34) as u8);
+
+        // Large plate comparing single-thread vs multi-thread bit-exactness + east/west wrap-around
+        let (w, h) = (256usize, 192usize);
+        let cells = w * h;
+        let mut holders = vec![1u16; cells];
+        let mut provs = vec![1u16; cells];
+        let mut geo = vec![0u8; cells];
+        for y in 0..h {
+            for x in 0..w {
+                let c = y * w + x;
+                if y == 0 || y + 1 == h {
+                    holders[c] = 0;
+                    provs[c] = 0;
+                } else if x >= w - 2 {
+                    holders[c] = 3;
+                    provs[c] = 3;
+                } else {
+                    provs[c] = ((c % 5) + 1) as u16;
+                    geo[c] = if (c % 17) == 0 { 1 } else if (c % 7) == 0 { 2 } else { 0 };
+                }
+            }
+        }
+        let owners = [0u16, 1, 4, 3]; // shorter than 6
+        let authored = [0u16, 1, 2, 3, 2, 1];
+        pal[1] = 0xC83232FF;
+        pal[3] = 0x32C864FF;
+        pal[4] = 0x3264DCFF;
+
+        let mut st = vec![0u8; cells * 4];
+        let mut mt = vec![0u8; cells * 4];
+        paint_political_plate(
+            w, h, &holders, &provs, &geo, &owners, &authored, &pal, 0.34, 0.70, 0.92, 1, &mut st,
+        )
+        .unwrap();
+        paint_political_plate(
+            w, h, &holders, &provs, &geo, &owners, &authored, &pal, 0.34, 0.70, 0.92, 4, &mut mt,
+        )
+        .unwrap();
+        assert_eq!(st, mt);
+        // Check wrap-around border at x = 0 touching x = w - 1 (holder 3 != 1) gets country_shade!
+        let cell_wrap = 10 * w;
+        assert_eq!(st[cell_wrap * 4], (0xC8u8 as f32 * 0.34) as u8);
+    }
+}
+
+

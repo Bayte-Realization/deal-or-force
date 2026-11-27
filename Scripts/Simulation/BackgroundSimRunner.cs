@@ -348,9 +348,10 @@ internal sealed class CampaignAccessGate
                 if (!starvingReader && readerWorkAheadMs > 0 && Stopwatch.GetElapsedTime(_readerRequestedAt).TotalMilliseconds < readerWorkAheadMs)
                     return;
 
-                // A starving 30 FPS routine reader gets one 33.3 ms frame plus margin (38 ms, down
-                // from 55 ms) so maxConsecutiveMisses stays <= 2 without stalling Speed 5.
-                var effectiveWindowMs = starvingReader ? Math.Max(readerWindowMs, 38) : readerWindowMs;
+                // A starving 30 FPS routine reader gets one 33.3 ms frame plus OS timer margin (50 ms) so
+                // early stage breaks on IsReaderStarving hold the window open until the frame arrives,
+                // keeping maxConsecutiveMisses <= 2 while immediately breaking once the reader enters and exits.
+                var effectiveWindowMs = starvingReader ? Math.Max(readerWindowMs, 50) : readerWindowMs;
                 var start = Stopwatch.GetTimestamp();
                 var freqMs = Stopwatch.Frequency / 1000.0;
                 while (_readerRequested && _writeWaiters == 0)
@@ -1812,7 +1813,7 @@ public sealed class BackgroundSimRunner : IDisposable
                         // modal arrives, a slice runs out mid-step, a reader/writer waits, or the slice budget expires.
                         // A priority reader or a command writer breaks both RunStages and this batch at the
                         // next stage boundary, so the larger Speed-5 slice costs no input latency.
-                        var sliceMs = speed >= 5 ? (mobilePacing ? 56.0 : 48.0) : speed == 4 ? (mobilePacing ? 18.0 : 14.0) : 6.0;
+                        var sliceMs = speed >= 5 ? (mobilePacing ? 56.0 : 24.0) : speed == 4 ? (mobilePacing ? 18.0 : 12.0) : 6.0;
                         var batchStarted = Stopwatch.GetTimestamp();
                         var anyStepDone = false;
                         var anyOpenedDay = false;
@@ -1844,7 +1845,7 @@ public sealed class BackgroundSimRunner : IDisposable
                             if (batchElapsedMs >= sliceMs) break;
                             if (campaign.AccessGate.HasReaderRequested &&
                                 (speed >= 5
-                                    ? batchElapsedMs >= (mobilePacing ? 32.0 : 24.0) || campaign.AccessGate.IsReaderStarving
+                                    ? batchElapsedMs >= (mobilePacing ? 32.0 : 8.0) || campaign.AccessGate.IsReaderStarving
                                     : batchElapsedMs >= 8.0))
                                 break;
                             if (speed == 4)
@@ -1874,8 +1875,8 @@ public sealed class BackgroundSimRunner : IDisposable
                     var releasingAt = measurePacing ? Stopwatch.GetTimestamp() : 0;
                     if (measurePacing) Interlocked.Add(ref _workerWorkTicks, releasingAt - acquiredAt);
                     campaign.AccessGate.ExitWrite(yieldToRequestedReader: true,
-                        readerWindowMs: speed >= 5 ? (mobilePacing ? 6 : 10) : (mobilePacing ? 10 : 20),
-                        readerWorkAheadMs: mobilePacing ? 20 : 12);
+                        readerWindowMs: speed >= 5 ? (mobilePacing ? 6 : 18) : (mobilePacing ? 10 : 20),
+                        readerWorkAheadMs: mobilePacing ? 20 : 0);
                     if (measurePacing) Interlocked.Add(ref _workerReleaseTicks, Stopwatch.GetTimestamp() - releasingAt);
                 }
 

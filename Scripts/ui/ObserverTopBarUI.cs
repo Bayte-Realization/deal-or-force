@@ -87,6 +87,24 @@ public partial class DealOrForceGame
             AddOutlinerButton(Loc.Format("{0} vs {1}", attacker?.DisplayName ?? "?", defender?.DisplayName ?? "?"),
                 () => FocusWar(war), WarNames.Of(_campaign, war));
         }
+        var movements = ObserverUiRules.ObservedLandlessMovements(_campaign);
+        if (movements.Count > 0)
+        {
+            AddOutlinerHeader("obs.ui.movements.short_heading");
+            foreach (var movement in movements.Take(8))
+            {
+                var captured = movement;
+                var host = Movements.HostOf(_campaign, movement);
+                var label = host is not null
+                    ? $"{movement.DisplayName} ({host.Tag}) · {Fmt.Percent(movement.Movement.Legitimacy)}"
+                    : $"{movement.DisplayName} · {Fmt.Percent(movement.Movement.Legitimacy)}";
+                AddOutlinerButton(label, () => OpenObservedMovement(captured.Id),
+                    Loc.Format("obs.ui.movements.row_tip_fmt", movement.DisplayName,
+                        host?.DisplayName ?? Tr("nobody"),
+                        Fmt.People(movement.Movement.Cadres),
+                        Fmt.Percent(movement.Movement.Legitimacy)));
+            }
+        }
     }
 
     private void Hide(Control control)
@@ -94,6 +112,43 @@ public partial class DealOrForceGame
         if (control is null || !control.Visible) return;
         control.Visible = false;
         _topBarObserverHidden.Add(control);
+    }
+
+    private void RefreshNullPlayerTopBar()
+    {
+        if (IsNewShellActive) return;
+        _identity.Text = Tr("The world");
+        var worldFont = _identity.GetThemeFont("font");
+        var worldSize = 18;
+        while (worldSize > 12 && worldFont.GetStringSize(_identity.Text, HorizontalAlignment.Left, -1, worldSize).X >
+               System.Math.Max(154, _identity.Size.X)) worldSize--;
+        _identity.AddThemeFontSizeOverride("font_size", worldSize);
+        _identityTag.Text = Tr("Observer mode");
+        _identityTag.TooltipText = Ui.Tip(Tr("shell.obs.badge_world"));
+        _identity.TooltipText = Ui.Tip(Tr("The world") + "\n" + Tr("Observer mode"));
+        if (_identityFlag is not null) _identityFlag.Visible = false;
+        RefreshCountryRankBadges();
+        if (_identityPortraitSlot is { Visible: true } && _identityPortraitLeaderKey != "obs")
+        {
+            _identityPortraitLeaderKey = "obs";
+            ClearRuntimeChildren(_identityPortraitSlot);
+        }
+        RefreshDatePlate(null);
+        WriteObserverTopBar();
+        PaintResourceStates(null);
+        ArrangeResourcePlate();
+        if (_hudFlagMount is not null) _hudFlagMount.Visible = false;
+        foreach (var stat in _hudStats) FitHudStat(stat);
+        NoteFigureTips();
+        _militarySpending.SetValueNoSignal(0f);
+        UpdateSpendingReadout(null);
+        UpdateSpeedButtons();
+        UpdateScreenButtons();
+        if (ResolveHudFigures())
+        {
+            PlaceHudChrome();
+            _strategicHudFingerprint = int.MinValue;
+        }
     }
 
     /// <summary>Called by RestoreCountryTopBar: everything observer mode hid comes back.</summary>

@@ -123,6 +123,12 @@ public partial class DealOrForceGame
                     _campaign.Defines.PeaceWholeRegions = !SettingsCatalog.Flag("peace_by_provinces");
                 break;
 
+            case "ai_diplomacy_lod":
+                if (_campaign is not null)
+                    _campaign.Defines.AiDiplomacyLodMode = AiStatecraft.NormalizeDiplomaticLodMode(
+                        SettingsCatalog.Chosen("ai_diplomacy_lod"));
+                break;
+
             case "save_format":
                 if (_campaign is not null)
                     // Text only when text was chosen. This read "anything but compressed", so an

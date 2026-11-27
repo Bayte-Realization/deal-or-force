@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -285,10 +286,22 @@ public sealed class PopulationGroupConverter : JsonConverter<PopulationGroup>
         return group;
     }
 
+    private const int InternedLiteralCap = 8_192;
+    private static readonly ConcurrentDictionary<string, string> InternedLiterals =
+        new(StringComparer.Ordinal);
+
     /// <summary>An id as an index into the save's table, or the literal text of an older row.</summary>
-    private static string ReadId(ref Utf8JsonReader reader) =>
-        reader.TokenType == JsonTokenType.Number ? SaveStringTable.At(reader.GetInt32())
-        : reader.GetString() ?? "";
+    private static string ReadId(ref Utf8JsonReader reader)
+    {
+        if (reader.TokenType == JsonTokenType.Number)
+            return SaveStringTable.At(reader.GetInt32());
+        var text = reader.GetString();
+        if (string.IsNullOrEmpty(text)) return "";
+        if (text.Length > 64) return text;
+        if (InternedLiterals.TryGetValue(text, out var existing)) return existing;
+        if (InternedLiterals.Count >= InternedLiteralCap) return text;
+        return InternedLiterals.GetOrAdd(text, text);
+    }
 
     /// <summary>A class or sector as the old object form wrote it: its number, or - from a writer that named enums - its name.</summary>
     private static int ReadEnum(ref Utf8JsonReader reader) =>

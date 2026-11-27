@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using DealOrForce.Simulation.Kernels;
 
 namespace DealOrForce.Simulation;
 
@@ -453,24 +454,315 @@ public static class OpinionSystem
     /// The relations of the day that are waiting to be settled, and the loop body that settles
     /// them, kept per campaign so that the pass allocates nothing for it.
     /// </summary>
+    private const int KernelChunkSize = 256;
+
+    private sealed class WorkerBatchScratch
+    {
+        public readonly List<(DiplomaticRelation Relation, Nation Left, Nation Right)> Pairs = new(KernelChunkSize);
+        public readonly int[] ReasonStart = new int[KernelChunkSize];
+        public readonly int[] ReasonCount = new int[KernelChunkSize];
+
+        public readonly float[] LeftEcon = new float[KernelChunkSize];
+        public readonly float[] LeftAuth = new float[KernelChunkSize];
+        public readonly float[] RightEcon = new float[KernelChunkSize];
+        public readonly float[] RightAuth = new float[KernelChunkSize];
+        public readonly float[] EsteemAb = new float[KernelChunkSize];
+        public readonly float[] EsteemBa = new float[KernelChunkSize];
+        public readonly float[] ClaimLeft = new float[KernelChunkSize];
+        public readonly float[] ClaimRight = new float[KernelChunkSize];
+        public readonly float[] ClaimBonus = new float[KernelChunkSize];
+        public readonly float[] BlocBias = new float[KernelChunkSize];
+        public readonly float[] BaseReasonSum = new float[KernelChunkSize];
+        public readonly float[] WitnessAgainst = new float[KernelChunkSize];
+        public readonly float[] WitnessFor = new float[KernelChunkSize];
+        public readonly float[] IdentityAffinity = new float[KernelChunkSize];
+        public readonly float[] StrengthRatio = new float[KernelChunkSize];
+        public readonly float[] FearReach = new float[KernelChunkSize];
+        public readonly byte[] PairFlags = new byte[KernelChunkSize];
+        public readonly float[] OutPolitics = new float[KernelChunkSize];
+        public readonly float[] OutSocial = new float[KernelChunkSize];
+        public readonly float[] OutClaims = new float[KernelChunkSize];
+        public readonly float[] OutGeopolitics = new float[KernelChunkSize];
+        public readonly float[] OutOpinion = new float[KernelChunkSize];
+        public readonly float[] OutFear = new float[KernelChunkSize];
+
+        public float[] BaseOpinion = new float[512];
+        public int[] Stacks = new int[512];
+        public float[] Scale = new float[512];
+        public int[] GrantedDay = new int[512];
+        public int[] ExpiresDay = new int[512];
+        public int[] DecayDays = new int[512];
+        public byte[] ReasonFlags = new byte[512];
+        public bool[] ReasonThirdParty = new bool[512];
+        public float[] OutWeight = new float[512];
+        public byte[] OutPrune = new byte[512];
+
+        public void EnsureReasonCapacity(int needed)
+        {
+            if (needed <= BaseOpinion.Length) return;
+            var cap = BaseOpinion.Length * 2;
+            if (cap < needed) cap = needed;
+            Array.Resize(ref BaseOpinion, cap);
+            Array.Resize(ref Stacks, cap);
+            Array.Resize(ref Scale, cap);
+            Array.Resize(ref GrantedDay, cap);
+            Array.Resize(ref ExpiresDay, cap);
+            Array.Resize(ref DecayDays, cap);
+            Array.Resize(ref ReasonFlags, cap);
+            Array.Resize(ref ReasonThirdParty, cap);
+            Array.Resize(ref OutWeight, cap);
+            Array.Resize(ref OutPrune, cap);
+        }
+    }
+
+    [ThreadStatic]
+    private static WorkerBatchScratch _workerScratch;
+
+    private static void FlushSettleChunk(Campaign campaign, WorkerBatchScratch scratch,
+        bool imagesEnabled, HashSet<int> greatPowers)
+    {
+        var count = scratch.Pairs.Count;
+        if (count == 0) return;
+
+        var totalReasons = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var reasonCount = scratch.Pairs[i].Relation.Reasons.Count;
+            scratch.ReasonStart[i] = totalReasons;
+            scratch.ReasonCount[i] = reasonCount;
+            totalReasons += reasonCount;
+        }
+
+        var today = campaign.ElapsedDays;
+        if (totalReasons > 0)
+        {
+            scratch.EnsureReasonCapacity(totalReasons);
+            var cursor = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var reasons = scratch.Pairs[i].Relation.Reasons;
+                for (var ri = 0; ri < reasons.Count; ri++)
+                {
+                    var reason = reasons[ri];
+                    var def = OpinionCatalog.Find(reason.Id);
+                    if (def is null)
+                    {
+                        scratch.BaseOpinion[cursor] = 0f;
+                        scratch.Stacks[cursor] = reason.Stacks;
+                        scratch.Scale[cursor] = reason.Scale;
+                        scratch.GrantedDay[cursor] = reason.GrantedDay;
+                        scratch.ExpiresDay[cursor] = reason.ExpiresDay;
+                        scratch.DecayDays[cursor] = 0;
+                        scratch.ReasonFlags[cursor] = 0;
+                        scratch.ReasonThirdParty[cursor] = false;
+                    }
+                    else
+                    {
+                        var item = def.Value;
+                        scratch.BaseOpinion[cursor] = item.Opinion;
+                        scratch.Stacks[cursor] = reason.Stacks;
+                        scratch.Scale[cursor] = reason.Scale;
+                        scratch.GrantedDay[cursor] = reason.GrantedDay;
+                        scratch.ExpiresDay[cursor] = reason.ExpiresDay;
+                        scratch.DecayDays[cursor] = item.Days;
+                        scratch.ReasonFlags[cursor] = (byte)(item.Decays ? 1 : 0);
+                        scratch.ReasonThirdParty[cursor] = item.ThirdParty;
+                    }
+                    cursor++;
+                }
+            }
+
+            NativeDiplomacyKernels.EvalReasonDecay(
+                scratch.BaseOpinion.AsSpan(0, totalReasons),
+                scratch.Stacks.AsSpan(0, totalReasons),
+                scratch.Scale.AsSpan(0, totalReasons),
+                scratch.GrantedDay.AsSpan(0, totalReasons),
+                scratch.ExpiresDay.AsSpan(0, totalReasons),
+                scratch.DecayDays.AsSpan(0, totalReasons),
+                scratch.ReasonFlags.AsSpan(0, totalReasons),
+                today,
+                scratch.OutWeight.AsSpan(0, totalReasons),
+                scratch.OutPrune.AsSpan(0, totalReasons));
+        }
+
+        var defines = campaign.Defines;
+        var ramp = M.Clamp01((today - 365f) / 1095f);
+        var hasRamp = ramp > 0f;
+        var claimBonusWeight = Math.Clamp(defines.TerritorialClaimWeight, 0f, 1f) * 0.35f;
+
+        for (var i = 0; i < count; i++)
+        {
+            var (relation, left, right) = scratch.Pairs[i];
+            var reasons = relation.Reasons;
+            var start = scratch.ReasonStart[i];
+            var reasonCount = scratch.ReasonCount[i];
+            var baseSum = 0f;
+            var wAgainst = 0f;
+            var wFor = 0f;
+            if (reasonCount > 0)
+            {
+                var write = 0;
+                for (var ri = 0; ri < reasonCount; ri++)
+                {
+                    var flatIdx = start + ri;
+                    if (scratch.OutPrune[flatIdx] != 0) continue;
+                    var weight = scratch.OutWeight[flatIdx];
+                    if (Math.Abs(weight) >= 0.05f)
+                    {
+                        baseSum += weight;
+                        if (scratch.ReasonThirdParty[flatIdx])
+                        {
+                            if (weight < 0f) wAgainst += weight;
+                            else wFor += weight;
+                        }
+                    }
+                    if (write != ri) reasons[write] = reasons[ri];
+                    write++;
+                }
+                if (write < reasonCount) reasons.RemoveRange(write, reasonCount - write);
+            }
+
+            scratch.BaseReasonSum[i] = baseSum;
+            scratch.WitnessAgainst[i] = wAgainst;
+            scratch.WitnessFor[i] = wFor;
+
+            var leftIdeol = PoliticsCore.IdeologyOf(left);
+            var rightIdeol = PoliticsCore.IdeologyOf(right);
+            scratch.LeftEcon[i] = leftIdeol.Economic;
+            scratch.LeftAuth[i] = leftIdeol.Authority;
+            scratch.RightEcon[i] = rightIdeol.Economic;
+            scratch.RightAuth[i] = rightIdeol.Authority;
+
+            byte flags = 0;
+            if (imagesEnabled)
+            {
+                flags |= NativeDiplomacyKernels.PairFlagImagesOn;
+                scratch.EsteemAb[i] = SocialMemory.Esteem(campaign, left, right);
+                scratch.EsteemBa[i] = SocialMemory.Esteem(campaign, right, left);
+            }
+            else
+            {
+                scratch.EsteemAb[i] = 0f;
+                scratch.EsteemBa[i] = 0f;
+            }
+
+            var leftClaim = LostLands.HasClaimedLand(campaign, left, right);
+            var rightClaim = LostLands.HasClaimedLand(campaign, right, left);
+            var leftHome = TerritorialClaims.HoldsOurHomeland(campaign, left, right);
+            var rightHome = TerritorialClaims.HoldsOurHomeland(campaign, right, left);
+            if (leftClaim || rightClaim || leftHome || rightHome)
+            {
+                flags |= NativeDiplomacyKernels.PairFlagClaimOrHome;
+                scratch.ClaimLeft[i] = leftClaim ? MathF.Max(0.25f, LostLands.Weight(campaign, left, right)) : (leftHome ? 0.50f : 0f);
+                scratch.ClaimRight[i] = rightClaim ? MathF.Max(0.25f, LostLands.Weight(campaign, right, left)) : (rightHome ? 0.50f : 0f);
+                scratch.ClaimBonus[i] = (leftClaim || rightClaim) ? claimBonusWeight : 0f;
+            }
+            else
+            {
+                scratch.ClaimLeft[i] = 0f;
+                scratch.ClaimRight[i] = 0f;
+                scratch.ClaimBonus[i] = 0f;
+            }
+
+            if (hasRamp)
+            {
+                scratch.BlocBias[i] = GeopoliticalCycle.BilateralRealignmentBias(campaign, left, right);
+                if (greatPowers is not null && greatPowers.Contains(left.Id) && greatPowers.Contains(right.Id))
+                    flags |= NativeDiplomacyKernels.PairFlagBothGp;
+            }
+            else
+            {
+                scratch.BlocBias[i] = 0f;
+            }
+
+            scratch.IdentityAffinity[i] = StateIdentity.Affinity(campaign, left, right);
+            scratch.StrengthRatio[i] = 1f;
+            scratch.FearReach[i] = 0f;
+            scratch.PairFlags[i] = flags;
+        }
+
+        NativeDiplomacyKernels.ScorePairs(
+            scratch.LeftEcon.AsSpan(0, count),
+            scratch.LeftAuth.AsSpan(0, count),
+            scratch.RightEcon.AsSpan(0, count),
+            scratch.RightAuth.AsSpan(0, count),
+            scratch.EsteemAb.AsSpan(0, count),
+            scratch.EsteemBa.AsSpan(0, count),
+            scratch.ClaimLeft.AsSpan(0, count),
+            scratch.ClaimRight.AsSpan(0, count),
+            scratch.ClaimBonus.AsSpan(0, count),
+            scratch.BlocBias.AsSpan(0, count),
+            scratch.BaseReasonSum.AsSpan(0, count),
+            scratch.WitnessAgainst.AsSpan(0, count),
+            scratch.WitnessFor.AsSpan(0, count),
+            scratch.IdentityAffinity.AsSpan(0, count),
+            scratch.StrengthRatio.AsSpan(0, count),
+            scratch.FearReach.AsSpan(0, count),
+            scratch.PairFlags.AsSpan(0, count),
+            defines.IdeologyOpinionWeight,
+            defines.SocialOpinionWeight,
+            ramp,
+            defines.ThirdPartyOpinionFloor,
+            defines.ThirdPartyOpinionCeiling,
+            scratch.OutPolitics.AsSpan(0, count),
+            scratch.OutSocial.AsSpan(0, count),
+            scratch.OutClaims.AsSpan(0, count),
+            scratch.OutGeopolitics.AsSpan(0, count),
+            scratch.OutOpinion.AsSpan(0, count),
+            scratch.OutFear.AsSpan(0, count));
+
+        for (var i = 0; i < count; i++)
+            scratch.Pairs[i].Relation.Opinion = scratch.OutOpinion[i];
+
+        scratch.Pairs.Clear();
+    }
+
     private sealed class SettleQueue
     {
         public readonly Campaign Campaign;
         public readonly List<DiplomaticRelation> Waiting = new();
         public readonly Action<int, int> SettleRange;
+        public bool ImagesEnabled;
+        public HashSet<int> GreatPowers;
+        public AiStatecraft.DiplomaticLodSnapshot LodSnapshot;
 
         public SettleQueue(Campaign campaign)
         {
             Campaign = campaign;
             SettleRange = (from, to) =>
             {
+                var week = Campaign.ElapsedDays >= 0 ? Campaign.ElapsedDays / 7 : 0;
+                var scratch = _workerScratch ??= new WorkerBatchScratch();
+                scratch.Pairs.Clear();
+                var imagesOn = ImagesEnabled;
+                var gps = GreatPowers;
+                var lodSnap = LodSnapshot;
+
                 for (var index = from; index < to; index++)
                 {
                     var relation = Waiting[index];
-                    var explain = Campaign.NationById(relation.A)?.IsHuman == true ||
-                                  Campaign.NationById(relation.B)?.IsHuman == true;
-                    Settle(Campaign, relation, explain);
+                    var left = Campaign.NationById(relation.A);
+                    var right = Campaign.NationById(relation.B);
+                    if (left is not null && right is not null &&
+                        !AiStatecraft.IsBackgroundSlotDueForWeek(week, relation.A, relation.B) &&
+                        !AiStatecraft.IsActiveDiplomacyTier(Campaign, left, right, relation,
+                            bordersKnown: false, borders: false, lodSnapshot: lodSnap))
+                        continue;
+
+                    if (left is null || right is null || left.IsHuman || right.IsHuman)
+                    {
+                        var explain = left?.IsHuman == true || right?.IsHuman == true;
+                        Settle(Campaign, relation, explain);
+                        continue;
+                    }
+
+                    scratch.Pairs.Add((relation, left, right));
+                    if (scratch.Pairs.Count >= KernelChunkSize)
+                        FlushSettleChunk(Campaign, scratch, imagesOn, gps);
                 }
+
+                if (scratch.Pairs.Count > 0)
+                    FlushSettleChunk(Campaign, scratch, imagesOn, gps);
             };
         }
     }
@@ -492,6 +784,9 @@ public static class OpinionSystem
         var waiting = queue.Waiting;
         if (waiting.Count == 0) return;
         var campaign = queue.Campaign;
+        queue.ImagesEnabled = SocialMemory.ImagesEnabled(campaign);
+        queue.GreatPowers = AllianceSystem.GreatPowers(campaign);
+        queue.LodSnapshot = AiStatecraft.AcquireDiplomaticLod(campaign);
         for (var index = 0; index < waiting.Count; index++)
         {
             if (campaign.NationById(waiting[index].A) is { } left) SocialMemory.NationKey(left);
@@ -518,6 +813,7 @@ public static class OpinionSystem
         // relation, its sender's purse and a private line of the chronicle, none of which the
         // relations still waiting read.
         _ = AllianceSystem.GreatPowers(campaign);
+        AiStatecraft.WarmDiplomaticLod(campaign);
         var queue = SettleQueues.GetValue(campaign, static c => new SettleQueue(c));
         queue.Waiting.Clear();
         var scanned = 0;
@@ -525,18 +821,25 @@ public static class OpinionSystem
         foreach (var relation in campaign.Relations.Values)
         {
             if (++scanned % 512 == 0) yield return 0;
-            if (relation.Stance == DiplomaticStance.Truce && today >= relation.TruceUntil)
+            var expiredTruce = relation.Stance == DiplomaticStance.Truce && today >= relation.TruceUntil &&
                 CampaignDiplomacy.RefreshExpiredTruce(campaign, relation);
             var due = (today + (relation.A + relation.B) % 7) % 7 == 0;
             if (relation.MissionByA is not null || relation.MissionByB is not null)
             {
                 DiplomaticOutreach.Tick(campaign, relation);
-                if (due)
+                if (due || expiredTruce)
                 {
                     var explain = campaign.NationById(relation.A)?.IsHuman == true ||
                                   campaign.NationById(relation.B)?.IsHuman == true;
                     Settle(campaign, relation, explain);
                 }
+                continue;
+            }
+            if (expiredTruce)
+            {
+                var explain = campaign.NationById(relation.A)?.IsHuman == true ||
+                              campaign.NationById(relation.B)?.IsHuman == true;
+                Settle(campaign, relation, explain);
                 continue;
             }
             if (!due) continue;

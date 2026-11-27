@@ -61,6 +61,8 @@ public sealed partial class GlobePresentation
 
     private readonly List<Vector3> _ribbonSamples = new();
     private readonly List<float> _ribbonDistances = new();
+    private readonly List<System.Numerics.Vector3> _linePointNumScratch = new();
+    private readonly List<DateLineSeam.Run> _lineRunScratch = new();
     private readonly RibbonBatch _routeBatch = new();
     private readonly RibbonBatch _seaLiftBatch = new();
     private RibbonBatch _activeRibbonBatch;
@@ -153,16 +155,104 @@ void fragment() {
         return image;
     }
 
+    private static System.Numerics.Vector3 ToNum(Vector3 v) => new(v.X, v.Y, v.Z);
+    private static System.Numerics.Vector2 ToNum(Vector2 v) => new(v.X, v.Y);
+    private static Vector3 ToGd(System.Numerics.Vector3 v) => new(v.X, v.Y, v.Z);
+
+    private bool TryPresentationPoint(float latitude, float longitude, float sphereRadius, out Vector3 point)
+    {
+        if (!GlobeLineSanity.IsValidGeo(latitude, longitude))
+        {
+            point = default;
+            return false;
+        }
+        point = PresentationPoint(latitude, longitude, sphereRadius);
+        return GlobeLineSanity.IsValidEmittedVertex(ToNum(point), _flatMap, _flatX);
+    }
+
+    private bool TryOnOrderSurface(Vector3 point, float sphereRadius, float flatZ, out Vector3 surfacePoint)
+    {
+        if (!GlobeLineSanity.IsFinite(ToNum(point)))
+        {
+            surfacePoint = default;
+            return false;
+        }
+        if (_flatMap)
+        {
+            if (MathF.Abs(point.X - _flatX) > GlobeLineSanity.MaxFlatVertexXDelta ||
+                MathF.Abs(point.Y) > GlobeLineSanity.MaxFlatVertexY)
+            {
+                surfacePoint = default;
+                return false;
+            }
+            surfacePoint = LocalFlatPointFromWorld(point, flatZ);
+            return GlobeLineSanity.IsValidEmittedVertex(ToNum(surfacePoint), true, _flatX);
+        }
+
+        if (!GlobeLineSanity.TrySafeNormalize(ToNum(point), out var unit))
+        {
+            surfacePoint = default;
+            return false;
+        }
+        float radius;
+        if (_reliefDisplacement > 0.0001f && _reliefHeightGrid is not null)
+        {
+            var geo = GlobeLineSanity.GeographicFromNormalSafe(unit);
+            radius = LocalGlobeRadius(geo.Latitude, geo.Longitude, sphereRadius);
+        }
+        else
+        {
+            radius = sphereRadius;
+        }
+        if (!float.IsFinite(radius))
+        {
+            surfacePoint = default;
+            return false;
+        }
+        surfacePoint = ToGd(unit * radius);
+        return GlobeLineSanity.IsValidEmittedVertex(ToNum(surfacePoint), false, _flatX);
+    }
+
     private Vector3 OnOrderSurface(Vector3 point) =>
-        _flatMap ? LocalFlatPointFromWorld(point, FlatLineZ) : LocalSurfacePointFromNormal(point, SurfaceLineRadius);
+        TryOnOrderSurface(point, SurfaceLineRadius, FlatLineZ, out var projected) ? projected : point;
+
+    private void CollectValidLineRuns(IReadOnlyList<Vector3> points, float maxSegmentLength, List<DateLineSeam.Run> runs)
+    {
+        _linePointNumScratch.Clear();
+        for (var i = 0; i < points.Count; i++)
+            _linePointNumScratch.Add(ToNum(points[i]));
+        GlobeLineSanity.CollectLineRuns(
+            System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_linePointNumScratch),
+            _flatMap,
+            FlatMapWidth,
+            maxSegmentLength,
+            runs,
+            _flatX);
+    }
 
     private void SampleRibbonTo(Vector3 point)
     {
-        if (_ribbonSamples.Count == 0) { _ribbonSamples.Add(OnOrderSurface(point)); return; }
+        if (!TryOnOrderSurface(point, SurfaceLineRadius, FlatLineZ, out var projectedEnd)) return;
+        if (_ribbonSamples.Count == 0)
+        {
+            _ribbonSamples.Add(projectedEnd);
+            return;
+        }
         var start = _ribbonSamples[^1];
-        var steps = Math.Clamp((int)MathF.Ceiling(start.DistanceTo(point) / 0.012f), 1, 256);
+        if (!GlobeLineSanity.IsValidEmittedVertex(ToNum(start), _flatMap, _flatX)) return;
+        var dist = start.DistanceTo(projectedEnd);
+        if (!float.IsFinite(dist) || dist < 1e-6f) return;
+        var steps = Math.Clamp((int)MathF.Ceiling(dist / 0.012f), 1, 256);
         for (var step = 1; step <= steps; step++)
-            _ribbonSamples.Add(OnOrderSurface(start.Lerp(point, step / (float)steps)));
+        {
+            var interp = ToGd(GlobeLineSanity.InterpolateSurfacePoint(
+                ToNum(start), ToNum(projectedEnd), step / (float)steps, _flatMap));
+            if (TryOnOrderSurface(interp, SurfaceLineRadius, FlatLineZ, out var sample) &&
+                _ribbonSamples[^1].DistanceSquaredTo(sample) >= 1e-10f)
+            {
+                _ribbonSamples.Add(sample);
+            }
+        }
     }
 
     private bool DrawOrderRibbon(Simulation.Army army, bool attack) =>
@@ -172,6 +262,9 @@ void fragment() {
         float progress, float widthScale = 1f)
     {
         if (batch is null) return false;
+        if (!GlobeLineSanity.IsValidEmittedVertex(ToNum(start), _flatMap, _flatX) ||
+            !GlobeLineSanity.IsValidEmittedVertex(ToNum(end), _flatMap, _flatX))
+            return false;
         _routePoints.Clear();
         _routePoints.Add(start);
         _routePoints.Add(end);
@@ -182,64 +275,110 @@ void fragment() {
     private bool DrawRibbon(RibbonBatch batch, int slot, float progress, float widthScale = 1f)
     {
         if (batch is null || _routePoints.Count < 2) return false;
+        progress = GlobeLineSanity.SafeClamp(progress, 0f, 1f, 0f);
+        widthScale = GlobeLineSanity.SafeClamp(widthScale, 0.05f, 4f, 1f);
+        var maxPointGap = _flatMap ? GlobeLineSanity.MaxFlatSegmentLength : GlobeLineSanity.MaxGlobeSegmentLength;
+        CollectValidLineRuns(_routePoints, maxPointGap, _lineRunScratch);
+        if (_lineRunScratch.Count == 0) return false;
+
         _activeRibbonBatch = batch;
         _activeRibbonSlot = slot;
-        _activeRibbonPrevPair = -1;
-        _ribbonSamples.Clear();
-        SampleRibbonTo(_routePoints[0]);
-        // Round only the immediate corner; the route still visits its province corridor.
-        for (var i = 1; i < _routePoints.Count - 1; i++)
+        var drewAny = false;
+        for (var r = 0; r < _lineRunScratch.Count; r++)
         {
-            var corner = _routePoints[i];
-            var enter = corner.Lerp(_routePoints[i - 1], 0.12f);
-            var leave = corner.Lerp(_routePoints[i + 1], 0.12f);
-            SampleRibbonTo(enter);
-            for (var step = 1; step <= 4; step++)
+            var run = _lineRunScratch[r];
+            var isFinalRun = r == _lineRunScratch.Count - 1;
+            _activeRibbonPrevPair = -1;
+            _ribbonSamples.Clear();
+            SampleRibbonTo(_routePoints[run.Start]);
+            // Round only the immediate corner; the route still visits its province corridor.
+            for (var i = run.Start + 1; i < run.Start + run.Count - 1; i++)
             {
-                var t = step / 4f;
-                SampleRibbonTo(enter.Lerp(corner, t).Lerp(corner.Lerp(leave, t), t));
+                var corner = _routePoints[i];
+                var enter = ToGd(GlobeLineSanity.InterpolateSurfacePoint(
+                    ToNum(corner), ToNum(_routePoints[i - 1]), 0.12f, _flatMap));
+                var leave = ToGd(GlobeLineSanity.InterpolateSurfacePoint(
+                    ToNum(corner), ToNum(_routePoints[i + 1]), 0.12f, _flatMap));
+                SampleRibbonTo(enter);
+                for (var step = 1; step <= 4; step++)
+                {
+                    var t = step / 4f;
+                    var a = ToGd(GlobeLineSanity.InterpolateSurfacePoint(ToNum(enter), ToNum(corner), t, _flatMap));
+                    var b = ToGd(GlobeLineSanity.InterpolateSurfacePoint(ToNum(corner), ToNum(leave), t, _flatMap));
+                    SampleRibbonTo(ToGd(GlobeLineSanity.InterpolateSurfacePoint(ToNum(a), ToNum(b), t, _flatMap)));
+                }
+            }
+            SampleRibbonTo(_routePoints[run.Start + run.Count - 1]);
+            if (_ribbonSamples.Count < 2) continue;
+
+            _ribbonDistances.Clear();
+            _ribbonDistances.Add(0f);
+            for (var i = 1; i < _ribbonSamples.Count; i++)
+                _ribbonDistances.Add(_ribbonDistances[i - 1] + _ribbonSamples[i - 1].DistanceTo(_ribbonSamples[i]));
+            var length = _ribbonDistances[^1];
+            if (!float.IsFinite(length) || length < 0.0001f) continue;
+
+            var headLength = MathF.Min(0.032f, length * 0.28f);
+            var headStart = length - headLength;
+            var halfWidth = MathF.Min((_flatMap ? 0.0060f : 0.0054f) * widthScale, headLength * 0.26f);
+            if (!float.IsFinite(halfWidth) || halfWidth <= 1e-6f) continue;
+
+            var headStarted = false;
+            for (var i = 0; i < _ribbonSamples.Count; i++)
+            {
+                var point = _ribbonSamples[i];
+                var before = _ribbonSamples[Math.Max(0, i - 1)];
+                var after = _ribbonSamples[Math.Min(_ribbonSamples.Count - 1, i + 1)];
+                if (isFinalRun && !headStarted && _ribbonDistances[i] >= headStart && i > 0)
+                {
+                    var span = _ribbonDistances[i] - _ribbonDistances[i - 1];
+                    var t = span > 0.00001f ? Math.Clamp((headStart - _ribbonDistances[i - 1]) / span, 0f, 1f) : 0f;
+                    var shoulderRaw = ToGd(GlobeLineSanity.InterpolateSurfacePoint(ToNum(before), ToNum(point), t, _flatMap));
+                    if (TryOnOrderSurface(shoulderRaw, SurfaceLineRadius, FlatLineZ, out var shoulder))
+                    {
+                        EmitRibbonPair(shoulder, before, point, halfWidth, headStart, length, progress, false);
+                        // Same center, wider shoulder: one head, no shaft sticking out of its tip.
+                        EmitRibbonPair(shoulder, before, point, halfWidth * 2.4f, headStart, length, progress, true);
+                        headStarted = true;
+                    }
+                }
+                var width = headStarted ? halfWidth * 2.4f * MathF.Max(0f, (length - _ribbonDistances[i]) / headLength) : halfWidth;
+                drewAny |= EmitRibbonPair(point, before, after, width, _ribbonDistances[i], length, progress, headStarted);
             }
         }
-        SampleRibbonTo(_routePoints[^1]);
-        _ribbonDistances.Clear();
-        _ribbonDistances.Add(0f);
-        for (var i = 1; i < _ribbonSamples.Count; i++)
-            _ribbonDistances.Add(_ribbonDistances[i - 1] + _ribbonSamples[i - 1].DistanceTo(_ribbonSamples[i]));
-        var length = _ribbonDistances[^1];
-        if (length < 0.0001f) return false;
-        var headLength = MathF.Min(0.032f, length * 0.28f);
-        var headStart = length - headLength;
-        var halfWidth = MathF.Min((_flatMap ? 0.0060f : 0.0054f) * widthScale, headLength * 0.26f);
-        var headStarted = false;
-        for (var i = 0; i < _ribbonSamples.Count; i++)
-        {
-            var point = _ribbonSamples[i];
-            var before = _ribbonSamples[Math.Max(0, i - 1)];
-            var after = _ribbonSamples[Math.Min(_ribbonSamples.Count - 1, i + 1)];
-            var tangent = (after - before).Normalized();
-            if (!headStarted && _ribbonDistances[i] >= headStart && i > 0)
-            {
-                var t = (headStart - _ribbonDistances[i - 1]) / MathF.Max(0.00001f, _ribbonDistances[i] - _ribbonDistances[i - 1]);
-                var shoulder = OnOrderSurface(before.Lerp(point, t));
-                EmitRibbonPair(shoulder, tangent, halfWidth, headStart, length, progress, false);
-                // Same center, wider shoulder: one head, no shaft sticking out of its tip.
-                EmitRibbonPair(shoulder, tangent, halfWidth * 2.4f, headStart, length, progress, true);
-                headStarted = true;
-            }
-            var width = headStarted ? halfWidth * 2.4f * MathF.Max(0f, (length - _ribbonDistances[i]) / headLength) : halfWidth;
-            EmitRibbonPair(point, tangent, width, _ribbonDistances[i], length, progress, headStarted);
-        }
-        return true;
+        return drewAny;
     }
 
-    private void EmitRibbonPair(Vector3 point, Vector3 tangent, float halfWidth, float distance,
+    private bool EmitRibbonPair(Vector3 point, Vector3 before, Vector3 after, float halfWidth, float distance,
         float length, float progress, bool head)
     {
-        var normal = _flatMap ? Vector3.Forward : point.Normalized();
-        var side = normal.Cross(tangent).Normalized() * halfWidth;
+        if (!float.IsFinite(halfWidth) || halfWidth < 0f || !float.IsFinite(distance) || !float.IsFinite(length) || length <= 0f)
+            return false;
+        if (!GlobeLineSanity.TrySafeRibbonFrame(ToNum(point), ToNum(before), ToNum(after),
+                _flatMap, flatPositiveZNormal: false, out _, out _, out var sideAxis))
+        {
+            _activeRibbonPrevPair = -1;
+            return false;
+        }
+        var side = ToGd(sideAxis) * halfWidth;
+        if (!TryOnOrderSurface(point + side, SurfaceLineRadius, FlatLineZ, out var left) ||
+            !TryOnOrderSurface(point - side, SurfaceLineRadius, FlatLineZ, out var right) ||
+            !GlobeLineSanity.IsValidEmittedEdge(ToNum(left), ToNum(right), _flatMap, _flatX))
+        {
+            _activeRibbonPrevPair = -1;
+            return false;
+        }
+
         var batch = _activeRibbonBatch;
         var slot = _activeRibbonSlot;
         var verts = batch.Verts[slot];
+        if (_activeRibbonPrevPair >= 0 &&
+            (!GlobeLineSanity.IsValidEmittedEdge(ToNum(verts[_activeRibbonPrevPair]), ToNum(left), _flatMap, _flatX) ||
+             !GlobeLineSanity.IsValidEmittedEdge(ToNum(verts[_activeRibbonPrevPair + 1]), ToNum(right), _flatMap, _flatX)))
+        {
+            _activeRibbonPrevPair = -1;
+        }
+
         var uvs = batch.Uvs[slot];
         var uv2s = batch.Uv2s[slot];
         var colors = batch.Colors[slot];
@@ -247,14 +386,15 @@ void fragment() {
         var pairBase = verts.Count;
         var color = RibbonWhite with { A = progress };
         var uvX = distance / 0.07f;
-        var uv2 = new Vector2(distance / length, head ? 1f : 0f);
-        for (var edge = 0; edge < 2; edge++)
-        {
-            verts.Add(OnOrderSurface(point + (edge == 0 ? side : -side)));
-            uvs.Add(new Vector2(uvX, edge));
-            uv2s.Add(uv2);
-            colors.Add(color);
-        }
+        var uv2 = new Vector2(Math.Clamp(distance / length, 0f, 1f), head ? 1f : 0f);
+        verts.Add(left);
+        uvs.Add(new Vector2(uvX, 0f));
+        uv2s.Add(uv2);
+        colors.Add(color);
+        verts.Add(right);
+        uvs.Add(new Vector2(uvX, 1f));
+        uv2s.Add(uv2);
+        colors.Add(color);
         if (_activeRibbonPrevPair >= 0)
         {
             indices.Add(_activeRibbonPrevPair);
@@ -265,5 +405,6 @@ void fragment() {
             indices.Add(pairBase);
         }
         _activeRibbonPrevPair = pairBase;
+        return indices.Count > 0;
     }
 }

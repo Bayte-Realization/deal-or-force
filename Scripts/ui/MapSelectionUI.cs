@@ -254,7 +254,7 @@ public partial class DealOrForceGame
     /// <summary>Select what a left click landed on: its country on the left, its ground along the bottom.</summary>
     private void ShowMapSelection(GlobePick pick)
     {
-        if (_campaign?.Player is null || pick.Nation is null) return;
+        if (_campaign is null || pick.Nation is null) return;
         if (_resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
         EnsureMapSelectionPanels();
         if (_countryCard is null) return;
@@ -363,7 +363,8 @@ public partial class DealOrForceGame
     private void ShowCountryCard(Nation nation)
     {
         var player = _campaign.Player;
-        var own = nation == player;
+        var own = player is not null && nation == player;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         SetFlag(_countryCardFlag, nation.Tag, 40);
         _countryCardName.Text = nation.DisplayName;
         RefreshCountryRankBadges();
@@ -396,7 +397,7 @@ public partial class DealOrForceGame
         if (own)
         {
             // An observer's own country is nobody's: the card says who runs it.
-            _countryCardStanding.Text = _observerMode && _campaign.HumanSeats.Count == 0 ? Tr("Run by the computer · you are watching") : Tr("Your country");
+            _countryCardStanding.Text = observing && _campaign.HumanSeats.Count == 0 ? Tr("Run by the computer · you are watching") : Tr("Your country");
             _countryCardStanding.AddThemeColorOverride("font_color", Ui.Colour("text.accent"));
             _countryCardStanding.TooltipText = "";
             if (_countryDossierTab == "Overview")
@@ -433,26 +434,35 @@ public partial class DealOrForceGame
         }
 
         // ---- where we stand: the stance, the opinion, and under the cursor what it is made of.
-        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
-        var war = _campaign.Wars.Find(candidate =>
-            !candidate.Ended && candidate.Involves(player.Id) && candidate.Involves(nation.Id));
-        _countryCardStanding.Text = war is not null
-            ? Simulation.Loc.Format("At war · war score {0:+0.0;-0.0;0.0}",
-                war.AttackerId == player.Id ? war.WarScore : -war.WarScore)
-            : Simulation.Loc.Format("{0} · their opinion of us {1:+0;-0;0}",
-                Tr(DiplomaticVocabulary.StanceName(relation.Stance)), relation.Opinion);
-        _countryCardStanding.AddThemeColorOverride("font_color", Ui.Colour(
-            war is not null || relation.Opinion < -20 ? "state.negative" :
-            relation.Opinion > 20 ? "state.positive" : "text.accent"));
-        Simulation.OpinionSystem.Explain(_campaign, relation);
-        var standingFacts = string.Join("\n", relation.OpinionDrivers.Entries
-            .OrderByDescending(entry => Math.Abs(entry.Value))
-            .Take(5)
-            .Select(entry => $"{Tr(entry.Source)} {entry.Value:+0.0;-0.0;0.0}"));
-        var rivalLine = AllyRivalShift.Line(_campaign, relation);
-        if (rivalLine.Length > 0)
-            standingFacts = standingFacts.Length == 0 ? rivalLine : rivalLine + "\n" + standingFacts;
-        _countryCardStanding.TooltipText = Ui.Tip(standingFacts);
+        if (player is null)
+        {
+            _countryCardStanding.Text = Tr("Run by the computer · you are watching");
+            _countryCardStanding.AddThemeColorOverride("font_color", Ui.Colour("text.accent"));
+            _countryCardStanding.TooltipText = "";
+        }
+        else
+        {
+            var relStanding = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
+            var warStanding = _campaign.Wars.Find(candidate =>
+                !candidate.Ended && candidate.Involves(player.Id) && candidate.Involves(nation.Id));
+            _countryCardStanding.Text = warStanding is not null
+                ? Simulation.Loc.Format("At war · war score {0:+0.0;-0.0;0.0}",
+                    warStanding.AttackerId == player.Id ? warStanding.WarScore : -warStanding.WarScore)
+                : Simulation.Loc.Format("{0} · their opinion of us {1:+0;-0;0}",
+                    Tr(DiplomaticVocabulary.StanceName(relStanding.Stance)), relStanding.Opinion);
+            _countryCardStanding.AddThemeColorOverride("font_color", Ui.Colour(
+                warStanding is not null || relStanding.Opinion < -20 ? "state.negative" :
+                relStanding.Opinion > 20 ? "state.positive" : "text.accent"));
+            Simulation.OpinionSystem.Explain(_campaign, relStanding);
+            var standingFacts = string.Join("\n", relStanding.OpinionDrivers.Entries
+                .OrderByDescending(entry => Math.Abs(entry.Value))
+                .Take(5)
+                .Select(entry => $"{Tr(entry.Source)} {entry.Value:+0.0;-0.0;0.0}"));
+            var rivalLine = AllyRivalShift.Line(_campaign, relStanding);
+            if (rivalLine.Length > 0)
+                standingFacts = standingFacts.Length == 0 ? rivalLine : rivalLine + "\n" + standingFacts;
+            _countryCardStanding.TooltipText = Ui.Tip(standingFacts);
+        }
 
         if (_countryDossierTab == "Overview")
         {
@@ -484,6 +494,9 @@ public partial class DealOrForceGame
 
         if (_countryDossierTab == "Relations")
         {
+        if (player is not null)
+        {
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
         var affinity = PoliticsCore.Affinity(_campaign, player.Id, nation.Id);
         CardRow(_countryCardRows, "Politics", affinity >= 0f ? Tr("close to ours") : Tr("unlike ours"),
             Tr("How alike two governments are moves what they make of each other, every week, " +
@@ -517,6 +530,7 @@ public partial class DealOrForceGame
                 CardRow(_countryCardRows, TranslateOpinionDriver(driver.Source), val, null, driver.Value >= 0 ? "state.positive" : "state.negative");
             }
         }
+        }
         AddCountryCompactRelations(nation);
         }
 
@@ -526,11 +540,13 @@ public partial class DealOrForceGame
             OpenScreen("Diplomacy");
         }, 0, 28, false, SpriteCatalog.TextureOf("icon_diplomacy", "res://game/gfx/interface/icons/icon_diplomacy.png"));
         full.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        full.TooltipText = Ui.Tip(Simulation.Loc.Format(
-            "Everything between you and {0}: what their opinion is made of, what you have signed and what it would take.",
-            nation.DisplayName));
+        full.TooltipText = Ui.Tip(player is null
+            ? Tr("Open the diplomacy dossier for this country.")
+            : Simulation.Loc.Format(
+                "Everything between you and {0}: what their opinion is made of, what you have signed and what it would take.",
+                nation.DisplayName));
         _countryCardLinks.AddChild(full);
-        if (nation.AnswersTo(player.Id))
+        if (player is not null && nation.AnswersTo(player.Id))
             _countryCardLinks.AddChild(ActionButton("Manage subject", () => OpenSubjectsModal(nation), 0, 28, true));
 
         HostCountryActions(_countryCardActionsHost);
@@ -595,13 +611,14 @@ public partial class DealOrForceGame
     private void ShowRegionCard()
     {
         var player = _campaign.Player;
+        var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
         var state = _selectedState;
         var topology = _campaign.ProvinceMap;
         ClearChildren(_regionCardRegionRows);
         ClearChildren(_regionCardProvinceRows);
 
         var owner = state is null ? null : _campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
-        var owned = state is not null && (state.NationMapIndex == player.MapIndex ||
+        var owned = !observing && player is not null && state is not null && (state.NationMapIndex == player.MapIndex ||
                     (state.HeldById == player.Id && HeldRegions.Administered(_campaign, state)));
         _regionCardFlag.Visible = owner is not null;
         if (owner is not null) SetFlag(_regionCardFlag, owner.Tag, 20);
@@ -615,7 +632,7 @@ public partial class DealOrForceGame
 
         // ---- the region: the same fog rule as the dossier, so the two never disagree.
         var visible = state is not null && (!_campaign.Defines.FogHidesRegionStatistics || owner is null ||
-                                            CanInspectNation(owner.Id) || PlayerHoldsMostOf(state));
+                                            observing || CanInspectNation(owner.Id) || (player is not null && PlayerHoldsMostOf(state)));
         if (state is not null)
         {
             CardRow(_regionCardRegionRows, "Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
@@ -747,32 +764,35 @@ public partial class DealOrForceGame
                 foreach (var strait in topology.Crossings)
                 {
                     if (strait.From != province && strait.To != province) continue;
-                    var viewer = _campaign.Player?.Id ?? -1;
+                    var viewer = player?.Id ?? -1;
                     CardRow(_regionCardProvinceRows, "Strait crossing", Tr(strait.Name),
                         Simulation.LandCrossings.Describe(_campaign, strait, viewer),
                         Simulation.LandCrossings.ClosedTo(_campaign, strait, viewer) ? "state.warning" : "text.bright");
                 }
             if (topology.HasLakeAccess(province)) CardRow(_regionCardProvinceRows, "Lake shore", Tr("yes"));
-            var seen = _campaign.Armies.Count(army => army.ProvinceId == province && CampaignIntel.PlayerCanSeeArmy(_campaign, army));
+            var seen = _campaign.Armies.Count(army => army.ProvinceId == province && (observing || CampaignIntel.PlayerCanSeeArmy(_campaign, army)));
             CardRow(_regionCardProvinceRows, "Divisions here", seen.ToString("N0"),
                 Tr("Formations you can see standing in this province. Foreign forces are hidden by fog of war."));
             // A count of counters is not what a player needs before ordering an attack: the
             // question is how much fight the foreign ones have left. Only formations this
             // country can actually see are averaged, and the player's own divisions are
             // left out of it, so a friendly garrison cannot make an enemy look healthy.
-            var observable = Simulation.MilitaryConditionReadout.ForPlayerInProvince(
-                _campaign, province, foreignOnly: true);
-            if (observable.Known && observable.Formations > 0)
+            if (player is not null)
             {
-                var observed = Tr("Division-weighted average of the foreign formations you can see here. Hidden reserves are not counted and no order or route is revealed.");
-                // The same lines the roster and the battle card already call spent: a
-                // formation below 35% organisation or 45% equipment is not holding much.
-                CardRow(_regionCardProvinceRows, "Observed organisation",
-                    Fmt.Percent(observable.Organisation), observed,
-                    observable.Organisation < .35f ? "state.warning" : "text.bright");
-                CardRow(_regionCardProvinceRows, "Observed equipment",
-                    Fmt.Percent(observable.Equipment), observed,
-                    observable.Equipment < .45f ? "state.warning" : "text.bright");
+                var observable = Simulation.MilitaryConditionReadout.ForPlayerInProvince(
+                    _campaign, province, foreignOnly: true);
+                if (observable.Known && observable.Formations > 0)
+                {
+                    var observed = Tr("Division-weighted average of the foreign formations you can see here. Hidden reserves are not counted and no order or route is revealed.");
+                    // The same lines the roster and the battle card already call spent: a
+                    // formation below 35% organisation or 45% equipment is not holding much.
+                    CardRow(_regionCardProvinceRows, "Observed organisation",
+                        Fmt.Percent(observable.Organisation), observed,
+                        observable.Organisation < .35f ? "state.warning" : "text.bright");
+                    CardRow(_regionCardProvinceRows, "Observed equipment",
+                        Fmt.Percent(observable.Equipment), observed,
+                        observable.Equipment < .45f ? "state.warning" : "text.bright");
+                }
             }
         }
         // The movements with their headquarters or a following here, each a click from its panel.

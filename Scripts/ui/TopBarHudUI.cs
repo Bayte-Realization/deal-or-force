@@ -240,6 +240,11 @@ public partial class DealOrForceGame
             _trendsNation = player;
         }
         var day = _campaign.ElapsedDays;
+        if (player is null)
+        {
+            RefreshNullPlayerTopBar();
+            return;
+        }
         _treasuryTrend.Sample(day, player.Treasury);
         _gdpTrend.Sample(day, player.Gdp);
         _populationTrend.Sample(day, player.Population);

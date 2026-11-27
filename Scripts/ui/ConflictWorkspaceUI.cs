@@ -93,15 +93,16 @@ public partial class DealOrForceGame
     {
         var a = _campaign.NationById(war.AttackerId); var b = _campaign.NationById(war.DefenderId);
         if (a is null || b is null) return null;
+        var playerId = _campaign.Player?.Id ?? -1;
         var names = $"{a.DisplayName} — {b.DisplayName}";
         var tags = new List<string>();
-        if (war.Involves(_campaign.Player.Id)) tags.Add(Tr("we are fighting"));
+        if (playerId > 0 && war.Involves(playerId)) tags.Add(Tr("we are fighting"));
         if (war.CivilConflict) tags.Add(Tr("civil war"));
         if (war.Limited) tags.Add(Tr("border war"));
         tags.Add(Tr(war.Intensity >= 2 ? "total war" : war.Intensity == 1 ? "major war" : "limited war"));
         var backers = sponsorships.GetValueOrDefault(war.Id) ?? Array.Empty<Sponsorship>();
-        if (backers.Any(s => s.SponsorId == _campaign.Player.Id)) tags.Add(Tr("we provide support"));
-        if (backers.Any(s => s.ClientId == _campaign.Player.Id)) tags.Add(Tr("foreign support to us"));
+        if (playerId > 0 && backers.Any(s => s.SponsorId == playerId)) tags.Add(Tr("we provide support"));
+        if (playerId > 0 && backers.Any(s => s.ClientId == playerId)) tags.Add(Tr("foreign support to us"));
         if (backers.Any(s => war.IsAttacking(s.ClientId)) && backers.Any(s => !war.IsAttacking(s.ClientId))) tags.Add(Tr("proxy confrontation"));
         else if (backers.Length > 0) tags.Add(Loc.Format("{0} backer(s)", backers.Length));
         return new($"War_{war.Id}", a.Tag, b.Tag, names, $"{names} {a.Tag} {b.Tag} {WarNames.Of(_campaign, war)}",
@@ -115,18 +116,18 @@ public partial class DealOrForceGame
     {
         var sponsorships = ProxyWars.Active(_campaign).Where(s => s.WarId >= 0).GroupBy(s => s.WarId)
             .ToDictionary(g => g.Key, g => g.ToArray());
-        var playerId = _campaign.Player.Id;
+        var playerId = _campaign.Player?.Id ?? -1;
         var entries = new List<ConflictEntry>();
         if (_conflictTab != 1)
             foreach (var relation in hot)
-                if (_conflictTab != 2 || relation.A == playerId || relation.B == playerId)
+                if (_conflictTab != 2 || (playerId > 0 && (relation.A == playerId || relation.B == playerId)))
                     if (ConflictEntryFor(relation) is { } entry) entries.Add(entry);
         if (_conflictTab != 0)
-            foreach (var war in wars.OrderByDescending(w => w.Involves(playerId))
+            foreach (var war in wars.OrderByDescending(w => playerId > 0 && w.Involves(playerId))
                          .ThenByDescending(w => sponsorships.GetValueOrDefault(w.Id)?.Length ?? 0)
                          .ThenByDescending(w => w.AttackerLosses + w.DefenderLosses).ThenBy(w => w.Id))
-                if (_conflictTab != 2 || war.Involves(playerId) ||
-                    sponsorships.TryGetValue(war.Id, out var aid) && aid.Any(s => s.SponsorId == playerId || s.ClientId == playerId))
+                if (_conflictTab != 2 || (playerId > 0 && (war.Involves(playerId) ||
+                    sponsorships.TryGetValue(war.Id, out var aid) && aid.Any(s => s.SponsorId == playerId || s.ClientId == playerId))))
                     if (ConflictEntryFor(war, sponsorships) is { } entry) entries.Add(entry);
         var query = _conflictSearch.Text.Trim();
         var found = entries.Where(e => query.Length == 0 || e.Search.Contains(query, StringComparison.OrdinalIgnoreCase) ||

@@ -110,6 +110,32 @@ public static class HouseholdEconomy
         float food, float energy, float medicine, bool atWar) =>
         ReviewCore(c, n, s, annualConditions, food, energy, medicine, atWar, MarketSystem.JobsDemanded(s));
 
+    [ThreadStatic] private static HouseholdScratch _householdScratch;
+
+    private sealed class HouseholdScratch
+    {
+        public long[] Sizes = Array.Empty<long>();
+        public byte[] IsUpper = Array.Empty<byte>();
+        public float[] AnchorWealth = Array.Empty<float>();
+        public float[] Employment = Array.Empty<float>();
+        public float[] Wealth = Array.Empty<float>();
+        public float[] Sol = Array.Empty<float>();
+        public float[] Radicalism = Array.Empty<float>();
+
+        public void EnsureCapacity(int count)
+        {
+            if (Sizes.Length >= count) return;
+            var cap = Math.Max(count, Sizes.Length == 0 ? 32 : Sizes.Length * 2);
+            Sizes = new long[cap];
+            IsUpper = new byte[cap];
+            AnchorWealth = new float[cap];
+            Employment = new float[cap];
+            Wealth = new float[cap];
+            Sol = new float[cap];
+            Radicalism = new float[cap];
+        }
+    }
+
     private static void ReviewCore(Campaign c, Nation n, ScenarioState s, float annualConditions,
         float food, float energy, float medicine, bool atWar, float buildingJobs)
     {
@@ -119,59 +145,129 @@ public static class HouseholdEconomy
         var share = DemographicCycle.WorkingShare(s);
         var groups = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(s.PopulationGroups);
         var needEmployment = s.NonBuildingJobs < 0;
-        var sumLabour = 0.0;
-        var sumEmployed = 0.0;
-        if (groups.Length == 0)
-        {
-            sumLabour = s.Population * (double)share * 1e-6;
-        }
-        else if (needEmployment)
-        {
-            for (var i = 0; i < groups.Length; i++)
-            {
-                var g = groups[i];
-                var active = g.Size * share * 1e-6 * (g.Class == SocialClass.Upper ? .15 : 1);
-                sumLabour += active;
-                sumEmployed += active * g.Employment;
-            }
-        }
-        else
-        {
-            for (var i = 0; i < groups.Length; i++)
-            {
-                var g = groups[i];
-                sumLabour += g.Size * share * 1e-6 * (g.Class == SocialClass.Upper ? .15 : 1);
-            }
-        }
-        var labour = (float)sumLabour;
-        if (needEmployment)
-        {
-            var emp = labour <= 0f ? 0f : (float)sumEmployed / labour;
-            s.NonBuildingJobs = Math.Max(0, labour * emp - buildingJobs);
-        }
         var damage = Math.Clamp(s.WarDamage, 0, 1);
-        s.NonBuildingJobs = Math.Max(0, s.NonBuildingJobs * (1 + Math.Clamp(annualConditions, -.25f, .15f) * interval));
-        s.EmploymentTarget = labour <= 0 ? 0 : Math.Clamp((s.NonBuildingJobs + buildingJobs) * (1 - damage * .5f) / labour, 0, 1);
-        s.BasicNeedsCoverage = food * .6f + energy * .25f + medicine * .15f;
-        var scarcity = Math.Max(0, 1 - s.BasicNeedsCoverage - c.Defines.ScarcityTolerance);
-        var unemployment = Math.Max(0, .9f - s.EmploymentTarget);
-        s.LivelihoodStress = Math.Clamp(scarcity * .65f + unemployment * .25f + damage * .25f, 0, 1);
         var employmentRate = Math.Clamp(c.Defines.HouseholdEmploymentApproach, 0, 1);
         var wealthRate = Math.Clamp(c.Defines.HouseholdWealthApproach, 0, 1);
-        double living = 0;
-        for (var i = 0; i < groups.Length; i++)
+
+        var handledGroups = false;
+        if (groups.Length >= 16 &&
+            Kernels.NativeKernelsLoader.EnableEconomyDemoDefault &&
+            Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapEconomyDemo))
         {
-            var g = groups[i];
-            g.Employment = M.Lerp(g.Employment, s.EmploymentTarget, employmentRate);
-            var anchor = LookupProfession(g.Profession)?.Wealth ?? (g.Class == SocialClass.Upper ? .9f : g.Class == SocialClass.Middle ? .6f : .35f);
-            var targetWealth = Math.Clamp(anchor + (g.Employment - .9f) * .22f - scarcity * .18f - damage * .12f, 0, 1);
-            g.Wealth = M.Lerp(g.Wealth, targetWealth, wealthRate);
-            var targetLiving = Math.Clamp(n.StandardOfLiving + (g.Wealth - .5f) * .12f - s.LivelihoodStress * .25f, 0, 1);
-            g.StandardOfLiving = M.Lerp(g.StandardOfLiving, targetLiving, .04f);
-            g.Radicalism = Math.Clamp(M.Lerp(g.Radicalism, s.Radicalism + s.LivelihoodStress * .2f, .025f), 0, 1);
-            living += g.Size * (double)g.StandardOfLiving;
+            var scratch = _householdScratch ??= new HouseholdScratch();
+            scratch.EnsureCapacity(groups.Length);
+            for (var i = 0; i < groups.Length; i++)
+            {
+                var g = groups[i];
+                scratch.Sizes[i] = g.Size;
+                scratch.IsUpper[i] = g.Class == SocialClass.Upper ? (byte)1 : (byte)0;
+                scratch.AnchorWealth[i] = LookupProfession(g.Profession)?.Wealth ?? (g.Class == SocialClass.Upper ? .9f : g.Class == SocialClass.Middle ? .6f : .35f);
+                scratch.Employment[i] = g.Employment;
+                scratch.Wealth[i] = g.Wealth;
+                scratch.Sol[i] = g.StandardOfLiving;
+                scratch.Radicalism[i] = g.Radicalism;
+            }
+
+            if (Kernels.NativeEconomyDemoKernels.TryHouseholdGroups(
+                    groups.Length,
+                    scratch.Sizes.AsSpan(0, groups.Length),
+                    scratch.IsUpper.AsSpan(0, groups.Length),
+                    scratch.AnchorWealth.AsSpan(0, groups.Length),
+                    scratch.Employment.AsSpan(0, groups.Length),
+                    scratch.Wealth.AsSpan(0, groups.Length),
+                    scratch.Sol.AsSpan(0, groups.Length),
+                    scratch.Radicalism.AsSpan(0, groups.Length),
+                    share,
+                    needEmployment,
+                    buildingJobs,
+                    s.NonBuildingJobs,
+                    annualConditions,
+                    interval,
+                    damage,
+                    food,
+                    energy,
+                    medicine,
+                    c.Defines.ScarcityTolerance,
+                    employmentRate,
+                    wealthRate,
+                    n.StandardOfLiving,
+                    s.Radicalism,
+                    out var outNonBuildingJobs,
+                    out var outEmpTarget,
+                    out var outBasicNeeds,
+                    out var outStress,
+                    out var livingSum))
+            {
+                s.NonBuildingJobs = outNonBuildingJobs;
+                s.EmploymentTarget = outEmpTarget;
+                s.BasicNeedsCoverage = outBasicNeeds;
+                s.LivelihoodStress = outStress;
+                for (var i = 0; i < groups.Length; i++)
+                {
+                    var g = groups[i];
+                    g.Employment = scratch.Employment[i];
+                    g.Wealth = scratch.Wealth[i];
+                    g.StandardOfLiving = scratch.Sol[i];
+                    g.Radicalism = scratch.Radicalism[i];
+                }
+                s.StandardOfLiving = M.Lerp(s.StandardOfLiving, (float)(livingSum / s.Population), .08f);
+                handledGroups = true;
+            }
         }
-        if (groups.Length > 0) s.StandardOfLiving = M.Lerp(s.StandardOfLiving, (float)(living / s.Population), .08f);
+
+        if (!handledGroups)
+        {
+            var sumLabour = 0.0;
+            var sumEmployed = 0.0;
+            if (groups.Length == 0)
+            {
+                sumLabour = s.Population * (double)share * 1e-6;
+            }
+            else if (needEmployment)
+            {
+                for (var i = 0; i < groups.Length; i++)
+                {
+                    var g = groups[i];
+                    var active = g.Size * share * 1e-6 * (g.Class == SocialClass.Upper ? .15 : 1);
+                    sumLabour += active;
+                    sumEmployed += active * g.Employment;
+                }
+            }
+            else
+            {
+                for (var i = 0; i < groups.Length; i++)
+                {
+                    var g = groups[i];
+                    sumLabour += g.Size * share * 1e-6 * (g.Class == SocialClass.Upper ? .15 : 1);
+                }
+            }
+            var labour = (float)sumLabour;
+            if (needEmployment)
+            {
+                var emp = labour <= 0f ? 0f : (float)sumEmployed / labour;
+                s.NonBuildingJobs = Math.Max(0, labour * emp - buildingJobs);
+            }
+            s.NonBuildingJobs = Math.Max(0, s.NonBuildingJobs * (1 + Math.Clamp(annualConditions, -.25f, .15f) * interval));
+            s.EmploymentTarget = labour <= 0 ? 0 : Math.Clamp((s.NonBuildingJobs + buildingJobs) * (1 - damage * .5f) / labour, 0, 1);
+            s.BasicNeedsCoverage = food * .6f + energy * .25f + medicine * .15f;
+            var scarcity = Math.Max(0, 1 - s.BasicNeedsCoverage - c.Defines.ScarcityTolerance);
+            var unemployment = Math.Max(0, .9f - s.EmploymentTarget);
+            s.LivelihoodStress = Math.Clamp(scarcity * .65f + unemployment * .25f + damage * .25f, 0, 1);
+            double living = 0;
+            for (var i = 0; i < groups.Length; i++)
+            {
+                var g = groups[i];
+                g.Employment = M.Lerp(g.Employment, s.EmploymentTarget, employmentRate);
+                var anchor = LookupProfession(g.Profession)?.Wealth ?? (g.Class == SocialClass.Upper ? .9f : g.Class == SocialClass.Middle ? .6f : .35f);
+                var targetWealth = Math.Clamp(anchor + (g.Employment - .9f) * .22f - scarcity * .18f - damage * .12f, 0, 1);
+                g.Wealth = M.Lerp(g.Wealth, targetWealth, wealthRate);
+                var targetLiving = Math.Clamp(n.StandardOfLiving + (g.Wealth - .5f) * .12f - s.LivelihoodStress * .25f, 0, 1);
+                g.StandardOfLiving = M.Lerp(g.StandardOfLiving, targetLiving, .04f);
+                g.Radicalism = Math.Clamp(M.Lerp(g.Radicalism, s.Radicalism + s.LivelihoodStress * .2f, .025f), 0, 1);
+                living += g.Size * (double)g.StandardOfLiving;
+            }
+            if (groups.Length > 0) s.StandardOfLiving = M.Lerp(s.StandardOfLiving, (float)(living / s.Population), .08f);
+        }
         var (birth, death, _) = VitalRatesCore(c, n, s, food, energy, medicine, atWar, netBreakdown: null);
         s.ReviewBirths = (long)Math.Round(s.Population * (double)birth * interval);
         s.ReviewDeaths = Math.Min(s.Population + s.ReviewBirths, (long)Math.Round(s.Population * (double)death * interval));
@@ -367,5 +463,190 @@ public static class HouseholdEconomy
             : birth - death >= 0.012f ? "Demographic boom"
             : "Balanced growth";
         return (birth, death, aging, status);
+    }
+
+    [ThreadStatic] private static VitalBatchScratch _vitalScratch;
+
+    private sealed class VitalBatchScratch
+    {
+        public long[] Pop = Array.Empty<long>();
+        public float[] WarDamage = Array.Empty<float>();
+        public int[] Hospitals = Array.Empty<int>();
+        public float[] Literacy = Array.Empty<float>();
+        public float[] Urbanization = Array.Empty<float>();
+        public float[] Sol = Array.Empty<float>();
+        public float[] Radicalism = Array.Empty<float>();
+        public float[] YoungShare = Array.Empty<float>();
+        public float[] OldShare = Array.Empty<float>();
+        public float[] WelfareSpending = Array.Empty<float>();
+        public float[] Inflation = Array.Empty<float>();
+        public float[] WarSupport = Array.Empty<float>();
+        public float[] NationStability = Array.Empty<float>();
+        public float[] StateStability = Array.Empty<float>();
+        public float[] CapitalLat = Array.Empty<float>();
+        public float[] Food = Array.Empty<float>();
+        public float[] Energy = Array.Empty<float>();
+        public float[] Medicine = Array.Empty<float>();
+        public byte[] Flags = Array.Empty<byte>();
+
+        public void EnsureCapacity(int count)
+        {
+            if (Pop.Length >= count) return;
+            var cap = Math.Max(count, Pop.Length == 0 ? 128 : Pop.Length * 2);
+            Pop = new long[cap];
+            WarDamage = new float[cap];
+            Hospitals = new int[cap];
+            Literacy = new float[cap];
+            Urbanization = new float[cap];
+            Sol = new float[cap];
+            Radicalism = new float[cap];
+            YoungShare = new float[cap];
+            OldShare = new float[cap];
+            WelfareSpending = new float[cap];
+            Inflation = new float[cap];
+            WarSupport = new float[cap];
+            NationStability = new float[cap];
+            StateStability = new float[cap];
+            CapitalLat = new float[cap];
+            Food = new float[cap];
+            Energy = new float[cap];
+            Medicine = new float[cap];
+            Flags = new byte[cap];
+        }
+    }
+
+    internal static bool ComputeVitalRatesBatch(
+        Campaign c,
+        ReadOnlySpan<Nation> nations,
+        ReadOnlySpan<ScenarioState> states,
+        ReadOnlySpan<bool> atWar,
+        float interval,
+        Span<float> outBirth,
+        Span<float> outDeath,
+        Span<float> outOldAgeBurden,
+        Span<long> outReviewBirths = default,
+        Span<long> outReviewDeaths = default)
+    {
+        if (c is null) return false;
+        var count = states.Length;
+        if (nations.Length != count || atWar.Length != count ||
+            outBirth.Length < count || outDeath.Length < count || outOldAgeBurden.Length < count ||
+            (!outReviewBirths.IsEmpty && outReviewBirths.Length < count) ||
+            (!outReviewDeaths.IsEmpty && outReviewDeaths.Length < count))
+        {
+            return false;
+        }
+        if (count == 0) return true;
+
+        var wantRb = !outReviewBirths.IsEmpty;
+        var wantRd = !outReviewDeaths.IsEmpty;
+        if (DemographyRulesHook.Installed)
+        {
+            for (var i = 0; i < count; i++)
+            {
+                var n = nations[i];
+                var s = states[i];
+                var (br, dr, ob) = VitalRatesCore(c, n, s,
+                    Supply(n, Commodity.Food), Supply(n, Commodity.Energy), Supply(n, Commodity.Pharmaceuticals),
+                    atWar[i], netBreakdown: null);
+                outBirth[i] = br;
+                outDeath[i] = dr;
+                outOldAgeBurden[i] = ob;
+                if (wantRb || wantRd)
+                {
+                    var rb = (long)Math.Round(s.Population * (double)br * interval);
+                    if (wantRb) outReviewBirths[i] = rb;
+                    if (wantRd) outReviewDeaths[i] = Math.Min(s.Population + rb, (long)Math.Round(s.Population * (double)dr * interval));
+                }
+            }
+            return false;
+        }
+
+        var scratch = _vitalScratch ??= new VitalBatchScratch();
+        scratch.EnsureCapacity(count);
+        var ageEnabled = c.Defines.DemographyAgeStructureEnabled;
+        Nation lastNation = null;
+        float lastFood = 1f, lastEnergy = 1f, lastMed = 1f;
+        byte lastNationFlags = 0;
+
+        for (var i = 0; i < count; i++)
+        {
+            var n = nations[i];
+            var s = states[i];
+            if (!ReferenceEquals(n, lastNation))
+            {
+                lastNation = n;
+                lastFood = Supply(n, Commodity.Food);
+                lastEnergy = Supply(n, Commodity.Energy);
+                lastMed = Supply(n, Commodity.Pharmaceuticals);
+                byte nf = 0;
+                if (n.Ideology is "traditionalism" or "theocratic_rule" or "agrarianism")
+                    nf |= Kernels.NativeEconomyDemoKernels.VitalFlagTraditionBonus;
+                if (StateIdentity.IsSecular(n.DeclaredReligion) || StateIdentity.IsAtheist(n.DeclaredReligion))
+                    nf |= Kernels.NativeEconomyDemoKernels.VitalFlagSecularPenalty;
+                if (ModifierSystem.Has(n, "pronatalist_drive"))
+                    nf |= Kernels.NativeEconomyDemoKernels.VitalFlagPronatalist;
+                else if (ModifierSystem.Has(n, "demographic_boom"))
+                    nf |= Kernels.NativeEconomyDemoKernels.VitalFlagDemoBoom;
+                lastNationFlags = nf;
+            }
+
+            scratch.Pop[i] = s.Population;
+            scratch.WarDamage[i] = s.WarDamage;
+            scratch.Hospitals[i] = s.Buildings.GetValueOrDefault(BuildingKind.Hospital);
+            scratch.Literacy[i] = s.Literacy;
+            scratch.Urbanization[i] = s.Urbanization;
+            scratch.Sol[i] = s.StandardOfLiving;
+            scratch.Radicalism[i] = s.Radicalism;
+            scratch.YoungShare[i] = s.YoungShare;
+            scratch.OldShare[i] = s.OldShare;
+            scratch.WelfareSpending[i] = n.WelfareSpending;
+            scratch.Inflation[i] = n.Inflation;
+            scratch.WarSupport[i] = n.WarSupport;
+            scratch.NationStability[i] = n.Stability;
+            scratch.StateStability[i] = s.Stability;
+            scratch.CapitalLat[i] = n.CapitalLatitude;
+            scratch.Food[i] = lastFood;
+            scratch.Energy[i] = lastEnergy;
+            scratch.Medicine[i] = lastMed;
+            var flg = lastNationFlags;
+            if (atWar[i]) flg |= Kernels.NativeEconomyDemoKernels.VitalFlagAtWar;
+            if (ageEnabled) flg |= Kernels.NativeEconomyDemoKernels.VitalFlagAgeEnabled;
+            scratch.Flags[i] = flg;
+        }
+
+        return Kernels.NativeEconomyDemoKernels.VitalRatesBatch(
+            scratch.Pop.AsSpan(0, count),
+            scratch.WarDamage.AsSpan(0, count),
+            scratch.Hospitals.AsSpan(0, count),
+            scratch.Literacy.AsSpan(0, count),
+            scratch.Urbanization.AsSpan(0, count),
+            scratch.Sol.AsSpan(0, count),
+            scratch.Radicalism.AsSpan(0, count),
+            scratch.YoungShare.AsSpan(0, count),
+            scratch.OldShare.AsSpan(0, count),
+            scratch.WelfareSpending.AsSpan(0, count),
+            scratch.Inflation.AsSpan(0, count),
+            scratch.WarSupport.AsSpan(0, count),
+            scratch.NationStability.AsSpan(0, count),
+            scratch.StateStability.AsSpan(0, count),
+            scratch.CapitalLat.AsSpan(0, count),
+            scratch.Food.AsSpan(0, count),
+            scratch.Energy.AsSpan(0, count),
+            scratch.Medicine.AsSpan(0, count),
+            scratch.Flags.AsSpan(0, count),
+            c.Defines.ScarcityTolerance,
+            c.Defines.DemographyBirthBaseAnnual,
+            c.Defines.DemographyLowLiteracyBirthAnnual,
+            c.Defines.DemographyDeathBaseAnnual,
+            c.Defines.DemographyShortageDeathAnnual,
+            c.Defines.DemographyReferenceOldShare,
+            c.Defines.DemographyMortalityOldWeight,
+            interval,
+            outBirth,
+            outDeath,
+            outOldAgeBurden,
+            outReviewBirths,
+            outReviewDeaths);
     }
 }

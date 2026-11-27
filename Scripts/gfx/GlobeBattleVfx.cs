@@ -16,22 +16,27 @@ public sealed partial class GlobePresentation
     private MeshInstance3D _battleArrowNode;
 
     private readonly RibbonBatch _battleRibbonBatch = new();
-    private readonly List<(Vector3 Origin, Vector3 Target, float Progress)> _battleArrowSpecs = new();
+    private readonly List<(Vector3 Origin, Vector3 Target, float Progress, bool IsFlat)> _battleArrowSpecs = new();
     private int _battleArrowFingerprint = int.MinValue;
     private int _battleArrowZoomBucket = int.MinValue;
+    private int _battleArrowFlatBucket = int.MinValue;
     private bool _battleArrowHasSurface;
 
     private float BattleArrowUnitsPerPixel()
     {
-        if (_flatMap) return _counterWorldPixel;
+        if (_flatMap) return GlobeLineSanity.SafeClamp(_counterWorldPixel, 0.0001f, 0.05f, 0.0008f);
         if (!IsInstanceValid(_camera)) return 0.0008f;
-        var viewportH = Math.Max(1f, Size.Y);
-        var altitude = Math.Max(0.25f, _camera.GlobalPosition.Length() - GlobeRadius);
-        return altitude * (2f * MathF.Tan(Mathf.DegToRad(_camera.Fov * 0.5f)) / viewportH);
+        var viewportH = Math.Max(1f, GlobeLineSanity.FiniteOr(Size.Y, 720f));
+        var camPos = _camera.GlobalPosition;
+        var camLen = GlobeLineSanity.IsFinite(ToNum(camPos)) ? camPos.Length() : GlobeRadius + 0.25f;
+        var altitude = Math.Max(0.25f, GlobeLineSanity.FiniteOr(camLen, GlobeRadius + 0.25f) - GlobeRadius);
+        var halfFovRad = Mathf.DegToRad(GlobeLineSanity.SafeClamp(_camera.Fov, 5f, 160f, 45f) * 0.5f);
+        var result = altitude * (2f * MathF.Tan(halfFovRad) / viewportH);
+        return GlobeLineSanity.SafeClamp(result, 1e-5f, 0.1f, 0.0008f);
     }
 
     private int CurrentBattleArrowZoomBucket() =>
-        Mathf.RoundToInt(MathF.Log2(Math.Max(BattleArrowUnitsPerPixel(), 1e-5f)) * 4f);
+        Mathf.RoundToInt(MathF.Log2(Math.Clamp(BattleArrowUnitsPerPixel(), 1e-5f, 0.1f)) * 4f);
 
     private void ClearBattleVfx()
     {
@@ -44,6 +49,7 @@ public sealed partial class GlobePresentation
         }
         _battleArrowFingerprint = int.MinValue;
         _battleArrowZoomBucket = int.MinValue;
+        _battleArrowFlatBucket = int.MinValue;
         if (IsInstanceValid(_battleArrowNode)) _battleArrowNode.Visible = false;
     }
 
@@ -80,24 +86,40 @@ public sealed partial class GlobePresentation
         int attackingProvinceId,
         float intensity)
     {
-        if (attackingProvinceId <= 0 || _campaign?.ProvinceMap is not { } map) return;
+        if (_campaign?.ProvinceMap is not { } map) return;
+        if (!GlobeLineSanity.TryValidateProvinceId(attackingProvinceId, map.ProvinceCount, map.ProvinceCenterCell)) return;
+        if (!GlobeLineSanity.IsValidGeo(battleLocation.Latitude, battleLocation.Longitude) ||
+            (battleLocation.Latitude == 0f && battleLocation.Longitude == 0f)) return;
+        var originGeo = map.CenterOf(attackingProvinceId);
+        if (!GlobeLineSanity.IsValidGeo(originGeo.Latitude, originGeo.Longitude)) return;
+
         var battlePoint = _flatMap
             ? LocalFlatPoint(battleLocation.Latitude, battleLocation.Longitude, FlatLineZ + 0.002f)
             : LocalSurfacePoint(battleLocation.Latitude, battleLocation.Longitude, SurfaceLineRadius + 0.0008f);
-        var originGeo = map.CenterOf(attackingProvinceId);
         var originPoint = _flatMap
             ? LocalFlatPoint(originGeo.Latitude, originGeo.Longitude, FlatLineZ + 0.0025f)
             : LocalSurfacePoint(originGeo.Latitude, originGeo.Longitude, SurfaceLineRadius + 0.001f);
-        // Skip degenerate or date-line wrapping arrows on flat projection.
+        if (_flatMap)
+            originPoint = originPoint with { X = DateLineSeam.NearestCopy(originPoint.X, battlePoint.X, FlatMapWidth) };
+        if (!GlobeLineSanity.IsValidEmittedVertex(ToNum(originPoint), _flatMap, _flatX) ||
+            !GlobeLineSanity.IsValidEmittedVertex(ToNum(battlePoint), _flatMap, _flatX))
+            return;
+
+        // Skip degenerate, invalid cross-globe, or date-line wrapping arrows.
         var dist = originPoint.DistanceTo(battlePoint);
-        if (dist >= 0.006f && (!_flatMap || dist < FlatMapWidth * 0.25f))
-            _battleArrowSpecs.Add((originPoint, battlePoint, Math.Clamp(intensity, 0.38f, 0.98f)));
+        var maxChord = _flatMap ? GlobeLineSanity.MaxBattleArrowChordFlat : GlobeLineSanity.MaxBattleArrowChordGlobe;
+        if (float.IsFinite(dist) && dist >= 0.006f && dist <= maxChord)
+        {
+            _battleArrowSpecs.Add((originPoint, battlePoint,
+                GlobeLineSanity.SafeClamp(intensity, 0.38f, 0.98f, 0.5f), _flatMap));
+        }
     }
 
     private void RefreshBattleVfxZoomIfNeeded()
     {
         if (!MilitaryMarkersEnabled || _battleArrowSpecs.Count == 0) return;
-        if (CurrentBattleArrowZoomBucket() != _battleArrowZoomBucket)
+        var flatBucket = _flatMap ? Mathf.FloorToInt(_flatX * 0.25f) : 0;
+        if (CurrentBattleArrowZoomBucket() != _battleArrowZoomBucket || flatBucket != _battleArrowFlatBucket)
             CommitBattleVfxMeshes();
     }
 
@@ -107,17 +129,21 @@ public sealed partial class GlobePresentation
         if (_routeMaterials[1] is null) CreateOrderMaterials();
 
         var zoomBucket = CurrentBattleArrowZoomBucket();
+        var flatBucket = _flatMap ? Mathf.FloorToInt(_flatX * 0.25f) : 0;
         _battleArrowZoomBucket = zoomBucket;
-        var arrowHash = HashCode.Combine(_flatMap, _battleArrowSpecs.Count, zoomBucket);
+        _battleArrowFlatBucket = flatBucket;
+        var arrowHash = HashCode.Combine(_flatMap, flatBucket, _battleArrowSpecs.Count, zoomBucket);
         for (var i = 0; i < _battleArrowSpecs.Count; i++)
         {
             var spec = _battleArrowSpecs[i];
             arrowHash = HashCode.Combine(arrowHash,
+                spec.IsFlat,
                 BitConverter.SingleToInt32Bits(spec.Origin.X),
                 BitConverter.SingleToInt32Bits(spec.Origin.Y),
                 BitConverter.SingleToInt32Bits(spec.Origin.Z),
                 BitConverter.SingleToInt32Bits(spec.Target.X),
-                BitConverter.SingleToInt32Bits(spec.Target.Y),
+                BitConverter.SingleToInt32Bits(spec.Target.Y));
+            arrowHash = HashCode.Combine(arrowHash,
                 BitConverter.SingleToInt32Bits(spec.Target.Z),
                 BitConverter.SingleToInt32Bits(spec.Progress));
         }
@@ -128,21 +154,30 @@ public sealed partial class GlobePresentation
                 _battleArrowFingerprint = arrowHash;
                 _battleRibbonBatch.Clear();
                 var rawUnitsPerPixel = BattleArrowUnitsPerPixel();
-                var worldPx = Math.Clamp(rawUnitsPerPixel, 0.00018f, 0.0016f);
-                var zoomScale = Math.Clamp(rawUnitsPerPixel / 0.00058f, 0.48f, 1.0f);
+                var worldPx = GlobeLineSanity.SafeClamp(rawUnitsPerPixel, 0.00018f, 0.0016f, 0.0008f);
+                var zoomScale = GlobeLineSanity.SafeClamp(rawUnitsPerPixel / 0.00058f, 0.48f, 1.0f, 0.8f);
+                var maxChord = _flatMap ? GlobeLineSanity.MaxBattleArrowChordFlat : GlobeLineSanity.MaxBattleArrowChordGlobe;
                 for (var i = 0; i < _battleArrowSpecs.Count; i++)
                 {
                     var spec = _battleArrowSpecs[i];
+                    if (spec.IsFlat != _flatMap) continue;
+                    if (!GlobeLineSanity.IsValidEmittedEdge(ToNum(spec.Origin), ToNum(spec.Target), _flatMap, _flatX, maxChord))
+                        continue;
                     var len = spec.Origin.DistanceTo(spec.Target);
-                    if (len < 0.004f) continue;
+                    if (!float.IsFinite(len) || len < 0.004f) continue;
                     var trimStart = MathF.Min(len * 0.16f, Math.Clamp(worldPx * 9f, 0.004f, 0.015f));
                     var trimEnd = MathF.Min(len * 0.18f, Math.Clamp(worldPx * 14f, 0.006f, 0.022f));
                     var start = spec.Origin;
                     var end = spec.Target;
                     if (len > trimStart + trimEnd + 0.005f)
                     {
-                        start = OnOrderSurface(spec.Origin.Lerp(spec.Target, trimStart / len));
-                        end = OnOrderSurface(spec.Origin.Lerp(spec.Target, 1f - trimEnd / len));
+                        var startRaw = ToGd(GlobeLineSanity.InterpolateSurfacePoint(
+                            ToNum(spec.Origin), ToNum(spec.Target), trimStart / len, _flatMap));
+                        var endRaw = ToGd(GlobeLineSanity.InterpolateSurfacePoint(
+                            ToNum(spec.Origin), ToNum(spec.Target), 1f - trimEnd / len, _flatMap));
+                        if (!TryOnOrderSurface(startRaw, SurfaceLineRadius, FlatLineZ, out start) ||
+                            !TryOnOrderSurface(endRaw, SurfaceLineRadius, FlatLineZ, out end))
+                            continue;
                     }
                     DrawStraightRibbon(_battleRibbonBatch, 1, start, end, spec.Progress, zoomScale);
                 }
