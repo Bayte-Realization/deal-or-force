@@ -100,12 +100,17 @@ public partial class DealOrForceGame : Control
         InterfaceInteractionGuard.Install(GetTree());
         ButtonMotion.Install(GetTree());
         TooltipKeeper.Install(GetTree());
+        if (DealOrForce.Platform.PlatformProfile.Current?.IsMobile == true ||
+            RenderingServer.GetCurrentRenderingMethod() == "gl_compatibility")
+        {
+            GetViewport().UseHdr2D = false;
+        }
         ControlSkin.Apply();
         ApplyDesktopCustomCursors();
         LayoutAudit.SetWatchSuppressed(() =>
             (_globe?.IsActivelyPanning ?? false) ||
             (_globe?.ShowcasePan ?? false) ||
-            (_campaign is { IsPaused: false } && _speed >= 4));
+            (_campaign is { IsPaused: false } && _speed >= 7));
         // A campaign's own options are read from whichever campaign is on screen now - asked
         // each time, so a loaded save or a new scenario is never answered for by the last one.
         Simulation.SettingsCatalog.CurrentCampaign = () => _campaign;
@@ -113,11 +118,10 @@ public partial class DealOrForceGame : Control
         {
             GamePaths.Prepare();
             StartDiagnostics();
-            Simulation.SimProfiler.Enabled = string.Equals(
-                System.Environment.GetEnvironmentVariable("DOF_PROFILE_SCOPES"),
-                "1", StringComparison.Ordinal);
+            Simulation.SimProfiler.Enabled = string.Equals(System.Environment.GetEnvironmentVariable("DOF_PROFILE_SCOPES"), "1", StringComparison.Ordinal);
             Simulation.PlayerSettings.UseDirectory(GamePaths.Settings);
             Simulation.Shell.ShellSettingsMigration.ApplyOnce();
+            Simulation.MobileFirstBootDefaults.ApplyOnce(IsMobilePlatform);
             await LoadingPhase("Loading interface and content catalogs", 10);
             // Resolve/migrate old saves only after the first loading frame is visible.
             GD.Print($"[dof] saves: {SaveRoot}");
@@ -152,6 +156,10 @@ public partial class DealOrForceGame : Control
 
             await LoadingPhase("Preparing the interface", 20, fast: true);
             var uiClock = System.Diagnostics.Stopwatch.StartNew();
+            var loadSlot = MainMenuScene.Wanted == MenuIntent.LoadSlot ? MainMenuScene.WantedSlot : null;
+            var savedMapPack = Simulation.MobileFirstBootDefaults.ResolveBootMapId(Simulation.SettingsCatalog.Chosen("map_pack"), MainMenuScene.Wanted == MenuIntent.LoadLatest, loadSlot, SaveRoot);
+            if (!string.IsNullOrWhiteSpace(savedMapPack))
+                Simulation.MapCatalog.SetActiveMap(savedMapPack);
             BuildInterface();
             _globe.LoadingInputBlocked = true;
             _globe.SetViewportRenderingPaused(true);
@@ -233,6 +241,7 @@ public partial class DealOrForceGame : Control
         MaintainControlsErgonomics();
         SyncCountryFactsHeight();
         TickNuclearAlert(delta);
+        SyncGlobeVisibilityFlags();
         var bgActive = _campaign is not null && _simRunner.IsActive && ReferenceEquals(_simRunner.Campaign, _campaign);
         if (!bgActive)
         {
@@ -262,25 +271,26 @@ public partial class DealOrForceGame : Control
             var lfSw = System.Diagnostics.Stopwatch.GetTimestamp();
             var presentedVisualVer = _globe?.SyncLockFreeWorldVisuals(_simRunner) ?? 0;
             lfMs = System.Diagnostics.Stopwatch.GetElapsedTime(lfSw).TotalMilliseconds;
-            var fastSim = !(hudSnap?.IsPaused ?? _campaign!.IsPaused) && _speed >= 4;
+            var fastSim = !(hudSnap?.IsPaused ?? _campaign!.IsPaused) && _speed >= 7;
+            var smoothMode = ActiveSmoothTimeMode();
+            var framePolicy = SmoothTimePacer.MainThreadPolicy(smoothMode, _speed, _isMobileRuntime);
             var globeNeedsSync = _globe is not null && _globe.NeedsFencedSync(fastSim);
             var globeUrgent = _globe is not null && _globe.NeedsUrgentFencedSync(fastSim);
             var flushDue = _interfaceSinceRefresh + delta >= RunningInterfaceInterval || (hudSnap?.IsPaused ?? _campaign!.IsPaused);
             var needLive = !isNewShell || _bgHudRefreshDue || flushDue || globeNeedsSync || AnyLegacyModalOrScreenVisible() ||
                            (_shell is not null && _shell.NeedsLiveCampaignRead(hudSnap));
-            // At Speed 5 the render snapshot and the clock plate are lock-free and keep full rate,
-            // so the routine locked HUD read can wait longer before it asks the worker for a window.
-            var liveReadIntervalMs = _speed >= 5 && !(hudSnap?.IsPaused ?? false)
-                ? (ulong)(_isMobileRuntime ? 320 : 100)
-                : (ulong)(_isMobileRuntime ? 180 : 75);
-            var urgentLive = globeUrgent || AnyLegacyModalOrScreenVisible() || (hudSnap?.PendingEventCount ?? 0) > 0 ||
-                             (hudSnap?.IsPaused ?? false) ||
-                             (Time.GetTicksMsec() - _lastBgLiveReadMsec >= liveReadIntervalMs);
+            var mustReadNow = globeUrgent || AnyLegacyModalOrScreenVisible() || (hudSnap?.PendingEventCount ?? 0) > 0 || (hudSnap?.IsPaused ?? false);
+            var spentBeforeFenceMs = System.Diagnostics.Stopwatch.GetElapsedTime(processWorkStarted).TotalMilliseconds;
+            var shieldDefer = fastSim && !mustReadNow && framePolicy.FrameShieldBudgetMs > 0.0 &&
+                              spentBeforeFenceMs >= framePolicy.FrameShieldBudgetMs &&
+                              _deferredFencedReadFrames < framePolicy.MaxDeferredFencedFrames;
+            var urgentLive = mustReadNow || (Time.GetTicksMsec() - _lastBgLiveReadMsec >= framePolicy.LiveReadIntervalMs);
             var fwSw = System.Diagnostics.Stopwatch.GetTimestamp();
-            var gotRead = needLive && _campaign!.TryEnterRead(0, requestWindowOnMiss: urgentLive);
+            var gotRead = needLive && !shieldDefer && _campaign!.TryEnterRead(0, requestWindowOnMiss: urgentLive);
             fwMs = System.Diagnostics.Stopwatch.GetElapsedTime(fwSw).TotalMilliseconds;
             if (gotRead)
             {
+                _deferredFencedReadFrames = 0;
                 _lastBgLiveReadMsec = Time.GetTicksMsec();
                 var frSw = System.Diagnostics.Stopwatch.GetTimestamp();
                 try
@@ -297,9 +307,14 @@ public partial class DealOrForceGame : Control
                     var shSw = System.Diagnostics.Stopwatch.GetTimestamp();
                     TickNewShell(delta, allowLiveReads: true);
                     newShellMs = System.Diagnostics.Stopwatch.GetElapsedTime(shSw).TotalMilliseconds;
-                    var glSw = System.Diagnostics.Stopwatch.GetTimestamp();
-                    _globe?.SyncWorldVisualsUnderReadLock(_campaign, delta);
-                    fencedGlobeMs = System.Diagnostics.Stopwatch.GetElapsedTime(glSw).TotalMilliseconds;
+                    var skipGlobeHousekeeping = fastSim && !globeUrgent && framePolicy.FrameShieldBudgetMs > 0.0 &&
+                        System.Diagnostics.Stopwatch.GetElapsedTime(processWorkStarted).TotalMilliseconds >= framePolicy.FrameShieldBudgetMs;
+                    if (!skipGlobeHousekeeping)
+                    {
+                        var glSw = System.Diagnostics.Stopwatch.GetTimestamp();
+                        _globe?.SyncWorldVisualsUnderReadLock(_campaign, delta);
+                        fencedGlobeMs = System.Diagnostics.Stopwatch.GetElapsedTime(glSw).TotalMilliseconds;
+                    }
                 }
                 finally
                 {
@@ -309,10 +324,15 @@ public partial class DealOrForceGame : Control
             }
             else if (isNewShell)
             {
+                if (shieldDefer) _deferredFencedReadFrames++;
                 _interfaceSinceRefresh = Math.Min(RunningInterfaceInterval, _interfaceSinceRefresh + delta);
                 var shSw = System.Diagnostics.Stopwatch.GetTimestamp();
                 TickNewShell(delta, allowLiveReads: false);
                 newShellMs = System.Diagnostics.Stopwatch.GetElapsedTime(shSw).TotalMilliseconds;
+            }
+            else if (shieldDefer)
+            {
+                _deferredFencedReadFrames++;
             }
             if (isNewShell)
                 _shell?.DatePlate.RefreshClock();
@@ -320,12 +340,7 @@ public partial class DealOrForceGame : Control
             if (presentedVer > 0)
                 _simRunner.NotifyVisualFramePresented(presentedVer);
         }
-        if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible)
-            // Nobody's eyes: an observer of the whole world sees the whole world. Watching one country, he sees what it sees.
-            && !WatchingWorld;
-        if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
-        // Choosing a country is choosing a shape and a colour: mines and factories are noise there.
-        if (_globe is not null) _globe.RegionIconsSuppressed = _pickerLayer is { Visible: true } || IsNewShellSuppressingRegionIcons();
+        SyncGlobeVisibilityFlags(allowAutoFlush: false);
         // The lens and the roll move while a key is held, so the line that reports them
         // has to be written every frame rather than when something is pressed.
         if (_freeCameraMode) RefreshFreeCameraReadout();
@@ -374,37 +389,16 @@ public partial class DealOrForceGame : Control
         ReportFrameCost(delta);
         _lastProcessEndTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         if (_simRunner.IsActive && ReferenceEquals(_simRunner.Campaign, _campaign)) return;
-        // Time is given a slice of the frame rather than a number of days.
-        //
-        // The loop used to run up to four days whatever they cost. A campaign day is
-        // fourteen milliseconds in a world with a hundred wars in it, and the first few
-        // days of a session are far worse because every path in the simulation is being
-        // compiled as it is first walked - so pressing play produced a stall of two hundred
-        // milliseconds and several more after it, which is exactly what "it lags when you
-        // start time" means.
-        //
-        // A budget converts that into the right failure: the frame stays inside its
-        // sixteen milliseconds and time runs as fast as it can rather than the frame rate
-        // collapsing to keep a promise about days. A speed the machine cannot reach becomes
-        // a slower campaign instead of an unresponsive one.
-        //
-        // And with smooth time on, a step is not one piece of work either. The day's passes and
-        // the week's economy run as stages (Campaign.StepFor). Light stages still share a frame
-        // up to its budget. A stage that itself used half of this call's slice ends the call:
-        // the frame does not keep starting the stages after that one until the budget is blown.
-        // The clock moves on when the step is done: the same world, with the heavy stage on its
-        // own frame instead of stacked on the stages that already filled the slice.
-        // The loop itself is SimulationFrameClock, so SimBench drives the same scheduler frame by
-        // frame on a save; what stays here is what only a running game has: the network flag, the
-        // autosave and what a fault does to the screen.
-        var smooth = (_isMobileRuntime && _speed < 5) || SettingsCatalog.Flag("smooth_ticks");
-        var wantedSliceMs = _isMobileRuntime && smooth && _speed < 4 ? 1.25 : 2.5;
+        // Synchronous fallback (multiplayer / C# mods): SimulationFrameClock spends Smooth Time 2.0
+        // budgets and staged yields so the frame stays responsive without changing campaign outcomes.
+        var syncSmoothMode = ActiveSmoothTimeMode();
+        if (_isMobileRuntime && _speed < 8 && syncSmoothMode == SmoothTimeMode.Off) syncSmoothMode = SmoothTimeMode.Adaptive;
+        var wantedSliceMs = SmoothTimePacer.SyncStageSliceMs(syncSmoothMode, _speed, _isMobileRuntime);
         if (Campaign.StageSliceMilliseconds != wantedSliceMs)
             Campaign.StageSliceMilliseconds = wantedSliceMs;
         var spentElsewhereMs = System.Diagnostics.Stopwatch.GetElapsedTime(processWorkStarted).TotalMilliseconds;
         try
         {
-            // Made once: two fresh closures a frame are garbage the collector meets sixty times a second.
             _frameBeforeCall ??= () =>
             {
                 if (_networkConnected && _networkIsHost && _networkGameStarted) _applyingNetworkCommand = true;
@@ -419,7 +413,7 @@ public partial class DealOrForceGame : Control
                 _pendingAutosave = true;
                 return true;
             };
-            _frameClock.RunFrame(_campaign, delta, _speed, smooth, _frameBeforeCall, _frameAfterCall,
+            _frameClock.RunFrame(_campaign, delta, _speed, syncSmoothMode, _frameBeforeCall, _frameAfterCall,
                 spentElsewhereMs, _isMobileRuntime);
         }
         catch (System.Exception exception) when (exception is not System.OutOfMemoryException && exception is not System.AccessViolationException)
@@ -439,6 +433,12 @@ public partial class DealOrForceGame : Control
     private Campaign _stepCompletionCampaign;
     private bool _bgHudRefreshDue;
     private ulong _lastBgLiveReadMsec;
+    private int _deferredFencedReadFrames;
+
+    private SmoothTimeMode ActiveSmoothTimeMode() =>
+        SmoothTimePacer.ResolveMode(
+            SettingsCatalog.Flag(SmoothTimePacer.LegacySettingId),
+            SettingsCatalog.Chosen(SmoothTimePacer.ModeSettingId));
 
     private bool WantsBackgroundSimulation =>
         _campaign is not null &&
@@ -455,17 +455,17 @@ public partial class DealOrForceGame : Control
                 _simRunner.Stop();
             return;
         }
-        // Coarser stage slices at the higher speeds: the worker yields at once to a tap or a
-        // command anyway (StageOverdue watches the gate), so a slice only bounds routine work.
-        Campaign.StageSliceMilliseconds = _speed >= 5 ? (_isMobileRuntime ? 14.0 : 10.0)
-            : _speed == 4 ? (_isMobileRuntime ? 8.0 : 6.0)
-            : (_isMobileRuntime ? 4.5 : 3.5);
+        var smoothMode = ActiveSmoothTimeMode();
+        var policy = SmoothTimePacer.WorkerPolicy(smoothMode, _speed, _isMobileRuntime);
+        Campaign.StageSliceMilliseconds = policy.StageSliceMs;
+        _simRunner.SmoothMode = smoothMode;
         _simRunner.AdaptiveStepPacing = true;
         _simRunner.MobilePacing = _isMobileRuntime;
         _simRunner.MinSpeed5DayIntervalMs = 0.0;
         if (!ReferenceEquals(_simRunner.Campaign, _campaign) || !_simRunner.IsActive)
             _simRunner.Start(_campaign!);
-        _simRunner.SyncClockState(_campaign!.IsPaused, _speed);
+        var desiredPaused = _simRunner.IsActive ? _simRunner.DesiredPaused : _campaign!.IsPaused;
+        _simRunner.SyncClockState(desiredPaused, _speed);
     }
 
     private void DrainBackgroundSimUpdates()
@@ -907,7 +907,7 @@ public partial class DealOrForceGame : Control
         {
             if (IsNewShellActive && HandleNewShellHotkey(key)) { GetViewport().SetInputAsHandled(); return; }
             var step = SpeedKey(key);
-            if (step is >= 1 and <= 5) { SetSpeed(step, resume: false); GetViewport().SetInputAsHandled(); return; }
+            if (step is >= 1 and <= 8) { SetSpeed(step, resume: false); GetViewport().SetInputAsHandled(); return; }
             if (step != 0)
             {
                 SetSpeed(_speed + (step > 0 ? 1 : -1), resume: false);
@@ -1409,6 +1409,7 @@ public partial class DealOrForceGame : Control
         UpdateNetworkHud();
         if (_campaign.IsHotseat && !_networkConnected) ShowSeatHandover();
         _lastFastHudRefreshMsec = 0;
+        PrepareCampaignEntryVisuals(focusPlayerCapital: !_observerMode && _globe.TargetViewDistance > 10.0f);
         Refresh();
     }
 
@@ -1879,7 +1880,15 @@ public partial class DealOrForceGame : Control
         _globe?.WakeGlobeRendering();
         if (_simRunner.IsActive && _campaign is not null && ReferenceEquals(_simRunner.Campaign, _campaign) && !_campaign.AccessGate.IsWriterHeldByCurrentThread)
         {
-            _simRunner.RunWrite(_ => TogglePause());
+            var desiredPaused = !_simRunner.DesiredPaused;
+            _simRunner.SetDesiredClockState(desiredPaused, _speed);
+            _frameClock.Reset();
+            PlayStrategicCue(desiredPaused ? "game_pause" : "game_resume");
+            _pause.Text = desiredPaused ? "▶" : "II";
+            StyleButton(_pause, desiredPaused);
+            if (IsNewShellActive) _shell?.DatePlate.RefreshClock();
+            _lastFastHudRefreshMsec = 0;
+            _bgHudRefreshDue = true;
             return;
         }
         _campaign.IsPaused = !_campaign.IsPaused;
@@ -1893,7 +1902,7 @@ public partial class DealOrForceGame : Control
     }
 
     /// <summary>
-    /// What a key means to the clock: 1-5 for that speed, 6 for one step faster, -1 for one
+    /// What a key means to the clock: 1-8 for that speed, 9 for one step faster, -1 for one
     /// step slower, 0 for nothing. Read by the key's place on the board (the top row and the
     /// keypad alike), so it is the same key under a Russian layout as under an English one.
     /// </summary>
@@ -1907,7 +1916,10 @@ public partial class DealOrForceGame : Control
             Key.Key3 or Key.Kp3 => 3,
             Key.Key4 or Key.Kp4 => 4,
             Key.Key5 or Key.Kp5 => 5,
-            Key.Equal or Key.Plus or Key.KpAdd => 6,
+            Key.Key6 or Key.Kp6 => 6,
+            Key.Key7 or Key.Kp7 => 7,
+            Key.Key8 or Key.Kp8 => 8,
+            Key.Equal or Key.Plus or Key.KpAdd => 9,
             Key.Minus or Key.KpSubtract => -1,
             _ => 0
         };
@@ -1921,13 +1933,25 @@ public partial class DealOrForceGame : Control
             return;
         }
         _globe?.WakeGlobeRendering();
+        var maxSpeed = Math.Max(1, _campaign?.Defines?.MaxSpeed ?? 8);
+        _speed = Mathf.Clamp(speed, 1, maxSpeed);
         if (_simRunner.IsActive && _campaign is not null && ReferenceEquals(_simRunner.Campaign, _campaign) && !_campaign.AccessGate.IsWriterHeldByCurrentThread)
         {
-            _simRunner.RunWrite(_ => SetSpeed(speed, resume));
+            var currentlyPaused = _simRunner.DesiredPaused;
+            var desiredPaused = currentlyPaused && resume ? false : currentlyPaused;
+            if (currentlyPaused && resume)
+            {
+                PlayStrategicCue("game_resume");
+                _pause.Text = Tr("II");
+                StyleButton(_pause, false);
+            }
+            _simRunner.SetDesiredClockState(desiredPaused, _speed);
+            _frameClock.Reset();
+            if (IsNewShellActive) _shell?.DatePlate.RefreshClock();
+            _lastFastHudRefreshMsec = 0;
+            _bgHudRefreshDue = true;
             return;
         }
-        _speed = Mathf.Clamp(speed, 1, 5);
-        _globe?.WakeGlobeRendering();
         _frameClock.Reset();
         if (_campaign.IsPaused && resume)
         {
@@ -1989,7 +2013,21 @@ public partial class DealOrForceGame : Control
             _simRunner.Stop();
         if (ReferenceEquals(_simRunner.Campaign, _campaign) && _simRunner.IsActive && !_campaign.AccessGate.IsHeldByCurrentThread)
         {
-            _simRunner.RunWrite(_ => Refresh(), refreshSnapshot: true);
+            SyncPausedHudSnapshotIfStale();
+            if (_campaign.TryEnterRead(0, requestWindowOnMiss: false))
+            {
+                try { Refresh(); }
+                finally { _campaign.ExitRead(); }
+            }
+            else
+            {
+                if (IsNewShellActive)
+                {
+                    TickNewShell(0.0, allowLiveReads: false);
+                    _shell?.DatePlate.RefreshClock();
+                }
+                _bgHudRefreshDue = true;
+            }
             return;
         }
         SyncObserverCommandGate();
@@ -2007,14 +2045,12 @@ public partial class DealOrForceGame : Control
         }
         if (IsNewShellActive) RefreshNewShell();
 
-        // At Speed 4/5, keep the DatePlate + event/peace modals updating every tick, while
-        // throttling secondary HUD and background workspace redraws (~8 Hz desktop / 5 Hz mobile)
-        // so fast-forward stays silk-smooth instead of rebuilding tables on every simulation hour.
-        var fastForward = !_campaign.IsPaused && _speed >= 4;
+        var fastForward = !_campaign.IsPaused && _speed >= 7;
+        var refreshPolicy = SmoothTimePacer.MainThreadPolicy(ActiveSmoothTimeMode(), _speed, _isMobileRuntime);
         if (fastForward)
         {
             var nowMsec = Time.GetTicksMsec();
-            var minGapMsec = (ulong)(_isMobileRuntime ? 200 : 125);
+            var minGapMsec = refreshPolicy.FastHudRefreshGapMs;
             if (_lastFastHudRefreshMsec != 0 && nowMsec - _lastFastHudRefreshMsec < minGapMsec)
             {
                 if (!IsNewShellActive) RefreshDatePlate(player);
@@ -2028,7 +2064,10 @@ public partial class DealOrForceGame : Control
         }
 
         var lang = Loc.Language;
-        if (_lastNamesDay != _campaign.ElapsedDays || _lastNamesMapRev != _campaign.MapRevision ||
+        var nameCheckDue = fastForward
+            ? Math.Abs(_campaign.ElapsedDays - _lastNamesDay) >= refreshPolicy.CountryNameRefreshDays
+            : _lastNamesDay != _campaign.ElapsedDays;
+        if (nameCheckDue || _lastNamesMapRev != _campaign.MapRevision ||
             _lastNamesOwnerRev != _campaign.OwnershipRevision || !string.Equals(_lastNamesLang, lang, StringComparison.Ordinal))
         {
             _lastNamesDay = _campaign.ElapsedDays;

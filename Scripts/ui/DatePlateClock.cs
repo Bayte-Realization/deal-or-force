@@ -11,9 +11,9 @@ namespace DealOrForce;
 /// </summary>
 internal static class DatePlateClock
 {
-    /// <summary>The engine's speeds run 1 to 5 (Defines.SecondsForSpeed); so do the marks.</summary>
+    /// <summary>The engine's speeds run 1 to 8 (Defines.SecondsForSpeed); so do the marks.</summary>
     internal const int Slowest = 1;
-    internal const int Fastest = 5;
+    internal const int Fastest = 8;
 
     internal static int Clamp(int speed) => Math.Clamp(speed, Slowest, Fastest);
 

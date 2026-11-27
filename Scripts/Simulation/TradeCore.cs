@@ -192,10 +192,28 @@ public static class TradeNetwork
         internal int[] DistanceSlots = Array.Empty<int>();
         internal int DistanceSlotCount;
         internal int LastNationsCount;
-        internal readonly Dictionary<int, (float Latitude, float Longitude)> CapitalCoordinates = new();
+        internal float[] CapLatById = Array.Empty<float>();
+        internal float[] CapLonById = Array.Empty<float>();
+        internal bool[] CapTrackedById = Array.Empty<bool>();
+        internal readonly List<int> TrackedCapIds = new();
         internal bool[] DirtyDistanceSlots = Array.Empty<bool>();
         internal bool[] HasPartnerRules = Array.Empty<bool>();
         internal readonly List<Nation> DirtyDistanceNations = new();
+
+        internal int[] NativeDistSlotIds = Array.Empty<int>();
+        internal float[] NativeDistLats = Array.Empty<float>();
+        internal float[] NativeDistLons = Array.Empty<float>();
+        internal int[] NativeDirtyIndices = Array.Empty<int>();
+
+        internal int[] NativeBuyerIds = Array.Empty<int>();
+        internal ushort[] NativeBuyerMapIdx = Array.Empty<ushort>();
+        internal float[] NativeBuyerReach = Array.Empty<float>();
+        internal int[] NativeSellerIds = Array.Empty<int>();
+        internal ushort[] NativeSellerMapIdx = Array.Empty<ushort>();
+        internal float[] NativeSellerReach = Array.Empty<float>();
+        internal float[] NativePairOpinion = Array.Empty<float>();
+        internal byte[] NativePairStance = Array.Empty<byte>();
+        internal byte[] NativePairFlags = Array.Empty<byte>();
         // Filed while the routes are written, so a screen can ask "who sold to this country"
         // without walking every other country's week. Cleared with the routes and marked
         // ready only when the pass finishes, so a half-run week is not treated as complete.
@@ -579,6 +597,172 @@ public static class TradeNetwork
         var dense = work.NationByIdDense;
         var activeBuyers = work.ActiveBuyers;
         var affinityValues = work.AffinityValues;
+
+        if (Kernels.NativeKernelsLoader.EnableTradeDefault &&
+            Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapAbiV1Base) &&
+            Kernels.NativeTradeArena.ForCampaign(campaign, Math.Max(4096, Math.Max(activeBuyerCount, stride) + 64)) is { } arena)
+        {
+            var neededPairs = activeBuyerCount * stride;
+            if (work.NativeBuyerIds.Length < activeBuyerCount)
+            {
+                var cap = Math.Max(activeBuyerCount + 64, 128);
+                work.NativeBuyerIds = new int[cap];
+                work.NativeBuyerMapIdx = new ushort[cap];
+                work.NativeBuyerReach = new float[cap];
+            }
+            if (work.NativeSellerIds.Length < stride)
+            {
+                var cap = Math.Max(stride + 64, 128);
+                work.NativeSellerIds = new int[cap];
+                work.NativeSellerMapIdx = new ushort[cap];
+                work.NativeSellerReach = new float[cap];
+            }
+            if (work.NativePairOpinion.Length < neededPairs)
+            {
+                work.NativePairOpinion = new float[neededPairs];
+                work.NativePairStance = new byte[neededPairs];
+                work.NativePairFlags = new byte[neededPairs];
+            }
+
+            var distSlots = work.DistanceSlots;
+            var reachById = work.TransportReachById;
+            for (var bi = 0; bi < activeBuyerCount; bi++)
+            {
+                var bid = activeBuyers[bi];
+                var buyer = dense[bid];
+                work.NativeBuyerIds[bi] = (uint)bid < (uint)distSlots.Length ? distSlots[bid] : -1;
+                work.NativeBuyerMapIdx[bi] = buyer is not null ? (ushort)buyer.MapIndex : (ushort)0;
+                work.NativeBuyerReach[bi] = (uint)bid < (uint)reachById.Length && reachById[bid] >= 0f ? reachById[bid] : 0.5f;
+            }
+            for (var si = 0; si < stride; si++)
+            {
+                var sid = uniqueSellers[si];
+                var seller = dense[sid];
+                work.NativeSellerIds[si] = (uint)sid < (uint)distSlots.Length ? distSlots[sid] : -1;
+                work.NativeSellerMapIdx[si] = seller is not null ? (ushort)seller.MapIndex : (ushort)0;
+                work.NativeSellerReach[si] = (uint)sid < (uint)reachById.Length && reachById[sid] >= 0f ? reachById[sid] : 0.5f;
+            }
+
+            var cuOverflow = work.CustomsUnionOverflow;
+            var cuMaskById = work.CustomsUnionMaskById;
+            var packBatch = Campaign.IsUnboundedStep || DeterministicParallel.Enabled(campaign)
+                ? activeBuyerCount
+                : Math.Max(8, 16_384 / stride);
+            for (var start = 0; start < activeBuyerCount; start += packBatch)
+            {
+                var end = Math.Min(activeBuyerCount, start + packBatch);
+                using (SimProfiler.Measure("    mkt:trade"))
+                using (SimProfiler.Measure("      trade:affinity"))
+                    DeterministicParallel.ForRange(campaign, start, end, PackAffinityRows, minItems: 8);
+                if (end < activeBuyerCount && Campaign.StageOverdue()) yield return 0;
+            }
+
+            bool nativeOk;
+            using (SimProfiler.Measure("    mkt:trade"))
+            using (SimProfiler.Measure("      trade:affinity"))
+            {
+                nativeOk = arena.TryComputeAffinity(
+                    work.NativeBuyerIds.AsSpan(0, activeBuyerCount),
+                    work.NativeBuyerMapIdx.AsSpan(0, activeBuyerCount),
+                    work.NativeBuyerReach.AsSpan(0, activeBuyerCount),
+                    work.NativeSellerIds.AsSpan(0, stride),
+                    work.NativeSellerMapIdx.AsSpan(0, stride),
+                    work.NativeSellerReach.AsSpan(0, stride),
+                    (work.DistanceTable ?? Array.Empty<float>()).AsSpan(),
+                    work.DistanceTableStride,
+                    work.DistanceSlotCount,
+                    work.NativePairOpinion.AsSpan(0, neededPairs),
+                    work.NativePairStance.AsSpan(0, neededPairs),
+                    work.NativePairFlags.AsSpan(0, neededPairs),
+                    stride,
+                    HalfReachKilometres,
+                    campaign.Defines.CustomsUnionInsideTrade,
+                    campaign.Defines.CustomsUnionOutsideTrade,
+                    affinityValues.AsSpan(0, neededPairs),
+                    stride);
+            }
+            if (nativeOk) yield break;
+
+            void PackAffinityRows(int from, int to)
+            {
+                for (var bi = from; bi < to; bi++)
+                {
+                    var bid = activeBuyers[bi];
+                    var buyer = dense[bid];
+                    var row = bi * stride;
+                    if (buyer is null)
+                    {
+                        for (var s = 0; s < stride; s++) work.NativePairFlags[row + s] = 32;
+                        continue;
+                    }
+                    var bMap = buyer.MapIndex;
+                    ulong bCuMask = 0UL;
+                    var bHasCu = false;
+                    List<int> bUnions = null;
+                    if (!cuOverflow)
+                    {
+                        bCuMask = (uint)bid < (uint)cuMaskById.Length ? cuMaskById[bid] : 0UL;
+                        bHasCu = bCuMask != 0UL;
+                    }
+                    else
+                    {
+                        bUnions = work.CustomsUnions.GetValueOrDefault(bid);
+                        bHasCu = bUnions is { Count: > 0 };
+                    }
+                    for (var s = 0; s < stride; s++)
+                    {
+                        var sid = uniqueSellers[s];
+                        var seller = dense[sid];
+                        if (seller is null || sid == bid)
+                        {
+                            work.NativePairFlags[row + s] = 32;
+                            work.NativePairStance[row + s] = 0;
+                            work.NativePairOpinion[row + s] = 0f;
+                            continue;
+                        }
+                        byte flags = 0;
+                        byte stance = 0;
+                        float opinion = 0f;
+                        var relation = CampaignDiplomacy.Peek(campaign, bid, sid);
+                        if (relation is not null)
+                        {
+                            flags |= 1;
+                            if (relation.Stance == DiplomaticStance.AtWar || relation.EmbargoByA || relation.EmbargoByB)
+                            {
+                                work.NativePairFlags[row + s] = 2;
+                                work.NativePairStance[row + s] = 0;
+                                work.NativePairOpinion[row + s] = 0f;
+                                continue;
+                            }
+                            opinion = relation.Opinion;
+                            if (relation.Stance == DiplomaticStance.Allied) stance = 1;
+                            else if (relation.Stance == DiplomaticStance.Rival) stance = 2;
+                        }
+                        if (bHasCu)
+                        {
+                            flags |= 8;
+                            if (!cuOverflow)
+                            {
+                                var sMask = (uint)sid < (uint)cuMaskById.Length ? cuMaskById[sid] : 0UL;
+                                if ((bCuMask & sMask) != 0UL) flags |= 4;
+                            }
+                            else
+                            {
+                                var sUnions = work.CustomsUnions.GetValueOrDefault(sid);
+                                if (sUnions is { Count: > 0 })
+                                    foreach (var u in bUnions!)
+                                        if (sUnions.Contains(u)) { flags |= 4; break; }
+                            }
+                        }
+                        if (CampaignDiplomacy.SharesLandBorder(campaign, bMap, seller.MapIndex)) flags |= 16;
+                        work.NativePairFlags[row + s] = flags;
+                        work.NativePairStance[row + s] = stance;
+                        work.NativePairOpinion[row + s] = opinion;
+                    }
+                }
+            }
+        }
+
         var batchSize = Campaign.IsUnboundedStep || DeterministicParallel.Enabled(campaign)
             ? activeBuyerCount
             : Math.Max(8, 16_384 / stride);
@@ -593,18 +777,101 @@ public static class TradeNetwork
 
         void FillRows(int from, int to)
         {
+            var cuOverflow = work.CustomsUnionOverflow;
+            var cuMaskById = work.CustomsUnionMaskById;
+            var cuInside = campaign.Defines.CustomsUnionInsideTrade;
+            var cuOutside = campaign.Defines.CustomsUnionOutsideTrade;
+            var distSlots = work.DistanceSlots;
+            var distTable = work.DistanceTable;
+            var distStride = work.DistanceTableStride;
+            var distSlotCount = work.DistanceSlotCount;
+            var reachArr = work.TransportReachById;
             for (var bi = from; bi < to; bi++)
             {
                 var bid = activeBuyers[bi];
                 if (dense[bid] is not { } buyer) continue;
                 var row = bi * stride;
+                var bMap = buyer.MapIndex;
+                var bReach = (uint)bid < (uint)reachArr.Length && reachArr[bid] >= 0f ? reachArr[bid] : 0.5f;
+                var bSlot = distTable is not null && (uint)bid < (uint)distSlots.Length ? distSlots[bid] : -1;
+                var bSlotValid = (uint)bSlot < (uint)distSlotCount;
+                ulong bCuMask = 0UL;
+                List<int> bUnions = null;
+                var bHasCu = false;
+                if (!cuOverflow)
+                {
+                    bCuMask = (uint)bid < (uint)cuMaskById.Length ? cuMaskById[bid] : 0UL;
+                    bHasCu = bCuMask != 0UL;
+                }
+                else
+                {
+                    bUnions = work.CustomsUnions.GetValueOrDefault(bid);
+                    bHasCu = bUnions is { Count: > 0 };
+                }
+
                 for (var s = 0; s < stride; s++)
                 {
                     var sid = uniqueSellers[s];
                     var seller = dense[sid];
-                    affinityValues[row + s] = seller is null || sid == bid
-                        ? 0f
-                        : PartnerAffinityOrBlocked(campaign, buyer, seller, work);
+                    if (seller is null || sid == bid)
+                    {
+                        affinityValues[row + s] = 0f;
+                        continue;
+                    }
+                    var relation = CampaignDiplomacy.Peek(campaign, bid, sid);
+                    if (relation is not null)
+                    {
+                        if (relation.Stance == DiplomaticStance.AtWar || relation.EmbargoByA || relation.EmbargoByB)
+                        {
+                            affinityValues[row + s] = -1f;
+                            continue;
+                        }
+                    }
+                    var score = 1f;
+                    if (relation is not null)
+                    {
+                        score *= M.Clamp(1f + relation.Opinion / 160f, 0.35f, 1.65f);
+                        if (relation.Stance == DiplomaticStance.Allied) score *= 1.30f;
+                        else if (relation.Stance == DiplomaticStance.Rival) score *= 0.68f;
+                    }
+                    if (bHasCu)
+                    {
+                        if (!cuOverflow)
+                        {
+                            var sMask = (uint)sid < (uint)cuMaskById.Length ? cuMaskById[sid] : 0UL;
+                            score *= (bCuMask & sMask) != 0UL ? cuInside : cuOutside;
+                        }
+                        else
+                        {
+                            var sUnions = work.CustomsUnions.GetValueOrDefault(sid);
+                            var shared = false;
+                            if (sUnions is { Count: > 0 })
+                                foreach (var union in bUnions!)
+                                    if (sUnions.Contains(union)) { shared = true; break; }
+                            score *= shared ? cuInside : cuOutside;
+                        }
+                    }
+                    if (!CampaignDiplomacy.SharesLandBorder(campaign, bMap, seller.MapIndex))
+                    {
+                        float km;
+                        if (bSlotValid && (uint)sid < (uint)distSlots.Length)
+                        {
+                            var sSlot = distSlots[sid];
+                            km = (uint)sSlot < (uint)distSlotCount
+                                ? distTable![bSlot * distStride + sSlot]
+                                : Kilometres(campaign, buyer, seller, work);
+                        }
+                        else
+                        {
+                            km = Kilometres(campaign, buyer, seller, work);
+                        }
+                        var span = km / HalfReachKilometres;
+                        var falloff = 1f / (1f + span * span);
+                        var sReach = (uint)sid < (uint)reachArr.Length && reachArr[sid] >= 0f ? reachArr[sid] : 0.5f;
+                        var reach = (bReach + sReach) * 0.5f;
+                        score *= falloff * reach;
+                    }
+                    affinityValues[row + s] = score;
                 }
             }
         }
@@ -1427,17 +1694,30 @@ public static class TradeNetwork
             DistanceTableNeedsCompaction(work)) return false;
         // A returning trader needs its row rebuilt even if its capital never moved.
         // While it was absent, new traders and relocated capitals did not fill those pairs.
-        foreach (var id in work.CapitalCoordinates.Keys)
-            if ((uint)id >= (uint)work.BuyerSlots.Length ||
-                work.BuyerSlots[id] < 0 && work.SellerSlots[id] < 0)
-                work.CapitalCoordinates.Remove(id);
+        var buyerSlots = work.BuyerSlots;
+        var sellerSlots = work.SellerSlots;
+        var tracked = work.CapTrackedById;
+        var trackedIds = work.TrackedCapIds;
+        for (var i = trackedIds.Count - 1; i >= 0; i--)
+        {
+            var id = trackedIds[i];
+            if ((uint)id >= (uint)buyerSlots.Length ||
+                buyerSlots[id] < 0 && sellerSlots[id] < 0)
+            {
+                if ((uint)id < (uint)tracked.Length) tracked[id] = false;
+                trackedIds.RemoveAt(i);
+            }
+        }
         var slots = work.DistanceSlots;
+        var capLat = work.CapLatById;
+        var capLon = work.CapLonById;
         for (var i = 0; i < participants.Count; i++)
         {
             var nation = participants[i];
-            if ((uint)nation.Id >= (uint)slots.Length || slots[nation.Id] < 0) return false;
-            if (!work.CapitalCoordinates.TryGetValue(nation.Id, out var coordinates) ||
-                coordinates != (nation.CapitalLatitude, nation.CapitalLongitude))
+            var id = nation.Id;
+            if ((uint)id >= (uint)slots.Length || slots[id] < 0) return false;
+            if ((uint)id >= (uint)tracked.Length || !tracked[id] ||
+                capLat[id] != nation.CapitalLatitude || capLon[id] != nation.CapitalLongitude)
                 return false;
         }
         return true;
@@ -1460,7 +1740,8 @@ public static class TradeNetwork
                 work.DistanceSlotCount = 0;
                 oldSlotCount = 0;
                 if (work.DistanceSlots.Length > 0) Array.Fill(work.DistanceSlots, -1);
-                work.CapitalCoordinates.Clear();
+                Array.Clear(work.CapTrackedById);
+                work.TrackedCapIds.Clear();
             }
             work.LastNationsCount = campaign.Nations.Count;
             if (work.DistanceSlots.Length <= maxId)
@@ -1468,6 +1749,13 @@ public static class TradeNetwork
                 var prevLen = work.DistanceSlots.Length;
                 Array.Resize(ref work.DistanceSlots, Math.Max(128, maxId + 64));
                 Array.Fill(work.DistanceSlots, -1, prevLen, work.DistanceSlots.Length - prevLen);
+            }
+            if (work.CapTrackedById.Length <= maxId)
+            {
+                var nextCap = Math.Max(128, maxId + 64);
+                Array.Resize(ref work.CapTrackedById, nextCap);
+                Array.Resize(ref work.CapLatById, nextCap);
+                Array.Resize(ref work.CapLonById, nextCap);
             }
             for (var k = 0; k < trading.Count; k++)
             {
@@ -1498,11 +1786,16 @@ public static class TradeNetwork
             if (fullRebuild)
             {
                 Array.Fill(work.DistanceTable, 12000f);
-                work.CapitalCoordinates.Clear();
+                Array.Clear(work.CapTrackedById);
+                work.TrackedCapIds.Clear();
                 for (var k = 0; k < trading.Count; k++)
                 {
                     var n = trading[k];
-                    work.CapitalCoordinates[n.Id] = (n.CapitalLatitude, n.CapitalLongitude);
+                    if ((uint)n.Id >= (uint)work.CapTrackedById.Length) continue;
+                    work.CapTrackedById[n.Id] = true;
+                    work.CapLatById[n.Id] = n.CapitalLatitude;
+                    work.CapLonById[n.Id] = n.CapitalLongitude;
+                    work.TrackedCapIds.Add(n.Id);
                 }
             }
             else
@@ -1512,11 +1805,18 @@ public static class TradeNetwork
                     var n = trading[k];
                     if (n.Id < 0) continue;
                     var slot = work.DistanceSlots[n.Id];
-                    var coords = (n.CapitalLatitude, n.CapitalLongitude);
-                    if (slot >= oldSlotCount || !work.CapitalCoordinates.TryGetValue(n.Id, out var prev) || prev != coords)
+                    if (slot >= oldSlotCount || !work.CapTrackedById[n.Id] ||
+                        work.CapLatById[n.Id] != n.CapitalLatitude ||
+                        work.CapLonById[n.Id] != n.CapitalLongitude)
                     {
                         dirty.Add(n);
-                        work.CapitalCoordinates[n.Id] = coords;
+                        if (!work.CapTrackedById[n.Id])
+                        {
+                            work.CapTrackedById[n.Id] = true;
+                            work.TrackedCapIds.Add(n.Id);
+                        }
+                        work.CapLatById[n.Id] = n.CapitalLatitude;
+                        work.CapLonById[n.Id] = n.CapitalLongitude;
                     }
                 }
             }
@@ -1526,10 +1826,72 @@ public static class TradeNetwork
         var table = work.DistanceTable;
         var stride = work.DistanceTableStride;
         var slots = work.DistanceSlots;
+        if (!fullRebuild && dirty.Count == 0) yield break;
+
+        if (Kernels.NativeKernelsLoader.EnableTradeDefault &&
+            Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapAbiV1Base) &&
+            trading.Count > 0 &&
+            Kernels.NativeTradeArena.ForCampaign(campaign, Math.Max(4096, work.DistanceSlotCount + 64)) is { } arena)
+        {
+            var tCount = trading.Count;
+            if (work.NativeDistSlotIds.Length < tCount)
+            {
+                var cap = Math.Max(tCount + 64, 128);
+                work.NativeDistSlotIds = new int[cap];
+                work.NativeDistLats = new float[cap];
+                work.NativeDistLons = new float[cap];
+            }
+            for (var k = 0; k < tCount; k++)
+            {
+                var n = trading[k];
+                work.NativeDistSlotIds[k] = (uint)n.Id < (uint)slots.Length ? slots[n.Id] : -1;
+                work.NativeDistLats[k] = n.CapitalLatitude;
+                work.NativeDistLons[k] = n.CapitalLongitude;
+            }
+            var dirtyCount = 0;
+            if (!fullRebuild)
+            {
+                if (work.DirtyDistanceSlots.Length < work.DistanceSlotCount)
+                    work.DirtyDistanceSlots = new bool[work.DistanceTableStride];
+                var changedSlots = work.DirtyDistanceSlots;
+                Array.Clear(changedSlots, 0, work.DistanceSlotCount);
+                for (var di = 0; di < dirty.Count; di++)
+                {
+                    var dSlot = slots[dirty[di].Id];
+                    if ((uint)dSlot < (uint)changedSlots.Length) changedSlots[dSlot] = true;
+                }
+                if (work.NativeDirtyIndices.Length < tCount)
+                    work.NativeDirtyIndices = new int[Math.Max(tCount + 64, 128)];
+                for (var k = 0; k < tCount; k++)
+                {
+                    var dSlot = work.NativeDistSlotIds[k];
+                    if ((uint)dSlot < (uint)changedSlots.Length && changedSlots[dSlot])
+                        work.NativeDirtyIndices[dirtyCount++] = k;
+                }
+            }
+            bool ok;
+            using (SimProfiler.Measure("    mkt:trade"))
+            using (SimProfiler.Measure("      trade:distance"))
+            {
+                ok = arena.TryUpdateDistances(
+                    work.NativeDistSlotIds.AsSpan(0, tCount),
+                    work.NativeDistLats.AsSpan(0, tCount),
+                    work.NativeDistLons.AsSpan(0, tCount),
+                    work.NativeDirtyIndices.AsSpan(0, dirtyCount),
+                    fullRebuild,
+                    stride,
+                    table.AsSpan());
+            }
+            if (ok)
+            {
+                dirty.Clear();
+                yield break;
+            }
+        }
+
         var rowsPerSlice = Math.Clamp(8192 / Math.Max(1, trading.Count), 4, 96);
         if (!fullRebuild)
         {
-            if (dirty.Count == 0) yield break;
             if (work.DirtyDistanceSlots.Length < work.DistanceSlotCount)
                 work.DirtyDistanceSlots = new bool[work.DistanceTableStride];
             var changedSlots = work.DirtyDistanceSlots;

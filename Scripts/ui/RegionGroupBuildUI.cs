@@ -87,13 +87,12 @@ public partial class DealOrForceGame
             var chosen = kind;
             var button = ActionButton(Simulation.Loc.Format("Build in {0}", allowed.Count), () =>
             {
-                var plan = Simulation.Controls.BatchActionUndo.ExecuteEverywhereConstruction(_campaign, player, allowed, chosen, 1);
+                var plan = CommitImmediateCampaignWrite(c => Simulation.Controls.BatchActionUndo.ExecuteEverywhereConstruction(c, c.Player, allowed, chosen, 1), true, true);
                 var queued = plan.TotalBuildings;
                 feedback.Text = queued > 0
                     ? Simulation.Loc.Format("Queued {0} × {1} for {2}.", queued, Tr(BuildingCatalog.Get(chosen).Name), Fmt.Money(cost * queued))
                     : Tr("Order submitted. The host will validate the construction sites.");
                 PlayStrategicCue(queued > 0 || IsNetworkClient ? "ui_select" : "ui_error");
-                Refresh();
             }, 150, 30);
             button.Disabled = allowed.Count == 0;
             button.TooltipText = allowed.Count == regions.Count ? Tr("Every selected region can take it.")

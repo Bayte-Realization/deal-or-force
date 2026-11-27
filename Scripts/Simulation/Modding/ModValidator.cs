@@ -71,7 +71,7 @@ public static class ModValidator
 
     private static readonly string[] ScannedSubfolders =
     {
-        "common", "events", "history", "localization", "patches", "scenarios", "skins", "interface", "gui", "music"
+        "common", "events", "history", "localization", "maps", "patches", "scenarios", "skins", "interface", "gui", "music"
     };
 
     /// <summary>Validate a single mod directory on disk.</summary>
@@ -137,6 +137,12 @@ public static class ModValidator
 
         // 6. Validate declarative patches/*.json|yaml|yml and inline $op directives.
         ValidatePatchesAndInlineOps(modRoot, info.Id.Length > 0 ? info.Id : Path.GetFileName(modRoot), report);
+
+        // 7. Validate custom map packs under maps/<id>/map.json.
+        ValidateMapPacks(modRoot, report);
+
+        // 8. Validate common/formable_nations/ and common/settings/ overlays.
+        ValidateFormableNationsAndSettings(modRoot, report);
 
         return report;
     }
@@ -964,6 +970,307 @@ public static class ModValidator
         if (string.IsNullOrWhiteSpace(id) || id.Length > 64) return false;
         if (id[0] is not (>= 'a' and <= 'z')) return false;
         return id.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_' or '-');
+    }
+
+    private static void ValidateMapPacks(string modRoot, ModValidationReport report)
+    {
+        var mapsDir = Path.Combine(modRoot, "maps");
+        if (!Directory.Exists(mapsDir)) return;
+
+        var dirs = Directory.EnumerateDirectories(mapsDir)
+            .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (dirs.Length == 0)
+        {
+            report.Add(ModDiagnosticSeverity.Warning, "WARN_MAPS_EMPTY", "maps", "",
+                "Mod contains an empty maps/ folder with no map pack subdirectories.",
+                "Create a subfolder such as maps/my_map_pack/ containing map.json, or remove the empty maps/ folder.");
+            return;
+        }
+
+        var mapIdRx = new Regex(@"^[a-z0-9_]{2,48}$", RegexOptions.Compiled);
+        var locDir = Path.Combine(modRoot, "localization");
+        var hasLoc = Directory.Exists(locDir);
+        var enLoc = hasLoc ? ReadLocaleMapSilent(Path.Combine(locDir, "english"), modRoot) : null;
+        var ruLoc = hasLoc ? ReadLocaleMapSilent(Path.Combine(locDir, "russian"), modRoot) : null;
+
+        foreach (var dir in dirs)
+        {
+            var folderId = Path.GetFileName(dir) ?? "";
+            var manifestPath = Directory.EnumerateFiles(dir, "map.*", SearchOption.TopDirectoryOnly)
+                .FirstOrDefault(StructuredData.IsDocument);
+            if (string.IsNullOrWhiteSpace(manifestPath))
+            {
+                report.Add(ModDiagnosticSeverity.Error, "ERR_MAP_MANIFEST_MISSING", $"maps/{folderId}", "",
+                    $"Map pack folder 'maps/{folderId}' is missing map.json.",
+                    $"Create maps/{folderId}/map.json with \"id\", \"name\", and \"inherit_base_hydrology\": true.");
+                continue;
+            }
+
+            var rel = Path.GetRelativePath(modRoot, manifestPath).Replace('\\', '/');
+            try
+            {
+                using var doc = JsonDocument.Parse(StructuredData.ReadJson(manifestPath), GameDataLoader.ForgivingJson);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    report.Add(ModDiagnosticSeverity.Error, "ERR_MAP_SCHEMA", rel, "$",
+                        "Map pack manifest root must be a JSON object.",
+                        "Wrap map pack fields inside { ... }.");
+                    continue;
+                }
+
+                var root = doc.RootElement;
+                var mapId = ReadString(root, "id");
+                if (string.IsNullOrWhiteSpace(mapId))
+                {
+                    report.Add(ModDiagnosticSeverity.Error, "ERR_MAP_ID_MISSING", rel, "id",
+                        "Map pack manifest is missing required 'id'.",
+                        $"Add \"id\": \"{folderId}\" (2-48 lowercase letters, digits, or underscores).");
+                }
+                else if (!mapIdRx.IsMatch(mapId))
+                {
+                    report.Add(ModDiagnosticSeverity.Error, "ERR_MAP_ID_FORMAT", rel, "id",
+                        $"Map pack id '{mapId}' must be 2-48 lowercase ASCII letters, digits, or underscores.",
+                        "Rename 'id' using only a-z, 0-9, and '_' (for example 'archipelago_v1').");
+                }
+                else if (!string.Equals(mapId, folderId, StringComparison.OrdinalIgnoreCase))
+                {
+                    report.Add(ModDiagnosticSeverity.Warning, "WARN_MAP_ID_MISMATCH", rel, "id",
+                        $"Map pack id '{mapId}' differs from its folder name '{folderId}'.",
+                        $"Match the folder name to '{mapId}' so map discovery and reloads stay unambiguous.");
+                }
+
+                var name = ReadString(root, "name");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    report.Add(ModDiagnosticSeverity.Error, "ERR_MAP_NAME_MISSING", rel, "name",
+                        "Map pack manifest is missing non-empty 'name'.",
+                        "Add \"name\": \"My Custom Map\" so players can select it in the New Game picker.");
+                }
+
+                CheckMapNumber(root, rel, "cells_per_province", 12, 10000, report);
+                CheckMapNumber(root, rel, "disputed_cells_per_province", 12, 10000, report);
+                CheckMapNumber(root, rel, "siberia_multiplier", 0.25, 16.0, report);
+                CheckMapNumber(root, rel, "polar_multiplier", 0.25, 16.0, report);
+
+                var hasHydro = (root.TryGetProperty("inherit_base_hydrology", out var h1) && h1.ValueKind is JsonValueKind.True or JsonValueKind.False) ||
+                               (root.TryGetProperty("inherits_base_hydrology", out var h2) && h2.ValueKind is JsonValueKind.True or JsonValueKind.False);
+                if (!hasHydro)
+                {
+                    report.Add(ModDiagnosticSeverity.Warning, "WARN_MAP_HYDROLOGY_UNSPECIFIED", rel, "inherit_base_hydrology",
+                        $"Map pack '{folderId}' does not specify 'inherit_base_hydrology'.",
+                        "Add \"inherit_base_hydrology\": true to inherit base rivers and coastlines unless shipping full custom hydrology.");
+                }
+
+                foreach (var assetField in new[] { "provinces", "definition", "ownership" })
+                {
+                    if (!root.TryGetProperty(assetField, out var assetEl) || assetEl.ValueKind == JsonValueKind.Null)
+                        continue;
+                    if (assetEl.ValueKind != JsonValueKind.String)
+                    {
+                        report.Add(ModDiagnosticSeverity.Error, "ERR_MAP_SCHEMA", rel, assetField,
+                            $"Field '{assetField}' must be a relative file path string inside maps/{folderId}/.",
+                            $"Write \"{assetField}\": \"{assetField}.csv\" or remove the key.");
+                        continue;
+                    }
+                    var assetRel = (assetEl.GetString() ?? "").Trim();
+                    if (assetRel.Length == 0) continue;
+
+                    try
+                    {
+                        var assetPath = ScenarioLibrary.SafePath(dir, assetRel);
+                        if (!File.Exists(assetPath))
+                        {
+                            report.Add(ModDiagnosticSeverity.Error, "ERR_MAP_ASSET_MISSING", rel, assetField,
+                                $"Declared map asset '{assetRel}' does not exist inside maps/{folderId}/.",
+                                $"Create '{assetRel}' under maps/{folderId}/ or omit '{assetField}' to use generated topology.");
+                        }
+                        else if (StructuredData.IsDocument(assetPath))
+                        {
+                            using var _ = JsonDocument.Parse(StructuredData.ReadJson(assetPath), GameDataLoader.ForgivingJson);
+                        }
+                        else
+                        {
+                            var hasRow = File.ReadLines(assetPath).Any(l =>
+                            {
+                                var t = l.Trim();
+                                return t.Length > 0 && !t.StartsWith('#') && !t.StartsWith("//", StringComparison.Ordinal);
+                            });
+                            if (!hasRow)
+                            {
+                                report.Add(ModDiagnosticSeverity.Error, "ERR_MAP_ASSET_INVALID", rel, assetField,
+                                    $"Map asset '{assetRel}' is empty.",
+                                    $"Populate '{assetRel}' with valid map data rows or remove '{assetField}'.");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        report.Add(ModDiagnosticSeverity.Error, "ERR_MAP_ASSET_INVALID", rel, assetField,
+                            $"Invalid map asset '{assetRel}': {ex.Message}",
+                            $"Ensure '{assetRel}' is a clean path inside maps/{folderId}/ with valid syntax.");
+                    }
+                }
+
+                var keyToken = mapId.Length > 0 ? mapId : folderId;
+                if (!hasLoc)
+                {
+                    report.Add(ModDiagnosticSeverity.Warning, "WARN_MAP_LOC_MISSING", rel, "localization",
+                        $"Map pack '{keyToken}' has no localization/english and localization/russian translations.",
+                        $"Add localization/english/ and localization/russian/ files with keys such as \"studio.map.{keyToken}.name\".");
+                }
+                else
+                {
+                    var enHasMap = enLoc!.Keys.Any(k => k.Contains(keyToken, StringComparison.OrdinalIgnoreCase));
+                    var ruHasMap = ruLoc!.Keys.Any(k => k.Contains(keyToken, StringComparison.OrdinalIgnoreCase));
+                    if (!enHasMap && !ruHasMap)
+                    {
+                        report.Add(ModDiagnosticSeverity.Warning, "WARN_MAP_LOC_MISSING", rel, "localization",
+                            $"No English or Russian localization key found matching map pack '{keyToken}'.",
+                            $"Add \"studio.map.{keyToken}.name\" and \"studio.map.{keyToken}.desc\" in both localization/english/ and localization/russian/.");
+                    }
+                }
+            }
+            catch { /* syntax error already reported by ValidateSyntaxTree */ }
+        }
+    }
+
+    private static void CheckMapNumber(JsonElement root, string rel, string key, double min, double max, ModValidationReport report)
+    {
+        if (!root.TryGetProperty(key, out var prop) || prop.ValueKind == JsonValueKind.Null) return;
+        if (prop.ValueKind != JsonValueKind.Number || !prop.TryGetDouble(out var v) || !double.IsFinite(v) || v < min || v > max)
+        {
+            report.Add(ModDiagnosticSeverity.Error, "ERR_MAP_SCHEMA", rel, key,
+                $"Map field '{key}' must be a number between {min:0.##} and {max:0.##}.",
+                $"Set '{key}' to a valid value in [{min:0.##}, {max:0.##}].");
+        }
+    }
+
+    private static Dictionary<string, string> ReadLocaleMapSilent(string dir, string modRoot)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!Directory.Exists(dir)) return map;
+        foreach (var file in StructuredData.Files(dir, SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(StructuredData.ReadJson(file), GameDataLoader.ForgivingJson);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object) continue;
+                foreach (var entry in doc.RootElement.EnumerateObject())
+                    if (entry.Value.ValueKind == JsonValueKind.String)
+                        map[entry.Name] = entry.Value.GetString() ?? "";
+            }
+            catch { }
+        }
+        return map;
+    }
+
+    private static void ValidateFormableNationsAndSettings(string modRoot, ModValidationReport report)
+    {
+        var formablesDir = Path.Combine(modRoot, "common", "formable_nations");
+        if (Directory.Exists(formablesDir))
+        {
+            foreach (var file in StructuredData.Files(formablesDir, SearchOption.TopDirectoryOnly))
+            {
+                var rel = Path.GetRelativePath(modRoot, file).Replace('\\', '/');
+                try
+                {
+                    using var doc = JsonDocument.Parse(StructuredData.ReadJson(file), GameDataLoader.ForgivingJson);
+                    var errors = new List<string>();
+                    FormableNations.Validate(doc.RootElement, errors);
+                    foreach (var err in errors)
+                    {
+                        report.Add(ModDiagnosticSeverity.Error, "ERR_FORMABLE_SCHEMA", rel, "common/formable_nations",
+                            err,
+                            "Ensure each formable defines 'name', eligibility ('eligible_tags' or 'eligible_cultures'), territory ('required_regions', 'required_tags', or 'required_provinces'), and numeric rates inside 0..1.");
+                    }
+                }
+                catch { /* syntax error caught by ValidateSyntaxTree */ }
+            }
+        }
+
+        var settingsDir = Path.Combine(modRoot, "common", "settings");
+        if (Directory.Exists(settingsDir))
+        {
+            foreach (var file in StructuredData.Files(settingsDir, SearchOption.TopDirectoryOnly))
+            {
+                var rel = Path.GetRelativePath(modRoot, file).Replace('\\', '/');
+                try
+                {
+                    using var doc = JsonDocument.Parse(StructuredData.ReadJson(file), GameDataLoader.ForgivingJson);
+                    if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                    {
+                        report.Add(ModDiagnosticSeverity.Error, "ERR_SETTING_SCHEMA", rel, "$",
+                            "Settings overlay root must be a JSON object keyed by setting id.",
+                            "Wrap setting definitions in { \"my_setting\": { ... } }.");
+                        continue;
+                    }
+                    foreach (var entry in doc.RootElement.EnumerateObject())
+                    {
+                        if (entry.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+                        if (entry.Value.ValueKind != JsonValueKind.Object)
+                        {
+                            report.Add(ModDiagnosticSeverity.Error, "ERR_SETTING_SCHEMA", rel, entry.Name,
+                                $"Setting '{entry.Name}' must be a JSON object.",
+                                "Provide { \"kind\": \"toggle\"|\"choice\"|\"slider\", ... }.");
+                            continue;
+                        }
+                        if (GameDataLoader.IsRemoved(entry.Value)) continue;
+
+                        var body = entry.Value;
+                        var kind = ReadString(body, "kind").ToLowerInvariant();
+                        if (kind.Length > 0 && kind is not ("toggle" or "choice" or "slider"))
+                        {
+                            report.Add(ModDiagnosticSeverity.Error, "ERR_SETTING_SCHEMA", rel, $"{entry.Name}.kind",
+                                $"Setting '{entry.Name}' has unsupported kind '{kind}'.",
+                                "Use 'toggle', 'choice', or 'slider'.");
+                            continue;
+                        }
+                        if (kind == "choice")
+                        {
+                            if (!body.TryGetProperty("values", out var vals) || vals.ValueKind != JsonValueKind.Array || vals.GetArrayLength() == 0)
+                            {
+                                report.Add(ModDiagnosticSeverity.Error, "ERR_SETTING_SCHEMA", rel, $"{entry.Name}.values",
+                                    $"Choice setting '{entry.Name}' requires a non-empty 'values' array.",
+                                    "Provide \"values\": [\"opt_a\", \"opt_b\"] and matching \"labels\".");
+                            }
+                            else if (body.TryGetProperty("labels", out var lbls) && lbls.ValueKind == JsonValueKind.Array &&
+                                     lbls.GetArrayLength() != vals.GetArrayLength())
+                            {
+                                report.Add(ModDiagnosticSeverity.Error, "ERR_SETTING_SCHEMA", rel, $"{entry.Name}.labels",
+                                    $"Choice setting '{entry.Name}' has {lbls.GetArrayLength()} labels for {vals.GetArrayLength()} values.",
+                                    "Keep 'labels' the same length as 'values' (or omit 'labels').");
+                            }
+                        }
+                        else if (kind == "slider")
+                        {
+                            var hasMin = body.TryGetProperty("minimum", out var minEl) && minEl.TryGetDouble(out var minV) && double.IsFinite(minV);
+                            var hasMax = body.TryGetProperty("maximum", out var maxEl) && maxEl.TryGetDouble(out var maxV) && double.IsFinite(maxV);
+                            if (hasMin && hasMax && minEl.GetDouble() >= maxEl.GetDouble())
+                            {
+                                report.Add(ModDiagnosticSeverity.Error, "ERR_SETTING_SCHEMA", rel, $"{entry.Name}.minimum",
+                                    $"Slider '{entry.Name}' minimum must be strictly less than maximum.",
+                                    "Adjust 'minimum' and 'maximum' so minimum < maximum.");
+                            }
+                            if (body.TryGetProperty("step", out var stepEl) && (!stepEl.TryGetDouble(out var st) || !double.IsFinite(st) || st <= 0))
+                            {
+                                report.Add(ModDiagnosticSeverity.Error, "ERR_SETTING_SCHEMA", rel, $"{entry.Name}.step",
+                                    $"Slider '{entry.Name}' requires a positive finite 'step'.",
+                                    "Set \"step\" to a positive increment such as 0.05 or 1.");
+                            }
+                        }
+                        else if (kind == "toggle" && body.TryGetProperty("default", out var defEl) &&
+                                 defEl.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                        {
+                            report.Add(ModDiagnosticSeverity.Error, "ERR_SETTING_SCHEMA", rel, $"{entry.Name}.default",
+                                $"Toggle '{entry.Name}' requires a boolean 'default' (true or false).",
+                                "Set \"default\": true or \"default\": false.");
+                        }
+                    }
+                }
+                catch { /* syntax error caught by ValidateSyntaxTree */ }
+            }
+        }
     }
 
     private static string CanonicalPair(string a, string b)

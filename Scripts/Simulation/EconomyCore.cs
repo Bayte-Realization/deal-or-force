@@ -1333,6 +1333,49 @@ public static class EconomySystem
         float Mismatch,
         float CycleRadicalism);
 
+    private sealed class EconomyFlushBatchScratch
+    {
+        public bool[] HouseholdDone = Array.Empty<bool>();
+        public Nation[] VitalNations = Array.Empty<Nation>();
+        public ScenarioState[] VitalStates = Array.Empty<ScenarioState>();
+        public bool[] VitalAtWar = Array.Empty<bool>();
+        public int[] VitalWorkIndex = Array.Empty<int>();
+        public float[] OutBirth = Array.Empty<float>();
+        public float[] OutDeath = Array.Empty<float>();
+        public float[] OutOldBurden = Array.Empty<float>();
+        public long[] OutRb = Array.Empty<long>();
+        public long[] OutRd = Array.Empty<long>();
+
+        public float[] NationSol = Array.Empty<float>();
+        public float[] WeeklyRadDelta = Array.Empty<float>();
+        public float[] CycleRad = Array.Empty<float>();
+        public float[] StateSol = Array.Empty<float>();
+        public float[] StateRad = Array.Empty<float>();
+
+        public void EnsureCapacity(int count)
+        {
+            if (HouseholdDone.Length >= count) return;
+            var cap = Math.Max(count + 64, 512);
+            HouseholdDone = new bool[cap];
+            VitalNations = new Nation[cap];
+            VitalStates = new ScenarioState[cap];
+            VitalAtWar = new bool[cap];
+            VitalWorkIndex = new int[cap];
+            OutBirth = new float[cap];
+            OutDeath = new float[cap];
+            OutOldBurden = new float[cap];
+            OutRb = new long[cap];
+            OutRd = new long[cap];
+            NationSol = new float[cap];
+            WeeklyRadDelta = new float[cap];
+            CycleRad = new float[cap];
+            StateSol = new float[cap];
+            StateRad = new float[cap];
+        }
+    }
+
+    [ThreadStatic] private static EconomyFlushBatchScratch _flushScratch;
+
     private static void FlushEconomyBatch(Campaign campaign, HeapPooledList<EconomyNationPrep> preps,
         HeapPooledList<(int PrepIndex, ScenarioState State)> work)
     {
@@ -1340,6 +1383,113 @@ public static class EconomySystem
         using (SimProfiler.Measure("eco:states"))
         {
             var workCount = work.Count;
+            if (workCount >= 8 &&
+                campaign.Defines.HouseholdDynamicsEnabled &&
+                Kernels.NativeKernelsLoader.EnableEconomyDemoDefault &&
+                Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapEconomyDemo))
+            {
+                var scratch = _flushScratch ??= new EconomyFlushBatchScratch();
+                scratch.EnsureCapacity(workCount);
+
+                if (workCount >= FlatStateParallelMin && DeterministicParallel.Enabled(campaign))
+                {
+                    DeterministicParallel.ForRange(campaign, 0, workCount, (from, to) =>
+                    {
+                        for (var i = from; i < to; i++)
+                        {
+                            var (prepIdx, state) = work[i];
+                            var p = preps[prepIdx];
+                            scratch.HouseholdDone[i] = HouseholdEconomy.ReviewGroupsForBatch(
+                                campaign, p.Nation, state, p.AnnualGrowth,
+                                p.FoodSupply, p.EnergySupply, p.MedSupply, MarketSystem.JobsDemanded(state));
+                        }
+                    }, minItems: FlatStateParallelMin);
+                }
+                else
+                {
+                    for (var i = 0; i < workCount; i++)
+                    {
+                        var (prepIdx, state) = work[i];
+                        var p = preps[prepIdx];
+                        scratch.HouseholdDone[i] = HouseholdEconomy.ReviewGroupsForBatch(
+                            campaign, p.Nation, state, p.AnnualGrowth,
+                            p.FoodSupply, p.EnergySupply, p.MedSupply, MarketSystem.JobsDemanded(state));
+                    }
+                }
+
+                var vitalCount = 0;
+                for (var i = 0; i < workCount; i++)
+                {
+                    if (!scratch.HouseholdDone[i]) continue;
+                    var (prepIdx, state) = work[i];
+                    var p = preps[prepIdx];
+                    scratch.VitalNations[vitalCount] = p.Nation;
+                    scratch.VitalStates[vitalCount] = state;
+                    scratch.VitalAtWar[vitalCount] = p.AtWar;
+                    scratch.VitalWorkIndex[vitalCount] = i;
+                    vitalCount++;
+                }
+
+                if (vitalCount > 0)
+                {
+                    var interval = Math.Clamp(campaign.Defines.EconomyTickDays, 1, 365) / 365f;
+                    HouseholdEconomy.ComputeVitalRatesBatch(
+                        campaign,
+                        scratch.VitalNations.AsSpan(0, vitalCount),
+                        scratch.VitalStates.AsSpan(0, vitalCount),
+                        scratch.VitalAtWar.AsSpan(0, vitalCount),
+                        interval,
+                        scratch.OutBirth.AsSpan(0, vitalCount),
+                        scratch.OutDeath.AsSpan(0, vitalCount),
+                        scratch.OutOldBurden.AsSpan(0, vitalCount),
+                        scratch.OutRb.AsSpan(0, vitalCount),
+                        scratch.OutRd.AsSpan(0, vitalCount));
+                    for (var vi = 0; vi < vitalCount; vi++)
+                    {
+                        HouseholdEconomy.FinishBatchedVitalStep(
+                            campaign, scratch.VitalNations[vi], scratch.VitalStates[vi],
+                            scratch.OutRb[vi], scratch.OutRd[vi]);
+                        scratch.VitalNations[vi] = null;
+                        scratch.VitalStates[vi] = null;
+                    }
+                }
+
+                for (var i = 0; i < workCount; i++)
+                {
+                    var (prepIdx, state) = work[i];
+                    var p = preps[prepIdx];
+                    var oldSol = state.StandardOfLiving;
+                    scratch.NationSol[i] = p.Nation.StandardOfLiving;
+                    scratch.StateSol[i] = oldSol;
+                    state.StandardOfLiving = M.Lerp(oldSol, p.Nation.StandardOfLiving, 0.04f);
+                    scratch.WeeklyRadDelta[i] = RadicalismCore.WeeklyChange(
+                        campaign, p.Nation, state, p.AtWar, p.WelfareRadicalism, p.FocusRadicalism);
+                    scratch.CycleRad[i] = p.CycleRadicalism;
+                    scratch.StateRad[i] = state.Radicalism;
+                }
+
+                Kernels.NativeCombatSupportKernels.EconStateWeekPost(
+                    scratch.NationSol.AsSpan(0, workCount),
+                    scratch.WeeklyRadDelta.AsSpan(0, workCount),
+                    scratch.CycleRad.AsSpan(0, workCount),
+                    scratch.StateSol.AsSpan(0, workCount),
+                    scratch.StateRad.AsSpan(0, workCount));
+
+                for (var i = 0; i < workCount; i++)
+                {
+                    var (prepIdx, state) = work[i];
+                    var p = preps[prepIdx];
+                    state.StandardOfLiving = scratch.StateSol[i];
+                    state.Radicalism = scratch.StateRad[i];
+                    MinorityPressure(campaign, p.Nation, state);
+                    MovementRules.MarkPeopleStateDirty(campaign, state);
+                }
+
+                for (var pi = 0; pi < preps.Count; pi++)
+                    SettleNationBatchItem(campaign, preps[pi]);
+                return;
+            }
+
             if (workCount >= FlatStateParallelMin && DeterministicParallel.Enabled(campaign))
             {
                 DeterministicParallel.ForRange(campaign, 0, workCount, (from, to) =>

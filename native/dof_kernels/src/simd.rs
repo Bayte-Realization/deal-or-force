@@ -101,6 +101,11 @@ pub(crate) mod x86_avx2 {
         let lt = _mm256_cmp_ps(a, b, _CMP_LT_OQ);
         _mm256_blendv_ps(b, a, lt)
     }
+
+    #[inline(always)]
+    pub(crate) unsafe fn select(mask: __m256, if_true: __m256, if_false: __m256) -> __m256 {
+        _mm256_blendv_ps(if_false, if_true, mask)
+    }
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -185,6 +190,11 @@ pub(crate) mod arm64_neon {
     #[target_feature(enable = "neon")]
     pub(crate) unsafe fn m_max(a: float32x4_t, b: float32x4_t) -> float32x4_t {
         vbslq_f32(vcgtq_f32(a, b), a, b)
+    }
+
+    #[target_feature(enable = "neon")]
+    pub(crate) unsafe fn abs(v: float32x4_t) -> float32x4_t {
+        vabsq_f32(v)
     }
 
     #[target_feature(enable = "neon")]

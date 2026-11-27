@@ -28,16 +28,20 @@ public enum ModStudioCategory
     Ideology = 10,
     PolicyLaw = 11,
     GrandProject = 12,
-    DefinesOverride = 13
+    DefinesOverride = 13,
+    FormableNation = 14,
+    Country = 15,
+    MapPack = 16
 }
 
-/// <summary>UI navigation sections grouping the 14 guided authoring categories.</summary>
+/// <summary>UI navigation sections grouping the guided authoring categories.</summary>
 public enum ModStudioSection
 {
     EventsAndDecisions = 0,
     EconomyAndTech = 1,
     MilitaryAndProjects = 2,
-    PoliticsAndBalance = 3
+    PoliticsAndBalance = 3,
+    FormableAndWorld = 4
 }
 
 public enum ModStudioFieldKind
@@ -251,6 +255,20 @@ public sealed class ModStudioDocument
         if (string.IsNullOrWhiteSpace(modRoot)) return Array.Empty<string>();
         var dir = Path.Combine(modRoot, CategoryFolder(category).Replace('/', Path.DirectorySeparatorChar));
         if (!Directory.Exists(dir)) return Array.Empty<string>();
+        if (category == ModStudioCategory.MapPack)
+        {
+            var packs = new List<string>();
+            foreach (var sub in Directory.EnumerateDirectories(dir).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+            {
+                var subName = Path.GetFileName(sub);
+                if (string.IsNullOrWhiteSpace(subName)) continue;
+                var mapFile = Directory.EnumerateFiles(sub, "map.*", SearchOption.TopDirectoryOnly)
+                    .FirstOrDefault(StructuredData.IsDocument);
+                if (!string.IsNullOrWhiteSpace(mapFile))
+                    packs.Add($"{subName}/{Path.GetFileName(mapFile)}");
+            }
+            return packs.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToArray();
+        }
         return Directory.EnumerateFiles(dir, "*.*", SearchOption.TopDirectoryOnly)
             .Where(f => StructuredData.IsDocument(f))
             .Select(Path.GetFileName)
@@ -271,7 +289,28 @@ public sealed class ModStudioDocument
         }
         try
         {
-            var rel = CategoryFolder(category) + "/" + Path.GetFileName(fileName.Trim());
+            string rel;
+            string stem;
+            if (category == ModStudioCategory.MapPack)
+            {
+                var clean = fileName.Replace('\\', '/').Trim().TrimStart('/');
+                if (!clean.Contains('/', StringComparison.Ordinal))
+                    clean += "/map.json";
+                var parts = clean.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length != 2)
+                {
+                    error = "Map pack entry must be '<id>/map.json'.";
+                    return false;
+                }
+                rel = $"{CategoryFolder(category)}/{parts[0]}/{parts[1]}";
+                stem = parts[0];
+            }
+            else
+            {
+                rel = CategoryFolder(category) + "/" + Path.GetFileName(fileName.Trim());
+                stem = Path.GetFileNameWithoutExtension(rel);
+                if (stem.StartsWith("99_studio_", StringComparison.OrdinalIgnoreCase)) stem = stem["99_studio_".Length..];
+            }
             var path = ScenarioLibrary.SafePath(modRoot, rel);
             if (!File.Exists(path))
             {
@@ -279,8 +318,6 @@ public sealed class ModStudioDocument
                 return false;
             }
             var raw = File.ReadAllText(path);
-            var stem = Path.GetFileNameWithoutExtension(path);
-            if (stem.StartsWith("99_studio_", StringComparison.OrdinalIgnoreCase)) stem = stem["99_studio_".Length..];
             if (!TryLoadJsonIntoDraft(category, StructuredData.ToJson(rel, raw), stem, out document, out error))
                 return false;
 
@@ -300,18 +337,22 @@ public sealed class ModStudioDocument
         if (string.IsNullOrWhiteSpace(id)) return;
         static Dictionary<string, string> ReadLoc(string modRoot, string lang, string id)
         {
-            var path = Path.Combine(modRoot, "localization", lang, $"99_studio_{id}.json");
-            if (!File.Exists(path)) return null;
-            try
+            foreach (var candidate in new[] { $"99_studio_{id}.json", $"00_{id}.json", "00_custom_map_pack.json" })
             {
-                using var doc = JsonDocument.Parse(StructuredData.ToJson(path, File.ReadAllText(path)), GameDataLoader.ForgivingJson);
-                if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
-                var map = new Dictionary<string, string>(StringComparer.Ordinal);
-                foreach (var p in doc.RootElement.EnumerateObject())
-                    if (p.Value.ValueKind == JsonValueKind.String) map[p.Name] = p.Value.GetString() ?? "";
-                return map;
+                var path = Path.Combine(modRoot, "localization", lang, candidate);
+                if (!File.Exists(path)) continue;
+                try
+                {
+                    using var doc = JsonDocument.Parse(StructuredData.ToJson(path, File.ReadAllText(path)), GameDataLoader.ForgivingJson);
+                    if (doc.RootElement.ValueKind != JsonValueKind.Object) continue;
+                    var map = new Dictionary<string, string>(StringComparer.Ordinal);
+                    foreach (var p in doc.RootElement.EnumerateObject())
+                        if (p.Value.ValueKind == JsonValueKind.String) map[p.Name] = p.Value.GetString() ?? "";
+                    if (map.Count > 0) return map;
+                }
+                catch { }
             }
-            catch { return null; }
+            return null;
         }
         var en = ReadLoc(modRoot, "english", id);
         var ru = ReadLoc(modRoot, "russian", id);
@@ -365,6 +406,9 @@ public sealed class ModStudioDocument
         ModStudioCategory.PolicyLaw => $"studio.law.{id}",
         ModStudioCategory.GrandProject => $"studio.gp.{id}",
         ModStudioCategory.DefinesOverride => $"studio.def.{id}",
+        ModStudioCategory.FormableNation => $"studio.form.{id}",
+        ModStudioCategory.Country => $"studio.ctry.{id}",
+        ModStudioCategory.MapPack => $"studio.map.{id}",
         _ => $"studio.custom.{id}"
     };
 
@@ -414,6 +458,30 @@ public sealed class ModStudioDocument
                 }
                 return true;
             }
+            if (category == ModStudioCategory.MapPack)
+            {
+                document._values["id"] = NormalizeId(string.IsNullOrWhiteSpace(ReadStr(root, "id")) ? fallbackId : ReadStr(root, "id"));
+                if (document._values["id"].Length > 48) document._values["id"] = document._values["id"][..48];
+                foreach (var f in document.Template.Fields)
+                {
+                    if (f.Key is "id" or "title_ru" or "description_ru") continue;
+                    if (root.TryGetProperty(f.Key, out var prop))
+                    {
+                        if (prop.ValueKind == JsonValueKind.String)
+                            document._values[f.Key] = prop.GetString() ?? "";
+                        else if (prop.ValueKind == JsonValueKind.Number)
+                            document._values[f.Key] = prop.GetRawText();
+                        else if (prop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                            document._values[f.Key] = prop.GetBoolean() ? "true" : "false";
+                    }
+                }
+                if (root.TryGetProperty("inherit_base_hydrology", out var ih) && ih.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                    document._values["inherits_base_hydrology"] = ih.GetBoolean() ? "true" : "false";
+                return true;
+
+                static string ReadStr(JsonElement obj, string key) =>
+                    obj.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.String ? (p.GetString() ?? "").Trim() : "";
+            }
             var entries = root.EnumerateObject().Where(p => !p.Name.StartsWith("//", StringComparison.Ordinal) && p.Value.ValueKind == JsonValueKind.Object).ToList();
             if (entries.Count == 0)
             {
@@ -421,7 +489,15 @@ public sealed class ModStudioDocument
                 return false;
             }
             var entry = entries[0];
-            document._values["id"] = SafeIdRegex.IsMatch(entry.Name) ? entry.Name : NormalizeId(entry.Name);
+            if (category == ModStudioCategory.Country)
+            {
+                document._values["tag"] = entry.Name.Trim().ToUpperInvariant();
+                document._values["id"] = NormalizeId(string.IsNullOrWhiteSpace(fallbackId) ? entry.Name : fallbackId);
+            }
+            else
+            {
+                document._values["id"] = SafeIdRegex.IsMatch(entry.Name) ? entry.Name : NormalizeId(entry.Name);
+            }
             var body = entry.Value;
 
             void CopyScalar(string fieldKey, string jsonKey)
@@ -439,8 +515,22 @@ public sealed class ModStudioDocument
                 }
             }
             foreach (var f in document.Template.Fields)
-                if (f.Key != "id") CopyScalar(f.Key, f.Key);
+                if (f.Key != "id" && !(category == ModStudioCategory.Country && f.Key == "tag")) CopyScalar(f.Key, f.Key);
             CopyScalar("description", "summary");
+            if (category == ModStudioCategory.Country)
+            {
+                CopyScalar("colour", "color");
+                CopyScalar("starting_treasury", "treasury");
+            }
+            else if (category == ModStudioCategory.FormableNation)
+            {
+                if (body.TryGetProperty("eligible_tags", out var et) && et.ValueKind == JsonValueKind.Array)
+                    document._values["tag"] = string.Join(", ", et.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => (x.GetString() ?? "").Trim().ToUpperInvariant()).Where(x => x.Length > 0));
+                if (body.TryGetProperty("required_regions", out var rr) && rr.ValueKind == JsonValueKind.Array)
+                    document._values["required_regions"] = string.Join(", ", rr.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => (x.GetString() ?? "").Trim().ToLowerInvariant()).Where(x => x.Length > 0));
+                if (body.TryGetProperty("eligible_cultures", out var ec) && ec.ValueKind == JsonValueKind.Array)
+                    document._values["allowed_cultures"] = string.Join(", ", ec.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => (x.GetString() ?? "").Trim().ToLowerInvariant()).Where(x => x.Length > 0));
+            }
 
             if (category == ModStudioCategory.Event)
             {
@@ -542,7 +632,7 @@ public sealed class ModStudioDocument
                 }
             }
 
-            if (entries.Count > 1)
+            if (category != ModStudioCategory.MapPack && entries.Count > 1)
                 document._rawOverrideJson = WriteIndentedJson(JsonNode.Parse(jsonText, documentOptions: GameDataLoader.ForgivingJson)!);
             return true;
 
@@ -566,6 +656,8 @@ public sealed class ModStudioDocument
     {
         var id = GetField("id").Trim();
         var fileId = SafeIdRegex.IsMatch(id) ? id : "custom_entry";
+        if (Category == ModStudioCategory.MapPack)
+            return $"maps/{fileId}/map.json";
         return $"{CategoryFolder(Category)}/99_studio_{fileId}.json";
     }
 
@@ -882,6 +974,96 @@ public sealed class ModStudioDocument
                 root["PrestigeWeeklyDriftRate"] = ParseFloat("prestige_weekly_drift_rate", 0.015f);
                 break;
             }
+            case ModStudioCategory.FormableNation:
+            {
+                static string[] SplitList(string raw, bool upper) => (raw ?? "")
+                    .Split(new[] { ',', ';', '\n', '\r', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => upper ? s.Trim().ToUpperInvariant() : s.Trim().ToLowerInvariant())
+                    .Where(s => s.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+
+                var tags = SplitList(GetField("tag"), upper: true);
+                var regions = SplitList(GetField("required_regions"), upper: false);
+                var cultures = SplitList(GetField("allowed_cultures"), upper: false);
+                var stabBonus = ParseFloat("stability_bonus", 0.04f);
+                var prestigeBonus = ParseFloat("prestige_bonus", 20f);
+                var unlocksEvent = GetField("unlocks_event").Trim();
+
+                var tagArr = new JsonArray();
+                foreach (var t in tags) tagArr.Add(t);
+                var regionArr = new JsonArray();
+                foreach (var r in regions) regionArr.Add(r);
+
+                var body = new JsonObject
+                {
+                    ["name"] = $"studio.form.{id}.name",
+                    ["description"] = $"studio.form.{id}.desc",
+                    ["tag"] = string.Join(", ", tags),
+                    ["eligible_tags"] = tagArr,
+                    ["required_regions"] = regionArr,
+                    ["minimum_stability"] = 0.65f,
+                    ["gdp_cost_share"] = 0.02f,
+                    ["governance_gain"] = Math.Clamp(stabBonus, 0f, 1f),
+                    ["productivity_gain"] = 0.02f,
+                    ["prestige_bonus"] = prestigeBonus,
+                    ["stability_bonus"] = stabBonus
+                };
+                if (regions.Length == 0 && tags.Length > 0)
+                {
+                    var reqTags = new JsonArray();
+                    foreach (var t in tags) reqTags.Add(t);
+                    body["required_tags"] = reqTags;
+                }
+                if (cultures.Length > 0)
+                {
+                    var culArr = new JsonArray();
+                    foreach (var c in cultures) culArr.Add(c);
+                    body["eligible_cultures"] = culArr;
+                }
+                if (!string.IsNullOrEmpty(unlocksEvent))
+                    body["unlocks_event"] = unlocksEvent;
+                root[id] = body;
+                break;
+            }
+            case ModStudioCategory.Country:
+            {
+                var tag = GetField("tag").Trim().ToUpperInvariant();
+                if (string.IsNullOrWhiteSpace(tag)) tag = "PRT";
+                var colour = GetField("colour").Trim();
+                if (string.IsNullOrWhiteSpace(colour)) colour = "#3A7CA5";
+                var treasury = ParseFloat("starting_treasury", 25f);
+                root[tag] = new JsonObject
+                {
+                    ["name"] = $"studio.ctry.{id}.name",
+                    ["description"] = $"studio.ctry.{id}.desc",
+                    ["color"] = colour,
+                    ["colour"] = colour,
+                    ["government_form"] = GetField("government_form").Trim(),
+                    ["course"] = GetField("course").Trim(),
+                    ["capital_region"] = GetField("capital_region").Trim(),
+                    ["starting_treasury"] = treasury,
+                    ["treasury"] = treasury
+                };
+                break;
+            }
+            case ModStudioCategory.MapPack:
+            {
+                var mapName = GetField("name").Trim();
+                if (string.IsNullOrWhiteSpace(mapName)) mapName = id;
+                var hydro = ParseBool("inherits_base_hydrology", true);
+                root["id"] = id;
+                root["name"] = mapName;
+                root["description"] = GetField("description").Trim();
+                root["author"] = GetField("author").Trim();
+                root["cells_per_province"] = ParseInt("cells_per_province", 40);
+                root["disputed_cells_per_province"] = ParseInt("disputed_cells_per_province", 36);
+                root["siberia_multiplier"] = ParseFloat("siberia_multiplier", 1.35f);
+                root["polar_multiplier"] = ParseFloat("polar_multiplier", 2.4f);
+                root["inherit_base_hydrology"] = hydro;
+                root["inherits_base_hydrology"] = hydro;
+                break;
+            }
         }
         return WriteIndentedJson(root);
     }
@@ -1023,8 +1205,27 @@ public sealed class ModStudioDocument
                 if (minLat > maxLat)
                     issues.Add(new ModStudioIssue(true, "min_abs_lat", "Minimum latitude cannot exceed maximum latitude."));
             }
-            if (Category == ModStudioCategory.Ideology && !HexColourRegex.IsMatch(GetField("colour").Trim()))
+            if (Category is ModStudioCategory.Ideology or ModStudioCategory.Country &&
+                !HexColourRegex.IsMatch(GetField("colour").Trim()))
                 issues.Add(new ModStudioIssue(true, "colour", "Colour must be a 6-digit hex literal such as #4B9CD3."));
+            if (Category == ModStudioCategory.Country)
+            {
+                var tag = GetField("tag").Trim();
+                if (!Regex.IsMatch(tag, "^[A-Za-z][A-Za-z0-9]{1,5}$"))
+                    issues.Add(new ModStudioIssue(true, "tag", "Country tag must be 2–6 letters or digits (typically 3 uppercase ISO letters such as PRT)."));
+                var gf = GetField("government_form").Trim();
+                if (gf.Length > 0 && GovernmentCatalog.All.Count > 0 && !GovernmentCatalog.Knows(gf))
+                    issues.Add(new ModStudioIssue(true, "government_form", $"Unknown government form '{gf}'."));
+                var course = GetField("course").Trim();
+                if (course.Length > 0 && NationalCourseCatalog.All.Any() && NationalCourseCatalog.Find(course) is null)
+                    issues.Add(new ModStudioIssue(true, "course", $"Unknown national course '{course}'."));
+            }
+            if (Category == ModStudioCategory.MapPack)
+            {
+                var mapId = GetField("id").Trim();
+                if (!Regex.IsMatch(mapId, "^[a-z0-9_]{2,48}$"))
+                    issues.Add(new ModStudioIssue(true, "id", "Map pack id must be 2–48 lowercase letters, digits, or underscores."));
+            }
             if (Category == ModStudioCategory.PolicyLaw &&
                 string.Equals(GetField("scope").Trim(), "region", StringComparison.OrdinalIgnoreCase) &&
                 GetField("modifier_key").Trim().ToLowerInvariant() is not ("radicalism_weekly" or "living_weekly" or "stability_weekly"))
@@ -1104,6 +1305,7 @@ public sealed class ModStudioDocument
         IdeologyCatalog.ResetCatalog(errors);
         PoliticalPolicyCatalog.ResetCatalog(errors);
         GrandProjectCatalog.ResetCatalog();
+        FormableNations.ResetCatalog();
         if (campaign is null) BuildingCatalog.ResetCatalog();
 
         var reloaded = 0;
@@ -1191,6 +1393,19 @@ public sealed class ModStudioDocument
                 reloaded++;
                 ParseRoot(file, "common/grand_projects", r => GrandProjectCatalog.Merge(r, loadErrors), errors);
             }
+            foreach (var file in DataFiles(root, "common", "formable_nations"))
+            {
+                reloaded++;
+                ParseRoot(file, "common/formable_nations", r => FormableNations.Merge(r, loadErrors), errors);
+            }
+            if (campaign is not null)
+            {
+                foreach (var file in DataFiles(root, "common", "countries"))
+                {
+                    reloaded++;
+                    ParseRoot(file, "common/countries", r => CountryDefinitions.Apply(campaign, r), errors);
+                }
+            }
             if (campaign?.Defines is not null)
             {
                 foreach (var file in DataFiles(root, "common", "defines"))
@@ -1201,6 +1416,8 @@ public sealed class ModStudioDocument
             }
         }
 
+        MapCatalog.SetModRoots(roots);
+        MapCatalog.Refresh();
         if (campaign is not null)
             foreach (var nation in campaign.Nations)
                 NationalModifiers.Invalidate(nation);
@@ -1600,7 +1817,57 @@ public sealed class ModStudioDocument
                     new("loc_key", "studio.field.loc_key", ModStudioFieldKind.Text, "my_mod.greeting"),
                     new("en_value", "studio.field.en_value", ModStudioFieldKind.Text, "Welcome to my custom scenario!"),
                     new("ru_value", "studio.field.ru_value", ModStudioFieldKind.Text, "Добро пожаловать в мой сценарий!", Required: false)
-                }, ModStudioSection.PoliticsAndBalance)
+                }, ModStudioSection.PoliticsAndBalance),
+            [ModStudioCategory.FormableNation] = new(
+                ModStudioCategory.FormableNation, "common/formable_nations", "studio.cat.formable", "studio.cat.formable_desc",
+                new ModStudioField[]
+                {
+                    new("id", "studio.field.id", ModStudioFieldKind.Id, "north_sea_commonwealth", HelpKey: "studio.help.id"),
+                    new("name", "studio.field.title", ModStudioFieldKind.Text, "North Sea Commonwealth"),
+                    new("title_ru", "studio.field.title_ru", ModStudioFieldKind.Text, "Содружество Северного моря", Required: false),
+                    new("description", "studio.field.description", ModStudioFieldKind.Text, "Unite the maritime littoral states of Northern Europe under one federation."),
+                    new("description_ru", "studio.field.description_ru", ModStudioFieldKind.Text, "Объедините морские государства Северной Европы в единую федерацию.", Required: false),
+                    new("tag", "studio.field.tag", ModStudioFieldKind.Text, "NOR, SWE", HelpKey: "studio.help.tag_list"),
+                    new("required_regions", "studio.field.required_regions", ModStudioFieldKind.Text, "no_osl, se_sto", HelpKey: "studio.help.regions_list"),
+                    new("allowed_cultures", "studio.field.allowed_cultures", ModStudioFieldKind.Text, "norwegian, swedish", Required: false, HelpKey: "studio.help.cultures_list"),
+                    new("prestige_bonus", "studio.field.prestige_bonus", ModStudioFieldKind.Float, "25", 0f, 500f),
+                    new("stability_bonus", "studio.field.stability_bonus", ModStudioFieldKind.Float, "0.04", 0f, 1f),
+                    new("unlocks_event", "studio.field.unlocks_event", ModStudioFieldKind.Text, "", Required: false)
+                }, ModStudioSection.FormableAndWorld),
+            [ModStudioCategory.Country] = new(
+                ModStudioCategory.Country, "common/countries", "studio.cat.country", "studio.cat.country_desc",
+                new ModStudioField[]
+                {
+                    new("id", "studio.field.id", ModStudioFieldKind.Id, "custom_portugal", HelpKey: "studio.help.id"),
+                    new("tag", "studio.field.tag", ModStudioFieldKind.Text, "PRT", HelpKey: "studio.help.tag_list"),
+                    new("name", "studio.field.title", ModStudioFieldKind.Text, "Portugal"),
+                    new("title_ru", "studio.field.title_ru", ModStudioFieldKind.Text, "Португалия", Required: false),
+                    new("description", "studio.field.description", ModStudioFieldKind.Text, "Atlantic maritime republic with modernized industrial corridors."),
+                    new("description_ru", "studio.field.description_ru", ModStudioFieldKind.Text, "Атлантическая морская республика с обновлённой промышленностью.", Required: false),
+                    new("colour", "studio.field.colour", ModStudioFieldKind.Text, "#2E7D4F"),
+                    new("government_form", "studio.field.government_form", ModStudioFieldKind.Choice, "parliamentary_republic",
+                        Choices: GovernmentCatalog.All.Select(g => g.Id).ToArray()),
+                    new("course", "studio.field.course", ModStudioFieldKind.Choice, "institutional_continuity",
+                        Choices: NationalCourseCatalog.All.Select(c => c.Id).ToArray()),
+                    new("capital_region", "studio.field.capital_region", ModStudioFieldKind.Text, "pt_lis", Required: false),
+                    new("starting_treasury", "studio.field.starting_treasury", ModStudioFieldKind.Float, "25", -1000f, 100000f)
+                }, ModStudioSection.FormableAndWorld),
+            [ModStudioCategory.MapPack] = new(
+                ModStudioCategory.MapPack, "maps", "studio.cat.map_pack", "studio.cat.map_pack_desc",
+                new ModStudioField[]
+                {
+                    new("id", "studio.field.id", ModStudioFieldKind.Id, "archipelago_theater", HelpKey: "studio.help.id"),
+                    new("name", "studio.field.title", ModStudioFieldKind.Text, "Archipelago Theater"),
+                    new("title_ru", "studio.field.title_ru", ModStudioFieldKind.Text, "Театр архипелага", Required: false),
+                    new("description", "studio.field.description", ModStudioFieldKind.Text, "Compact maritime theater tuned for naval logistics and island landings."),
+                    new("description_ru", "studio.field.description_ru", ModStudioFieldKind.Text, "Компактный морской театр для флотской логистики и десантных операций.", Required: false),
+                    new("cells_per_province", "studio.field.cells_per_province", ModStudioFieldKind.Number, "36", 12f, 10000f),
+                    new("disputed_cells_per_province", "studio.field.disputed_cells_per_province", ModStudioFieldKind.Number, "30", 12f, 10000f),
+                    new("siberia_multiplier", "studio.field.siberia_multiplier", ModStudioFieldKind.Float, "1.25", 0.25f, 16f),
+                    new("polar_multiplier", "studio.field.polar_multiplier", ModStudioFieldKind.Float, "2.0", 0.25f, 16f),
+                    new("inherits_base_hydrology", "studio.field.inherits_base_hydrology", ModStudioFieldKind.Bool, "true"),
+                    new("author", "studio.field.author", ModStudioFieldKind.Text, "Deal or Force Mod Studio", Required: false)
+                }, ModStudioSection.FormableAndWorld)
         };
         return map;
     }
@@ -1674,7 +1941,373 @@ public sealed class ModStudioDocument
                     ["max_monthly_growth"] = "0.004", ["default_tax_rate"] = "0.18", ["ai_aggression"] = "1.3", ["ai_war_chance"] = "0.11",
                     ["peace_weariness_after_days"] = "720", ["mainland_reclamation_enabled"] = "true", ["prestige_enabled"] = "true", ["prestige_weekly_drift_rate"] = "0.010"
                 })
+            },
+            [ModStudioCategory.FormableNation] = new ModStudioPreset[]
+            {
+                new("form_union", "studio.preset.form_union", new Dictionary<string, string>
+                {
+                    ["tag"] = "BEL, NLD, LUX", ["required_regions"] = "be_bru, nl_nh", ["allowed_cultures"] = "dutch, walloon",
+                    ["prestige_bonus"] = "30", ["stability_bonus"] = "0.04"
+                }),
+                new("form_empire", "studio.preset.form_empire", new Dictionary<string, string>
+                {
+                    ["tag"] = "NOR, SWE, DNK", ["required_regions"] = "no_osl, se_sto, dk_cph", ["allowed_cultures"] = "norwegian, swedish, danish",
+                    ["prestige_bonus"] = "45", ["stability_bonus"] = "0.05"
+                })
+            },
+            [ModStudioCategory.Country] = new ModStudioPreset[]
+            {
+                new("ctry_republic", "studio.preset.ctry_republic", new Dictionary<string, string>
+                {
+                    ["tag"] = "PRT", ["colour"] = "#2E7D4F", ["government_form"] = "parliamentary_republic",
+                    ["course"] = "commercial_openness", ["capital_region"] = "pt_lis", ["starting_treasury"] = "35"
+                }),
+                new("ctry_autocracy", "studio.preset.ctry_autocracy", new Dictionary<string, string>
+                {
+                    ["tag"] = "PRT", ["colour"] = "#8C3B2B", ["government_form"] = "presidential_republic",
+                    ["course"] = "strategic_autonomy", ["capital_region"] = "pt_lis", ["starting_treasury"] = "45"
+                })
+            },
+            [ModStudioCategory.MapPack] = new ModStudioPreset[]
+            {
+                new("map_dense", "studio.preset.map_dense", new Dictionary<string, string>
+                {
+                    ["cells_per_province"] = "22", ["disputed_cells_per_province"] = "18",
+                    ["siberia_multiplier"] = "1.1", ["polar_multiplier"] = "1.6", ["inherits_base_hydrology"] = "true"
+                }),
+                new("map_archipelago", "studio.preset.map_archipelago", new Dictionary<string, string>
+                {
+                    ["cells_per_province"] = "42", ["disputed_cells_per_province"] = "36",
+                    ["siberia_multiplier"] = "1.4", ["polar_multiplier"] = "2.5", ["inherits_base_hydrology"] = "true"
+                })
             }
         };
     }
+}
+
+public enum ModScaffoldKind
+{
+    Data = 0,
+    MapPack = 1,
+    Scenario = 2,
+    Formable = 3,
+    GdScript = 4,
+    CSharp = 5,
+    RustWorker = 6,
+    FSharp = 7
+}
+
+public sealed record ModScaffoldRequest(
+    string ParentModsDir,
+    string ModId,
+    string DisplayName,
+    string Author,
+    ModScaffoldKind Kind);
+
+public sealed record ModScaffoldResult(
+    string ModRoot,
+    string ManifestPath,
+    IReadOnlyList<string> CreatedFiles);
+
+/// <summary>
+/// Pure-C# project scaffolder producing complete, validated Deal or Force mod packages on disk.
+/// </summary>
+public static class ModStudioScaffolder
+{
+    private static readonly JsonWriterOptions IndentedJson = new() { Indented = true };
+
+    public static bool TryParseKind(string raw, out ModScaffoldKind kind)
+    {
+        switch ((raw ?? "").Trim().ToLowerInvariant())
+        {
+            case "data": kind = ModScaffoldKind.Data; return true;
+            case "map" or "map_pack" or "mappack": kind = ModScaffoldKind.MapPack; return true;
+            case "scenario": kind = ModScaffoldKind.Scenario; return true;
+            case "formable" or "formable_nation": kind = ModScaffoldKind.Formable; return true;
+            case "gdscript" or "gd": kind = ModScaffoldKind.GdScript; return true;
+            case "csharp" or "cs": kind = ModScaffoldKind.CSharp; return true;
+            case "fsharp" or "fs": kind = ModScaffoldKind.FSharp; return true;
+            case "rust" or "rust_worker": kind = ModScaffoldKind.RustWorker; return true;
+            default: kind = ModScaffoldKind.Data; return false;
+        }
+    }
+
+    public static ModScaffoldResult Scaffold(ModScaffoldRequest request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.ParentModsDir))
+            throw new InvalidDataException("Mods root folder is not configured.");
+
+        var id = ModStudioDocument.NormalizeId(request.ModId);
+        if (request.Kind == ModScaffoldKind.MapPack && id.Length > 48)
+            id = id[..48].TrimEnd('_');
+
+        var displayName = string.IsNullOrWhiteSpace(request.DisplayName) ? ToTitle(id) : request.DisplayName.Trim();
+        var author = string.IsNullOrWhiteSpace(request.Author) ? "Deal or Force Modder" : request.Author.Trim();
+
+        var parentFull = Path.GetFullPath(request.ParentModsDir.Trim());
+        ContentWorkbench.RejectLinks(parentFull);
+        Directory.CreateDirectory(parentFull);
+
+        var modRoot = ScenarioLibrary.SafePath(parentFull, id);
+        ContentWorkbench.RejectLinks(modRoot);
+        if (Directory.Exists(modRoot) && Directory.EnumerateFileSystemEntries(modRoot).Any())
+            throw new InvalidDataException($"Mod folder '{id}' already exists. Choose a unique mod id.");
+        Directory.CreateDirectory(modRoot);
+
+        var created = new List<string>();
+        string WriteRel(string relPath, string content)
+        {
+            var full = ScenarioLibrary.SafePath(modRoot, relPath);
+            ContentWorkbench.RejectLinks(full);
+            var dir = Path.GetDirectoryName(full);
+            if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(full, content.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\r', '\n') + "\n",
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            created.Add(full);
+            return full;
+        }
+
+        var manifest = new JsonObject
+        {
+            ["id"] = id,
+            ["name"] = displayName,
+            ["version"] = "1.0.0",
+            ["supported_game_version"] = "0.8.*",
+            ["author"] = author,
+            ["enabled"] = true,
+            ["load_order"] = 150,
+            ["dependencies"] = new JsonArray(),
+            ["gdscript_entry"] = request.Kind == ModScaffoldKind.GdScript ? "scripts/mod_main.gd" : "",
+            ["csharp_assembly"] = ""
+        };
+        if (request.Kind == ModScaffoldKind.RustWorker)
+        {
+            manifest["worker_interval_days"] = 7;
+            manifest["worker_timeout_ms"] = 500;
+        }
+        var manifestPath = WriteRel("manifest.json", FormatJson(manifest));
+
+        var enLoc = new JsonObject
+        {
+            [$"mod.{id}.title"] = displayName,
+            [$"mod.{id}.desc"] = $"Custom {request.Kind} mod created by {author}."
+        };
+        var ruLoc = new JsonObject
+        {
+            [$"mod.{id}.title"] = displayName,
+            [$"mod.{id}.desc"] = $"Пользовательский мод ({request.Kind}) от {author}."
+        };
+
+        switch (request.Kind)
+        {
+            case ModScaffoldKind.Data:
+            {
+                var decDoc = ModStudioDocument.CreateFromTemplate(ModStudioCategory.Decision, $"{id}_initiative", $"{displayName} Initiative");
+                decDoc.SetField("title_ru", $"Инициатива: {displayName}");
+                WriteRel($"common/decisions/99_studio_{id}_initiative.json", decDoc.RenderJson());
+                decDoc.RenderLocalizationStubs(out var dEn, out var dRu);
+                WriteRel($"localization/english/99_studio_{id}_initiative.json", dEn);
+                WriteRel($"localization/russian/99_studio_{id}_initiative.json", dRu);
+
+                var evDoc = ModStudioDocument.CreateFromTemplate(ModStudioCategory.Event, $"{id}_debate", $"{displayName}: Policy Debate");
+                evDoc.SetField("title_ru", $"{displayName}: Дебаты о курсе");
+                WriteRel($"events/99_studio_{id}_debate.json", evDoc.RenderJson());
+                evDoc.RenderLocalizationStubs(out var eEn, out var eRu);
+                WriteRel($"localization/english/99_studio_{id}_debate.json", eEn);
+                WriteRel($"localization/russian/99_studio_{id}_debate.json", eRu);
+                break;
+            }
+            case ModScaffoldKind.MapPack:
+            {
+                var mapDoc = ModStudioDocument.CreateFromTemplate(ModStudioCategory.MapPack, id, displayName);
+                mapDoc.SetField("author", author);
+                WriteRel($"maps/{id}/map.json", mapDoc.RenderJson());
+                enLoc[$"studio.map.{id}.name"] = displayName;
+                ruLoc[$"studio.map.{id}.name"] = displayName;
+                enLoc[$"studio.map.{id}.desc"] = $"Custom map pack authored by {author}.";
+                ruLoc[$"studio.map.{id}.desc"] = $"Пользовательский пакет карты от {author}.";
+                break;
+            }
+            case ModScaffoldKind.Scenario:
+            {
+                var scen = new JsonObject
+                {
+                    ["id"] = id,
+                    ["name"] = displayName,
+                    ["description"] = $"Standalone scenario created by {author}.",
+                    ["start_date"] = "2024-01-01",
+                    ["player_country"] = "GBR",
+                    ["base_world"] = true
+                };
+                WriteRel($"scenarios/{id}/scenario.json", FormatJson(scen));
+                enLoc[$"scenario.{id}.name"] = displayName;
+                ruLoc[$"scenario.{id}.name"] = displayName;
+                enLoc[$"scenario.{id}.desc"] = $"Standalone scenario created by {author}.";
+                ruLoc[$"scenario.{id}.desc"] = $"Отдельный сценарий от {author}.";
+                break;
+            }
+            case ModScaffoldKind.Formable:
+            {
+                var formId = $"{id}_union";
+                var formDoc = ModStudioDocument.CreateFromTemplate(ModStudioCategory.FormableNation, formId, displayName);
+                formDoc.SetField("title_ru", displayName);
+                WriteRel($"common/formable_nations/99_studio_{formId}.json", formDoc.RenderJson());
+                formDoc.RenderLocalizationStubs(out var fEn, out var fRu);
+                WriteRel($"localization/english/99_studio_{formId}.json", fEn);
+                WriteRel($"localization/russian/99_studio_{formId}.json", fRu);
+                break;
+            }
+            case ModScaffoldKind.GdScript:
+            {
+                WriteRel("scripts/mod_main.gd",
+                    "extends RefCounted\n\n" +
+                    "func on_load(api) -> void:\n" +
+                    $"	api.log(\"[{id}] Mod loaded; map=\" + api.get_map_id())\n\n" +
+                    "func on_campaign_created(api) -> void:\n" +
+                    "	var tags: PackedStringArray = api.get_all_tags()\n" +
+                    $"	api.log(\"[{id}] Active tags: \" + str(tags.size()))\n\n" +
+                    "func on_day_advanced(api) -> void:\n" +
+                    "	if api.get_day() % 30 == 0:\n" +
+                    "		var wars: Array = api.get_wars(\"\")\n" +
+                    $"		api.log(\"[{id}] Monthly wars tracked: \" + str(wars.size()))\n");
+                break;
+            }
+            case ModScaffoldKind.CSharp:
+            {
+                var asm = ToPascal(id);
+                WriteRel($"corecode/{asm}.csproj",
+                    "<Project Sdk=\"Microsoft.NET.Sdk\">\n" +
+                    "  <PropertyGroup>\n" +
+                    "    <TargetFramework>net10.0</TargetFramework>\n" +
+                    "    <ImplicitUsings>enable</ImplicitUsings>\n" +
+                    "    <Nullable>disable</Nullable>\n" +
+                    $"    <AssemblyName>{asm}</AssemblyName>\n" +
+                    "  </PropertyGroup>\n" +
+                    "  <ItemGroup Condition=\"'$(GameAssembly)' == ''\">\n" +
+                    "    <ProjectReference Include=\"../../../../DealOrForce.csproj\" />\n" +
+                    "  </ItemGroup>\n" +
+                    "</Project>\n");
+                WriteRel("corecode/ModEntry.cs",
+                    "using DealOrForce.Modding;\nusing DealOrForce.Simulation;\n\n" +
+                    $"namespace {asm};\n\n" +
+                    "public sealed class ModEntry : IGlobalityMod\n{\n" +
+                    $"    public void OnLoad(ModContext context) => context.Log(\"{displayName} C# module loaded\");\n" +
+                    "    public void OnCampaignCreated(ModContext context) { }\n" +
+                    "    public void OnDayAdvanced(ModContext context) { }\n}\n");
+                break;
+            }
+            case ModScaffoldKind.FSharp:
+            {
+                var asm = ToPascal(id);
+                WriteRel($"corecode/{asm}.fsproj",
+                    "<Project Sdk=\"Microsoft.NET.Sdk\">\n" +
+                    "  <PropertyGroup>\n" +
+                    "    <TargetFramework>net10.0</TargetFramework>\n" +
+                    $"    <AssemblyName>{asm}</AssemblyName>\n" +
+                    "    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>\n" +
+                    "  </PropertyGroup>\n" +
+                    "  <ItemGroup>\n    <Compile Include=\"ModEntry.fs\" />\n  </ItemGroup>\n" +
+                    "  <ItemGroup Condition=\"'$(GameAssembly)' == ''\">\n" +
+                    "    <ProjectReference Include=\"../../../../DealOrForce.csproj\" />\n" +
+                    "  </ItemGroup>\n" +
+                    "</Project>\n");
+                WriteRel("corecode/ModEntry.fs",
+                    $"namespace {asm}\n\nopen DealOrForce.Modding\n\ntype ModEntry() =\n" +
+                    $"    interface IGlobalityMod with\n        member _.OnLoad(context) = context.Log(\"{displayName} F# module loaded\")\n" +
+                    "        member _.OnCampaignCreated(_) = ()\n        member _.OnDayAdvanced(_) = ()\n");
+                break;
+            }
+            case ModScaffoldKind.RustWorker:
+            {
+                var crate = id.Replace('_', '-');
+                WriteRel("corecode/Cargo.toml",
+                    $"[package]\nname = \"{crate}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n" +
+                    "[dependencies]\nserde = { version = \"1\", features = [\"derive\"] }\nserde_json = \"1\"\n");
+                WriteRel("corecode/src/main.rs",
+                    "use std::io::{self, Read};\nuse serde::Deserialize;\n\n" +
+                    "#[derive(Deserialize)]\nstruct Request { protocol: u32, event: String, day: u32 }\n\n" +
+                    "fn main() -> Result<(), Box<dyn std::error::Error>> {\n" +
+                    "    let mut input = String::new();\n" +
+                    "    io::stdin().take(2 * 1024 * 1024 + 1).read_to_string(&mut input)?;\n" +
+                    "    let req: Request = serde_json::from_str(&input)?;\n" +
+                    "    if req.protocol != 1 { return Err(\"unsupported protocol\".into()); }\n" +
+                    $"    let out = serde_json::json!({{\"protocol\": 1, \"commands\": [], \"logs\": [format!(\"{id} worker tick {{}} at day {{}}\", req.event, req.day)]}});\n" +
+                    "    println!(\"{}\", out);\n    Ok(())\n}\n");
+                break;
+            }
+        }
+
+        WriteRel($"localization/english/00_{id}.json", FormatJson(enLoc));
+        WriteRel($"localization/russian/00_{id}.json", FormatJson(ruLoc));
+        WriteRel("README.md",
+            $"# {displayName}\n\n" +
+            $"- **ID:** `{id}`\n- **Kind:** `{request.Kind}`\n- **Author:** {author}\n\n" +
+            $"Validate with `Tools/validate-mod.ps1 -ModPath \"{modRoot}\" -Strict` or in the Mod Content Studio.\n");
+
+        return new ModScaffoldResult(modRoot, manifestPath, created);
+
+        static string FormatJson(JsonNode node)
+        {
+            var buf = new ArrayBufferWriter<byte>(256);
+            using (var w = new Utf8JsonWriter(buf, IndentedJson)) node.WriteTo(w);
+            return Encoding.UTF8.GetString(buf.WrittenSpan) + "\n";
+        }
+        static string ToTitle(string snake) => string.Join(' ',
+            snake.Split('_', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => char.ToUpperInvariant(s[0]) + s[1..]));
+        static string ToPascal(string snake) => string.Concat(
+            snake.Split('_', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => char.ToUpperInvariant(s[0]) + s[1..]));
+    }
+}
+
+public enum ModSnippetTarget
+{
+    JsonEffect = 0,
+    JsonTrigger = 1,
+    GdScript = 2,
+    Luau = 3
+}
+
+public sealed record ModStudioSnippet(
+    string Id,
+    string TitleKey,
+    ModSnippetTarget Target,
+    string Code);
+
+/// <summary>
+/// Curated validated JSON trigger/effect blocks and GDScript/Luau API hooks for 1-click insertion in Mod Content Studio.
+/// </summary>
+public static class ModStudioSnippets
+{
+    public static IReadOnlyList<ModStudioSnippet> All { get; } = Array.AsReadOnly(new ModStudioSnippet[]
+    {
+        new("trigger_war", "studio.snippet.trigger_war", ModSnippetTarget.JsonTrigger,
+            "{\n  \"at_war\": true,\n  \"min_stability\": 0.45,\n  \"max_radicalism\": 0.35\n}"),
+        new("trigger_treasury", "studio.snippet.trigger_treasury", ModSnippetTarget.JsonTrigger,
+            "{\n  \"min_treasury\": 10.0,\n  \"min_prestige\": 100.0,\n  \"has_feature\": \"diplomatic_missions\"\n}"),
+        new("trigger_course", "studio.snippet.trigger_course", ModSnippetTarget.JsonTrigger,
+            "{\n  \"tags\": [\"GBR\", \"FRA\", \"DEU\"],\n  \"has_grand_project\": \"transcontinental_hsr\",\n  \"missing_feature\": \"nuclear_strikes\"\n}"),
+        new("effect_modifier", "studio.snippet.effect_modifier", ModSnippetTarget.JsonEffect,
+            "{\n  \"add_modifier\": { \"supply_diversification_pact\": 365 },\n  \"prestige\": 8.0\n}"),
+        new("effect_fiscal_stability", "studio.snippet.effect_fiscal_stability", ModSnippetTarget.JsonEffect,
+            "{\n  \"income_share\": -0.03,\n  \"stability\": 0.025,\n  \"war_support\": 0.015,\n  \"political_points\": -15\n}"),
+        new("effect_prestige_shift", "studio.snippet.effect_prestige_shift", ModSnippetTarget.JsonEffect,
+            "{\n  \"treasury\": 5.0,\n  \"prestige\": 12.0,\n  \"unlock_feature\": \"aviation\"\n}"),
+        new("gdscript_hook", "studio.snippet.gdscript_hook", ModSnippetTarget.GdScript,
+            "\tvar wars: Array = api.get_wars(\"\")\n" +
+            "\tvar map_id: String = api.get_map_id()\n" +
+            "\tif wars.size() > 0:\n" +
+            "\t\tvar rel: float = api.get_relation(\"GBR\", \"FRA\")\n" +
+            "\t\tapi.log(\"Map %s wars=%d rel=%.1f\" % [map_id, wars.size(), rel])\n" +
+            "\t\tapi.add_modifier(\"GBR\", \"supply_diversification_pact\", 180)\n"),
+        new("luau_hook", "studio.snippet.luau_hook", ModSnippetTarget.Luau,
+            "local tags = api:Get(\"get_all_tags\"):Call()\n" +
+            "local region = api:Get(\"get_region\"):Call(1)\n" +
+            "api:Get(\"log\"):Call(\"Map=\" .. api:Get(\"get_map_id\"):Call() .. \" regions sample=\" .. tostring(region[\"name\"] or \"\"))\n" +
+            "api:Get(\"trigger_event\"):Call(tags[1] or \"GBR\", \"industrial_bottlenecks\")\n")
+    });
+
+    public static ModStudioSnippet Find(string id) =>
+        All.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
 }

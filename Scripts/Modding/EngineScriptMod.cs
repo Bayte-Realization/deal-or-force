@@ -48,7 +48,14 @@ public static class EngineScriptMod
             ["manage_debt"] = Callable.From<string, string, double, bool>(api.manage_debt),
             ["add_course_shock"] = Callable.From<string, double, string, bool>(api.add_course_shock),
             ["study_doctrine"] = Callable.From<string, string, string, bool, bool>(api.study_doctrine),
-            ["propose_diplomatic_act"] = Callable.From<string, string, string, bool>(api.propose_diplomatic_act)
+            ["propose_diplomatic_act"] = Callable.From<string, string, string, bool>(api.propose_diplomatic_act),
+            ["get_all_tags"] = Callable.From<string[]>(api.get_all_tags),
+            ["get_map_id"] = Callable.From<string>(api.get_map_id),
+            ["get_region"] = Callable.From<int, Godot.Collections.Dictionary>(api.get_region),
+            ["get_wars"] = Callable.From<string, Godot.Collections.Array>(api.get_wars),
+            ["get_relation"] = Callable.From<string, string, double>(api.get_relation),
+            ["add_modifier"] = Callable.From<string, string, int, bool>(api.add_modifier),
+            ["trigger_event"] = Callable.From<string, string, bool>(api.trigger_event)
         };
         bridge.MakeReadOnly();
         return bridge;

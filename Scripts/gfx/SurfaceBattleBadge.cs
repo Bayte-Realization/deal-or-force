@@ -23,8 +23,8 @@ public static class BattleBadgeGpu
     private const int GlyphWidth = 32;
     private const int GlyphHeight = 48;
 
-    private static Shader _shader;
-    private static ImageTexture _glyphAtlas;
+    private static Shader _shader; private static ImageTexture _glyphAtlas;
+    internal static void ReleaseStaticResources() { _glyphAtlas = null; _shader = null; }
 
     public static Shader Shader => _shader ??= new Shader
     {

@@ -879,8 +879,11 @@ public static partial class MovementRules
     internal static ulong PopulationStamp(Campaign campaign)
     {
         var cache = campaign?.MovementPeople;
-        if (cache is null || !cache.Indexed) return 0UL;
-        var values = cache.StateDemographySigs;
+        return cache is null || !cache.Indexed ? 0UL : cache.CachedPopulationStamp;
+    }
+
+    private static ulong ComputePopulationStamp(ulong[] values)
+    {
         ulong sig = 14695981039346656037UL;
         sig = Mix(sig, (ulong)values.Length);
         for (var i = 0; i < values.Length; i++)
@@ -1013,6 +1016,7 @@ public static partial class MovementRules
             cache.OwnershipRevision = campaign.OwnershipRevision;
             cache.TrackedClockSeq = campaign.SimulationTickClockSeq;
             cache.StepDirtyPrimed = true;
+            cache.CachedPopulationStamp = ComputePopulationStamp(cache.StateDemographySigs);
             cache.Indexed = true;
             yield return 0;
             yield break;
@@ -1078,6 +1082,7 @@ public static partial class MovementRules
         cache.OwnershipRevision = campaign.OwnershipRevision;
         cache.TrackedClockSeq = campaign.SimulationTickClockSeq;
         cache.StepDirtyPrimed = true;
+        cache.CachedPopulationStamp = ComputePopulationStamp(cache.StateDemographySigs);
         cache.Indexed = true;
         yield return 0;
     }

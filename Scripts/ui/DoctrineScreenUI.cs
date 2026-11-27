@@ -24,7 +24,7 @@ public partial class DealOrForceGame
     private Label _doctrineZoomLabel;
     private Button _doctrineTacticalView, _doctrineCourseView, _doctrineGeneralsView;
     private string _doctrineView = "tactical";
-    private int _doctrineScreenDay = -1;
+    private int _doctrineScreenDay = -1, _doctrineCourseScrollY, _doctrineCourseScrollNationId = -1;
     private DoctrinePresentationState? _doctrineScreenState;
 
     private void BuildDoctrineScreen()
@@ -149,35 +149,26 @@ public partial class DealOrForceGame
         HideMapSelection(true);
         SetArmyPanelVisible(false);
         RaiseWorkspaceLayer(_doctrineLayer);
-        _doctrineScreenDay = -1;
+        _doctrineScreenDay = -1; ResetDoctrineAbandonConfirm();
         RefreshDoctrineScreen();
         UpdateScreenButtons();
     }
 
-    private void OpenDoctrineScreenOnView(string view)
-    {
-        _doctrineView = view;
-        OpenDoctrineScreen();
-    }
-
-    private void OpenDoctrineScreenOnService(string slot)
-    {
-        _doctrineView = "tactical";
-        OpenDoctrineScreen();
-        SelectDoctrineService(slot);
-    }
+    private void OpenDoctrineScreenOnView(string view) { _doctrineView = view; OpenDoctrineScreen(); }
+    private void OpenDoctrineScreenOnService(string slot) { _doctrineView = "tactical"; OpenDoctrineScreen(); SelectDoctrineService(slot); }
 
     private void CloseDoctrineScreen()
     {
         if (_doctrineLayer is not null) _doctrineLayer.Visible = false;
         if (_openScreen == "Doctrines") _openScreen = "";
-        UpdateScreenButtons();
+        _doctrineCourseScrollY = 0; _doctrineCourseScrollNationId = -1;
+        ResetDoctrineAbandonConfirm(); UpdateScreenButtons();
     }
 
     private void SetDoctrineView(string view)
     {
-        _doctrineView = view;
-        _doctrineScreenDay = -1;
+        if (_doctrineView != view) _doctrineCourseScrollY = 0;
+        _doctrineView = view; _doctrineScreenDay = -1; ResetDoctrineAbandonConfirm();
         RefreshDoctrineScreen();
     }
 
@@ -226,51 +217,33 @@ public partial class DealOrForceGame
         RebuildDoctrineBookList(n);
         RefreshDoctrineServices();
 
+        CaptureDoctrineCourseScroll(n);
         ClearPolicyRows(_doctrineCentre);
         if (_doctrineView == "generals")
         {
-            var generalsScroll = new ScrollContainer
-            {
-                Name = "DoctrineGeneralsScroll",
-                SizeFlagsVertical = SizeFlags.ExpandFill,
-                SizeFlagsHorizontal = SizeFlags.ExpandFill,
-                HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-                ClipContents = true,
-                FollowFocus = true
-            };
+            var generalsScroll = NewDoctrineScroll("DoctrineGeneralsScroll");
             _doctrineCentre.AddChild(generalsScroll);
             var pad = new MarginContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
-            pad.AddThemeConstantOverride("margin_right", 14);
-            generalsScroll.AddChild(pad);
+            pad.AddThemeConstantOverride("margin_right", 14); generalsScroll.AddChild(pad);
             var generalsRows = new VBoxContainer { Name = "DoctrineGeneralsRows", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            generalsRows.AddThemeConstantOverride("separation", 8);
-            pad.AddChild(generalsRows);
+            generalsRows.AddThemeConstantOverride("separation", 8); pad.AddChild(generalsRows);
             GeneralsPage(n, generalsRows);
         }
         else if (_doctrineView == "course")
         {
-            var courseScroll = new ScrollContainer
-            {
-                Name = "DoctrineCourseScroll",
-                SizeFlagsVertical = SizeFlags.ExpandFill,
-                SizeFlagsHorizontal = SizeFlags.ExpandFill,
-                HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-                ClipContents = true,
-                FollowFocus = true
-            };
+            var courseScroll = NewDoctrineScroll("DoctrineCourseScroll");
             _doctrineCentre.AddChild(courseScroll);
             var pad = new MarginContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
-            pad.AddThemeConstantOverride("margin_right", 14);
-            courseScroll.AddChild(pad);
+            pad.AddThemeConstantOverride("margin_right", 14); courseScroll.AddChild(pad);
             var courseRows = new VBoxContainer { Name = "DoctrineCourseRows", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            courseRows.AddThemeConstantOverride("separation", 8);
-            pad.AddChild(courseRows);
+            courseRows.AddThemeConstantOverride("separation", 8); pad.AddChild(courseRows);
             CurrencyStrip(courseRows, n, withPolitical: true, columns: 4);
             StrategicDoctrinePage(n, courseRows, wideGrid: true);
+            RestoreDoctrineCourseScroll(courseScroll);
         }
         else
         {
-            DoctrineTreeToolbar(_doctrineCentre);
+            DoctrineTreeToolbar(_doctrineCentre); RefreshDoctrineToolbarAbandon(n);
             DoctrineTreeWindow(_doctrineCentre);
             if (TacticalDoctrineCatalog.Find(_doctrineBook) is { } book)
             {
@@ -283,6 +256,25 @@ public partial class DealOrForceGame
         if (_doctrineView == "generals") GeneralsSide(_doctrineSide);
         else ShowDoctrinePreview(n, _doctrineSide);
         FitDoctrineTypography(_doctrineLayer);
+    }
+
+    private static ScrollContainer NewDoctrineScroll(string name) => new()
+    { Name = name, SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, ClipContents = true, FollowFocus = true };
+
+    private void CaptureDoctrineCourseScroll(Nation n)
+    {
+        if (_doctrineView == "course" && _doctrineCourseScrollNationId == n.Id && _doctrineCentre.GetNodeOrNull<ScrollContainer>("DoctrineCourseScroll") is { } existingCourseScroll)
+            _doctrineCourseScrollY = existingCourseScroll.ScrollVertical;
+        else if (_doctrineView != "course" || _doctrineCourseScrollNationId != n.Id) _doctrineCourseScrollY = 0;
+        _doctrineCourseScrollNationId = _doctrineView == "course" ? n.Id : -1;
+    }
+
+    private void RestoreDoctrineCourseScroll(ScrollContainer courseScroll)
+    {
+        var savedCourseScrollY = _doctrineCourseScrollY;
+        if (savedCourseScrollY <= 0) return;
+        courseScroll.ScrollVertical = savedCourseScrollY;
+        Callable.From(() => { if (IsInstanceValid(courseScroll)) courseScroll.ScrollVertical = savedCourseScrollY; }).CallDeferred();
     }
 
     /// <summary>The books as a column, shelf by shelf: clear [IN FORCE]/[COMPANION]/[STUDYING] status and X/Y progress.</summary>
@@ -368,10 +360,10 @@ public partial class DealOrForceGame
             hint.Name = "DoctrineZoomHint";
             hint.AutowrapMode = TextServer.AutowrapMode.Off;
             hint.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-            hint.ClipText = true;
-            hint.TooltipText = Ui.Tip(TreeViewport.Hint);
+            hint.ClipText = true; hint.TooltipText = Ui.Tip(TreeViewport.Hint);
             hint.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             _doctrineToolbar.AddChild(hint);
+            EnsureDoctrineToolbarAbandonButton(_doctrineToolbar);
         }
         if (_doctrineToolbar.GetParent() is { } holder) holder.RemoveChild(_doctrineToolbar);
         rows.AddChild(_doctrineToolbar);

@@ -211,12 +211,18 @@ public static class GlobeOverlaySyncTests
             "GlobePresentation locates TryBeginFrameRead and SyncFencedWorldVisuals blocks");
 
         var tryReadBlock = globeSrc.Substring(tryReadIdx, syncIdx - tryReadIdx);
-        Check(tryReadBlock.Contains("CurrentRenderSnapshot()", StringComparison.Ordinal) &&
-              tryReadBlock.Contains("snap.MapRevision > _controlRevision || snap.MapRevision > _frontRevision || snap.WarRevision > _frontWarRevision", StringComparison.Ordinal) &&
-              tryReadBlock.Contains("fastSim ? 0.16 : 0.045", StringComparison.Ordinal) &&
-              tryReadBlock.Contains("fastSim ? 0.033 : 0.016", StringComparison.Ordinal) &&
+        var needsSyncIdx = globeSrc.IndexOf("internal bool NeedsFencedSync(", StringComparison.Ordinal);
+        var needsUrgentIdx = globeSrc.IndexOf("internal bool NeedsUrgentFencedSync(", StringComparison.Ordinal);
+        Check(needsSyncIdx > 0 && needsUrgentIdx > needsSyncIdx,
+            "GlobePresentation locates NeedsFencedSync / NeedsUrgentFencedSync helpers");
+        var needsSyncBlock = globeSrc.Substring(needsSyncIdx, needsUrgentIdx - needsSyncIdx);
+        Check(needsSyncBlock.Contains("CurrentRenderSnapshot()", StringComparison.Ordinal) &&
+              needsSyncBlock.Contains("snap.MapRevision > _controlRevision || snap.MapRevision > _frontRevision || snap.WarRevision > _frontWarRevision", StringComparison.Ordinal) &&
+              needsSyncBlock.Contains("isMobileOrTouch ? 0.40 : 0.25", StringComparison.Ordinal) &&
+              tryReadBlock.Contains("isMobileOrTouch ? 0.40 : 0.25", StringComparison.Ordinal) &&
+              tryReadBlock.Contains("campaign.TryEnterRead(0, wantWindow)", StringComparison.Ordinal) &&
               globeSrc.Contains("AdvanceCameraForFrame(delta);", StringComparison.Ordinal),
-            "TryBeginFrameRead uses monotonic revision gating while GlobePresentation advances camera before fenced sync");
+            "NeedsFencedSync/TryBeginFrameRead remove 33ms polling (0.25s desktop / 0.40s mobile housekeeping) while advancing camera before fenced sync");
         Check(globeSrc.Contains("internal bool NeedsUrgentFencedSync(", StringComparison.Ordinal) &&
               globeSrc.Contains("internal void SyncWorldVisualsUnderReadLock(", StringComparison.Ordinal) &&
               globeSrc.Contains("result.Frontier?.Dispose()", StringComparison.Ordinal),
@@ -234,12 +240,13 @@ public static class GlobeOverlaySyncTests
               syncBlock.Contains("_lastCombatSyncHours = fencedCampaign.ElapsedHours;", StringComparison.Ordinal),
             "SyncFencedWorldVisuals rebuilds war fronts on WarRevision changes and stamps _lastCombatSyncHours");
 
-        Check(syncBlock.Contains("(speed5Running ? 0.25 : fastSim ? 0.12 : 0.10)", StringComparison.Ordinal) &&
-              syncBlock.Contains("0.22 : 0.0", StringComparison.Ordinal) &&
-              syncBlock.Contains("UpdateMilitaryPresentation(forceNow: desktopTopologyMoved)", StringComparison.Ordinal) &&
-              syncBlock.Contains("InvalidateFlatCounterDensity()", StringComparison.Ordinal) &&
-              syncBlock.Contains("isTouchPrimary ? 0.22 : 0.033", StringComparison.Ordinal),
-            "SyncFencedWorldVisuals unifies desktop combat/route sync at 33ms + deferred density invalidation while preserving mobile cadences");
+        Check(syncBlock.Contains("var phaseInterval = isMobileOrTouch ? 0.045 : 0.030;", StringComparison.Ordinal) &&
+              syncBlock.Contains("var armySyncInterval = isPausedNow ? 0.0 : (isMobileOrTouch ? 0.045 : 0.033);", StringComparison.Ordinal) &&
+              syncBlock.Contains("var routeInterval = isPausedNow ? 0.0 : (isMobileOrTouch ? 0.045 : 0.033);", StringComparison.Ordinal) &&
+              syncBlock.Contains("HydrateLockFreeMarkerStacks(fencedCampaign);", StringComparison.Ordinal) &&
+              syncBlock.Contains("UpdateMilitaryPresentation(forceNow: desktopTopologyMoved);", StringComparison.Ordinal) &&
+              syncBlock.Contains("InvalidateFlatCounterDensity()", StringComparison.Ordinal),
+            "SyncFencedWorldVisuals eliminates 220-300ms mobile throttles, hydrates lock-free stacks, and keeps 33ms/45ms cadences");
 
         var buildFrontIdx = bordersSrc.IndexOf("private void BuildFrontPreviewCore()", StringComparison.Ordinal);
         var planCodeIdx = bordersSrc.IndexOf("private static byte PlanCode(", StringComparison.Ordinal);
@@ -264,40 +271,57 @@ public static class GlobeOverlaySyncTests
             "GlobePresentation.BordersAndOverlays preserves battle/route contract symbols");
 
         var badgeSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "SurfaceBattleBadge.cs"));
-        Check(militarySrc.Contains("Speed: >= 4", StringComparison.Ordinal) &&
+        var gpuSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GpuMapCompute.cs"));
+        var lockFreeSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeLockFreeSync.cs"));
+        var miniSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "CityMiniatureRenderer.cs"));
+        var tradeTrafficSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeTradeTraffic.cs"));
+        var settlementsSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeSettlements.cs"));
+        var capitalsSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeCapitals.cs"));
+        Check(militarySrc.Contains("Speed: >= 7", StringComparison.Ordinal) &&
+              militarySrc.Contains("_lastLockFreeBattleHours == _campaign.ElapsedHours", StringComparison.Ordinal) &&
               militarySrc.Contains("timeSinceLast >= (isMobileOrTouch ? 0.14 : 0.033)", StringComparison.Ordinal) &&
               militarySrc.Contains("bool forceNow = false", StringComparison.Ordinal) &&
               militarySrc.Contains("_battleBadgeMultiMesh", StringComparison.Ordinal) &&
+              militarySrc.Contains("CustomAabb = new Aabb(new Vector3(-120f, -120f, -120f), new Vector3(240f, 240f, 240f))", StringComparison.Ordinal) &&
               militarySrc.Contains("BattleBadgeGpu.WriteInstance(", StringComparison.Ordinal) &&
               militarySrc.Contains("_counterTextureScratch", StringComparison.Ordinal) &&
               badgeSrc.Contains("public static class BattleBadgeGpu", StringComparison.Ordinal) &&
               badgeSrc.Contains("PackDefenderColor", StringComparison.Ordinal) &&
               !militarySrc.Contains("new SubViewport", StringComparison.Ordinal) &&
               !badgeSrc.Contains("new SubViewport", StringComparison.Ordinal),
-            "MilitaryPresentation uses zero-SubViewport GPU-instanced BattleBadgeGpu MultiMesh and reuses counter texture buffers");
+            "MilitaryPresentation uses zero-SubViewport GPU-instanced BattleBadgeGpu MultiMesh with CustomAabb and skips redundant battle rebuilds");
+        Check(miniSrc.Contains("CustomAabb", StringComparison.Ordinal) &&
+              tradeTrafficSrc.Contains("CustomAabb", StringComparison.Ordinal) &&
+              settlementsSrc.Contains("CustomAabb", StringComparison.Ordinal) &&
+              capitalsSrc.Contains("CustomAabb", StringComparison.Ordinal),
+            "Dynamic MultiMeshes (cities, trade traffic, settlements, capitals) set fixed CustomAabb");
 
         Check(plateSrc.Contains("PlateRepaintSeconds = 0.25;", StringComparison.Ordinal) &&
               plateSrc.Contains("FrontierRepaintSeconds = 0.50;", StringComparison.Ordinal) &&
-              plateSrc.Contains("MobilePlateRepaintSeconds = 1.0;", StringComparison.Ordinal) &&
+              plateSrc.Contains("MobilePlateRepaintSeconds = 0.25;", StringComparison.Ordinal) &&
               plateSrc.Contains("FastSimPlateRepaintSeconds = 0.35;", StringComparison.Ordinal) &&
               plateSrc.Contains("FastSimFrontierRepaintSeconds = 0.85;", StringComparison.Ordinal) &&
-              plateSrc.Contains("GpuPlateRepaintSeconds = 0.16;", StringComparison.Ordinal) &&
-              plateSrc.Contains("GpuFrontierRepaintSeconds = 0.30;", StringComparison.Ordinal) &&
+              plateSrc.Contains("GpuPlateRepaintSeconds = 0.05;", StringComparison.Ordinal) &&
+              plateSrc.Contains("GpuFrontierRepaintSeconds = 0.35;", StringComparison.Ordinal) &&
+              plateSrc.Contains("wantFrontierNow = !needPlate && needFrontier", StringComparison.Ordinal) &&
               plateSrc.Contains("PaintDirtyMipmappedInto(", StringComparison.Ordinal) &&
               plateSrc.Contains("FrontierImageDirtyInto(", StringComparison.Ordinal) &&
               plateSrc.Contains("_gpuMapCompute", StringComparison.Ordinal) &&
               plateSrc.Contains("pendingPlate.Dispose();", StringComparison.Ordinal) &&
               plateSrc.Contains("frontier.Dispose();", StringComparison.Ordinal) &&
-              plateSrc.Contains("image.Dispose();", StringComparison.Ordinal),
-            "GlobePlateRepaint uses GPU compute + incremental dirty-rect mipmaps, reuses LOH buffers, and disposes unmanaged Image handles");
+              plateSrc.Contains("image.Dispose();", StringComparison.Ordinal) &&
+              gpuSrc.Contains("PackFrontierHalfResBytes", StringComparison.Ordinal) &&
+              gpuSrc.Contains("DispatchRingSlots = 3", StringComparison.Ordinal) &&
+              lockFreeSrc.Contains("SyncArmyMarkersLockFree", StringComparison.Ordinal),
+            "GlobePlateRepaint + GpuMapCompute use staggered half-res 5-pass 1+JFA frontier, 3-slot dispatch ring, tuned cooldowns, and lock-free army markers");
 
         var counterSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "FlatCounterPresentation.cs"));
         var unitsSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobePresentation.UnitsAndMarkers.cs"));
         Check(counterSrc.Contains("_simStepIntervalEma", StringComparison.Ordinal) &&
-              counterSrc.Contains("speed >= 5", StringComparison.Ordinal) &&
-              counterSrc.Contains("speed == 4 ? 14.0f : 6.5f", StringComparison.Ordinal) &&
+              counterSrc.Contains("speed >= 8", StringComparison.Ordinal) &&
+              counterSrc.Contains("speed == 7 ? 14.0f : 6.5f", StringComparison.Ordinal) &&
               unitsSrc.Contains("HasPendingArrivalGlide", StringComparison.Ordinal),
-            "FlatCounterPresentation adapts motion damping to measured step interval and cached marker arrival glide");
+            "FlatCounterPresentation adapts motion damping to Speed 7/8 step interval and cached marker arrival glide");
 
         var miniatureSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "CityMiniatureRenderer.cs"));
         var labelsSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobePresentation.Labels.cs"));
@@ -307,37 +331,61 @@ public static class GlobeOverlaySyncTests
               miniatureSrc.Contains("CapitalRevision", StringComparison.Ordinal) &&
               labelsSrc.Contains("_countryLabelCache", StringComparison.Ordinal) &&
               labelsSrc.Contains("_nextCountryLabelPlaceMsec", StringComparison.Ordinal) &&
+              labelsSrc.Contains("Label3dFrameBudgetMs = 1.5", StringComparison.Ordinal) &&
               overlaySyncSrc.Contains("!_camera.IsInsideTree()", StringComparison.Ordinal) &&
               citiesSrc.Contains("!_camera.IsInsideTree()", StringComparison.Ordinal),
-            "City miniatures key structurally, country labels diff incrementally, and camera queries guard IsInsideTree");
+            "City miniatures key structurally, country labels diff incrementally within 1.5ms budget, and camera queries guard IsInsideTree");
 
         var tickSrc = File.ReadAllText(Path.Combine(root, "Scripts", "Simulation", "Campaign.TickStages.cs"));
         Check(tickSrc.Contains("AccessGate.HasPriorityReaderRequested || AccessGate.IsReaderStarving || AccessGate.HasWriteWaiter", StringComparison.Ordinal),
             "Campaign.TickStages RunStages yields at stage boundaries when renderer is starving");
 
-        Check(simRunnerSrc.Contains("batchElapsedMs >= (mobilePacing ? 32.0 : 8.0) || campaign.AccessGate.IsReaderStarving", StringComparison.Ordinal) &&
-              simRunnerSrc.Contains("readerWindowMs: speed >= 5 ? (mobilePacing ? 6 : 18) : (mobilePacing ? 10 : 20)", StringComparison.Ordinal) &&
-              simRunnerSrc.Contains("readerWorkAheadMs: mobilePacing ? 20 : 0", StringComparison.Ordinal),
-            "BackgroundSimRunner yields at 8ms desktop with zero work-ahead while keeping all mobilePacing constants intact");
+        var pacerSrc = File.ReadAllText(Path.Combine(root, "Scripts", "Simulation", "SmoothTimePacer.cs"));
+        var offDesk8 = SmoothTimePacer.WorkerPolicy(SmoothTimeMode.Off, 8, mobilePacing: false);
+        var offMob8 = SmoothTimePacer.WorkerPolicy(SmoothTimeMode.Off, 8, mobilePacing: true);
+        var offDesk7 = SmoothTimePacer.WorkerPolicy(SmoothTimeMode.Off, 7, mobilePacing: false);
+        var offMob7 = SmoothTimePacer.WorkerPolicy(SmoothTimeMode.Off, 7, mobilePacing: true);
+        var adaptDesk8 = SmoothTimePacer.WorkerPolicy(SmoothTimeMode.Adaptive, 8, mobilePacing: false);
+        Check(simRunnerSrc.Contains("SmoothTimePacer.WorkerPolicy(smoothMode, speed, mobilePacing)", StringComparison.Ordinal) &&
+              simRunnerSrc.Contains("batchElapsedMs >= policy.ReaderYieldAfterMs || campaign.AccessGate.IsReaderStarving", StringComparison.Ordinal) &&
+              simRunnerSrc.Contains("readerWindowMs: policy.ReaderWindowMs", StringComparison.Ordinal) &&
+              simRunnerSrc.Contains("readerWorkAheadMs: policy.ReaderWorkAheadMs", StringComparison.Ordinal) &&
+              pacerSrc.Contains("YieldOffMob = 32.0", StringComparison.Ordinal) &&
+              offDesk8.ReaderYieldAfterMs == 8.0 && offMob8.ReaderYieldAfterMs == 32.0 &&
+              offDesk8.ReaderWindowMs == 18 && offMob8.ReaderWindowMs == 6 &&
+              offDesk7.ReaderWindowMs == 20 && offMob7.ReaderWindowMs == 10 &&
+              offDesk8.ReaderWorkAheadMs == 0 && offMob8.ReaderWorkAheadMs == 20 &&
+              adaptDesk8.ReaderYieldAfterMs <= 4.0 && adaptDesk8.ReaderWorkAheadMs == 0,
+            "BackgroundSimRunner routes reader yield/window/work-ahead via SmoothTimePacer.WorkerPolicy while preserving legacy Off/mobilePacing constants and tighter Adaptive preemption");
 
-        Check(gameSrc.Contains("_isMobileRuntime ? 320 : 100", StringComparison.Ordinal) &&
-              gameSrc.Contains("_isMobileRuntime ? 180 : 75", StringComparison.Ordinal) &&
+        var offMainDesk8 = SmoothTimePacer.MainThreadPolicy(SmoothTimeMode.Off, 8, mobileRuntime: false);
+        var offMainMob8 = SmoothTimePacer.MainThreadPolicy(SmoothTimeMode.Off, 8, mobileRuntime: true);
+        var offMainDesk6 = SmoothTimePacer.MainThreadPolicy(SmoothTimeMode.Off, 6, mobileRuntime: false);
+        var offMainMob6 = SmoothTimePacer.MainThreadPolicy(SmoothTimeMode.Off, 6, mobileRuntime: true);
+        var adaptMainDesk8 = SmoothTimePacer.MainThreadPolicy(SmoothTimeMode.Adaptive, 8, mobileRuntime: false);
+        Check(gameSrc.Contains("SmoothTimePacer.MainThreadPolicy(smoothMode, _speed, _isMobileRuntime)", StringComparison.Ordinal) &&
+              gameSrc.Contains("framePolicy.LiveReadIntervalMs", StringComparison.Ordinal) &&
+              gameSrc.Contains("framePolicy.FrameShieldBudgetMs", StringComparison.Ordinal) &&
+              offMainDesk8.LiveReadIntervalMs == 100UL && offMainMob8.LiveReadIntervalMs == 320UL &&
+              offMainDesk6.LiveReadIntervalMs == 75UL && offMainMob6.LiveReadIntervalMs == 180UL &&
+              adaptMainDesk8.FrameShieldBudgetMs > 0.0 && adaptMainDesk8.LiveReadIntervalMs >= 100UL &&
+              gameSrc.Contains("_simRunner.SetDesiredClockState(desiredPaused, _speed);", StringComparison.Ordinal) &&
               gameSrc.Contains("_globe?.SyncWorldVisualsUnderReadLock(_campaign, delta)", StringComparison.Ordinal),
-            "DealOrForceGame shares its step-boundary read lock directly with GlobePresentation");
+            "DealOrForceGame routes live read intervals & frame shield through SmoothTimePacer.MainThreadPolicy, uses non-blocking SetDesiredClockState, and shares step-boundary read lock");
     }
 
     private static void DesktopReaderNonStarvationAtSpeed5()
     {
         var campaign = Campaign.CreateBootstrap(91128);
         campaign.IsPaused = false;
-        campaign.Speed = 5;
+        campaign.Speed = 8;
         using var runner = new BackgroundSimRunner
         {
             MobilePacing = false,
             MinSpeed5DayIntervalMs = 0.0
         };
         runner.Start(campaign);
-        runner.SyncClockState(paused: false, speed: 5);
+        runner.SyncClockState(paused: false, speed: 8);
         try
         {
             var hits = 0;

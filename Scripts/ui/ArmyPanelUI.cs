@@ -45,7 +45,9 @@ public partial class DealOrForceGame
         {
             _disbandArmedUntil = now + 4000;
             var men = mine.Sum(army => (long)(army.Personnel * army.Strength));
-            SetArmyFeedback(Simulation.Loc.Format("Disband {0:N0} division(s), {1:N0} men? Press Disband (or Delete) again to confirm.", mine.Length, men));
+            SetArmyFeedback(Simulation.Loc.Format(IsTouchPrimaryUi
+                ? "mobile.plan.disband_confirm_fmt"
+                : "Disband {0:N0} division(s), {1:N0} men? Press Disband (or Delete) again to confirm.", mine.Length, men));
             if (IsInstanceValid(_armyDisbandButton)) _armyDisbandButton.Text = Tr("Confirm");
             return;
         }
@@ -89,10 +91,9 @@ public partial class DealOrForceGame
         _armyPanelCount.HorizontalAlignment = HorizontalAlignment.Right;
         _armyPanelCount.AutowrapMode = TextServer.AutowrapMode.Off;
         _armyPanelCount.ClipText = true;
-        _armyPanelCount.CustomMinimumSize = new Vector2(74, 0);
-        header.AddChild(_armyPanelCount);
-
         var isTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        _armyPanelCount.CustomMinimumSize = new Vector2(isTouch ? 56 : 74, 0);
+        header.AddChild(_armyPanelCount);
         _armyMergeHqButton = ActionButton(Tr("shell.ws.army.merge_hq_btn"), CreateGroupFromSelection, 46, isTouch ? 36 : 28);
         _armyMergeHqButton.Name = "ArmyQuickMergeHq";
         _armyMergeHqButton.TooltipText = Ui.Tip(Tr("shell.ws.army.merge_hq_tip"));
@@ -130,7 +131,7 @@ public partial class DealOrForceGame
             ClipContents = true,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 76),
+            CustomMinimumSize = new Vector2(0, isTouch ? 54 : 76),
             SizeFlagsStretchRatio = 0.78f
         };
         rosterFrame.SetMeta("atlas_section_ground", "surface.inset");
@@ -163,7 +164,7 @@ public partial class DealOrForceGame
         _armyRosterHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _armyRosterHint.ClipText = true;
         _armyRosterHint.MaxLinesVisible = 2;
-        _armyRosterHint.CustomMinimumSize = new Vector2(0, 30);
+        _armyRosterHint.CustomMinimumSize = new Vector2(0, isTouch ? 20 : 30);
         shell.AddChild(_armyRosterHint);
 
         // ---- tabbed command deck ----
@@ -171,7 +172,8 @@ public partial class DealOrForceGame
         {
             Name = "ArmyCommandTabs",
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 176),
+            CustomMinimumSize = new Vector2(0, isTouch ? 148 : 176),
+            ClipTabs = true,
             ClipContents = true
         };
         commandTabs.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
@@ -235,8 +237,8 @@ public partial class DealOrForceGame
         AddStanceButton(posture, "Force attack", ArmyStance.ForceAttack, "Attack now rather than when ready: the heaviest attack, the worst defence, and the heaviest casualties.");
 
         doctrinePage.AddChild(Title("REINFORCEMENT PRIORITY", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
-        var priority = new HBoxContainer { ClipContents = true };
-        priority.AddThemeConstantOverride("separation", 4);
+        var priority = new HFlowContainer { ClipContents = true };
+        priority.AddThemeConstantOverride("h_separation", 4); priority.AddThemeConstantOverride("v_separation", 4);
         doctrinePage.AddChild(priority);
         AddReinforcementPriorityButton(priority, "Low", ReinforcementPriority.Low, "0.45 weight. For quiet sectors and formations that are training rather than fighting.");
         AddReinforcementPriorityButton(priority, "Normal", ReinforcementPriority.Normal, "Standard weight. The sustainable allocation.", true);
@@ -389,14 +391,6 @@ public partial class DealOrForceGame
         button.CustomMinimumSize = new Vector2(Mathf.Max(minimum, textWidth + padding + iconWidth + 2), button.CustomMinimumSize.Y);
     }
 
-    private void AddDrawButton(Container parent, string label, string icon, FrontLineKind kind, string name, string help)
-    {
-        var button = ArmyIconButton(label, () => ToggleDrawing(kind), 96, 30, false, icon);
-        ArmyCommandTip(button, name, help);
-        _drawButtons[kind] = button;
-        parent.AddChild(button);
-    }
-
     private void AddOrderButton(Container parent, string icon, ArmyOrder order, string name, string help)
     {
         var button = ArmyIconButton("", () => IssueArmyOrder(order), 56, 36, false, icon);
@@ -435,7 +429,7 @@ public partial class DealOrForceGame
         if (!visible) EndDrawing();
         if (_armyPanel is null) return;
         _armyPanel.Visible = visible;
-        if (!visible) _armyRosterRows.Clear();
+        if (!visible) { _armyRosterRows.Clear(); RefreshPlanningBar(); }
     }
 
     private void RefreshArmyPanel()
@@ -521,6 +515,6 @@ public partial class DealOrForceGame
         foreach (var (order, button) in _armyOrderButtons) { button.Disabled = !mine; StyleButton(button, mine && divisions.All(army => army.OrderKind == order)); }
         foreach (var (stance, button) in _armyStanceButtons) { button.Disabled = !mine; StyleButton(button, mine && divisions.All(army => army.Stance == stance)); }
         ApplyArmyPriorityButtonStates();
-        RefreshDrawingUi();
+        RefreshPlanningBar();
     }
 }

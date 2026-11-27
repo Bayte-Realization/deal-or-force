@@ -119,6 +119,9 @@ internal sealed class ShellCornerView
         flagBtn.AddThemeStyleboxOverride("normal", _flagPocketNormal);
         flagBtn.AddThemeStyleboxOverride("hover", _flagPocketHover);
         flagBtn.AddThemeStyleboxOverride("pressed", _ctx.PressedWellStyle());
+        flagBtn.AddThemeStyleboxOverride("hover_pressed", _ctx.PressedWellStyle());
+        flagBtn.AddThemeStyleboxOverride("focus", _emptyStyle);
+        flagBtn.AddThemeStyleboxOverride("disabled", _flagPocketNormal);
         flagBtn.Pressed += () => { _rail.HideHoverTag(); _ctx.PlayCue?.Invoke("shell_plate_tap"); _ctx.ToggleScreen?.Invoke("Nation"); };
         flagBtn.MouseEntered += () =>
         {
@@ -187,34 +190,33 @@ internal sealed class ShellCornerView
         _rankHost.TooltipText = Ui.Tip(Loc.Get("World power rank — click to open Country Rankings."));
         _ctx.Root.AddChild(_rankHost);
 
+        var rankInner = new Control { Name = "ShellRankInner", ClipContents = true, MouseFilter = Control.MouseFilterEnum.Ignore };
+        rankInner.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _rankHost.AddChild(rankInner);
+
         var rankRow = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center, ClipContents = true, MouseFilter = Control.MouseFilterEnum.Ignore };
         rankRow.AddThemeConstantOverride("separation", 4);
         rankRow.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _rankHost.AddChild(rankRow);
+        rankInner.AddChild(rankRow);
 
-        _rankNumLabel = new Label
-        {
-            Name = "ShellRankBadge", Text = "№ 1",
-            VerticalAlignment = VerticalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore
-        };
+        _rankNumLabel = new Label { Name = "ShellRankBadge", Text = "№ 1", VerticalAlignment = VerticalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore };
         _rankNumLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
         _rankNumLabel.AddThemeFontSizeOverride("font_size", 14);
         _rankNumLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper"));
         rankRow.AddChild(_rankNumLabel);
 
-        _rankSubLabel = new Label
-        {
-            Text = Loc.Get("shell.overall_rank"),
-            VerticalAlignment = VerticalAlignment.Center,
-            MouseFilter = Control.MouseFilterEnum.Ignore
-        };
+        _rankSubLabel = new Label { Text = Loc.Get("shell.overall_rank"), VerticalAlignment = VerticalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore };
         _rankSubLabel.AddThemeFontOverride("font", _ctx.Font("shell.sans"));
         _rankSubLabel.AddThemeFontSizeOverride("font_size", 11);
         _rankSubLabel.AddThemeColorOverride("font_color", Ui.Colour("shell.paper_muted"));
         rankRow.AddChild(_rankSubLabel);
 
-        _rankActiveUnderline = new ColorRect { Color = Ui.Colour("shell.brass_hi"), Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
-        _rankHost.AddChild(_rankActiveUnderline);
+        _rankActiveUnderline = new ColorRect
+        {
+            Name = "ShellRankActiveUnderline", Color = Ui.Colour("shell.brass_hi"), Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore,
+            AnchorLeft = 0.18f, AnchorRight = 0.82f, AnchorTop = 1f, AnchorBottom = 1f, OffsetTop = -2.5f, OffsetBottom = 0f
+        };
+        rankInner.AddChild(_rankActiveUnderline);
     }
 
     private void BuildCellsBed()
@@ -390,8 +392,6 @@ internal sealed class ShellCornerView
         _rankNumLabel.AddThemeFontSizeOverride("font_size", compact ? 11 : 14);
         _rankSubLabel.Visible = !compact;
         _rankSubLabel.Text = Loc.Get("shell.overall_rank");
-        _rankActiveUnderline.Position = new Vector2(rankRect.W * 0.18f, rankRect.H - 3f);
-        _rankActiveUnderline.Size = new Vector2(rankRect.W * 0.64f, 2.5f);
         _flagKbd.Position = new Vector2(flagRect.Right - 18f, flagRect.Bottom - 16f);
 
         var cellX0 = ox + (compact ? 82f : 120f);
@@ -459,7 +459,6 @@ internal sealed class ShellCornerView
             if (_atWar) Layout(_ctx.ResolveViewportProfile(false), false);
             if (_lastTag != "__WORLD__") { _lastTag = "__WORLD__"; ShellCornerTelemetry.FitWorldCrest(_flagTexture, _ctx.Icon("icon_world"), _flagEdgeOverlay, _profile.FlagWellWidth, _profile.FlagWellHeight, _profile.Compact); }
             if (_rankActiveUnderline.Visible) _rankActiveUnderline.Visible = false;
-            if (_flagButton.ButtonPressed) _flagButton.ButtonPressed = false;
             if (_lastCountryOpen == true) { _lastCountryOpen = false; _flagButton.AddThemeStyleboxOverride("normal", _flagPocketNormal); }
             if (_rankNumLabel.Text != "OBS") _rankNumLabel.Text = "OBS";
             var summary = ObserverUiRules.ComputeWorldSummary(world);
@@ -500,7 +499,6 @@ internal sealed class ShellCornerView
 
         var countryOpen = string.Equals(openScreen, "Nation", StringComparison.Ordinal);
         if (_rankActiveUnderline.Visible != countryOpen) _rankActiveUnderline.Visible = countryOpen;
-        if (_flagButton.ButtonPressed != countryOpen) _flagButton.ButtonPressed = countryOpen;
         if (_lastCountryOpen != countryOpen)
         {
             _lastCountryOpen = countryOpen;

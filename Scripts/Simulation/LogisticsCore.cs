@@ -47,6 +47,9 @@ public static class LogisticsSystem
     // same process used to clear these lists and then read the first campaign's provinces.
     // The traces themselves run side by side, each on a scratch of its own (WorkerScratch);
     // the per-campaign board holds only what all of them read.
+    private const int DenseMapLimit = 4096;
+    private const int DenseNationLimit = 4096;
+
     private sealed class Scratch
     {
         public int[] Distance = Array.Empty<int>();
@@ -54,32 +57,88 @@ public static class LogisticsSystem
         public int[] Stamp = Array.Empty<int>();
         // Which provinces the network reaches from its roots, stamped like the trace below.
         public int[] Reach = Array.Empty<int>();
+        public int[] QueueBuf = Array.Empty<int>();
         public int Generation;
-        public readonly Queue<int> Frontier = new();
+
         public readonly List<int> Roots = new();
-        public readonly Dictionary<int, int> HubByState = new();
-        public readonly Dictionary<int, float> DemandBySource = new();
-        // Divisions of the country being traced that no road reached, by the region they stand
-        // in: what the people of that region are asked to feed (Partisans.LiveOffTheLand).
-        public readonly Dictionary<int, float> Unreached = new();
-        public readonly Dictionary<int, ScenarioState> StateById = new();
-        public readonly Dictionary<ushort, List<int>> Controlled = new();
-        public readonly Dictionary<int, List<Army>> ArmiesByNation = new();
-        public readonly Dictionary<int, bool> IsIsolatedHub = new();
-        public readonly Dictionary<int, bool> IsForwardHub = new();
-        public readonly Dictionary<int, int> HeldInState = new();
-        public readonly Dictionary<int, int> LandInState = new();
+        public readonly List<int> ActiveHubStates = new();
+
+        // Per-state indexed generational tables (zero Dictionary overhead during trace)
+        public int[] HubProvByState = Array.Empty<int>();
+        public int[] HubGenByState = Array.Empty<int>();
+        public byte[] HubFlagsByState = Array.Empty<byte>(); // bit 0: isolated, bit 1: forward
+
+        public float[] DemandByState = Array.Empty<float>();
+        public int[] DemandGenByState = Array.Empty<int>();
+        public int DemandGen;
+
+        public float[] UnreachedByState = Array.Empty<float>();
+        public int[] UnreachedGenByState = Array.Empty<int>();
+        public int UnreachedGen;
+
+        public ScenarioState[] StateByIdx = Array.Empty<ScenarioState>();
+        public int[] StateGenByIdx = Array.Empty<int>();
+        public int StateGen;
+        public readonly List<ScenarioState> NationStates = new();
+
+        public int[] HeldCountByState = Array.Empty<int>();
+        public int[] HeldGenByState = Array.Empty<int>();
+        public int HeldGen;
+
+        public int[] LandCountByState = Array.Empty<int>();
+        public int MaxStateMapIndex;
         public ProvinceTopology LandCounted;
-        public readonly HashSet<ushort> Corridors = new();
-        public readonly HashSet<ushort> Patrons = new();
+
+        // Per-nation map/basin generational stamps (zero HashSet overhead inside BFS)
+        public int[] CorridorStamp = Array.Empty<int>();
+        public int CorridorGen;
+        public int[] PatronStamp = Array.Empty<int>();
+        public int PatronGen;
+        public bool HasPatrons;
+        public int[] OpenBasinStamp = Array.Empty<int>();
+        public int OpenBasinGen;
+
+        // Shared board dense tables for provinces & armies (indexed by MapIndex / NationId)
+        public readonly List<int>[] ControlledDense = new List<int>[DenseMapLimit];
+        public readonly List<int> ControlledUsedMaps = new();
+        public readonly Dictionary<ushort, List<int>> ControlledOverflow = new();
+
+        public List<Army>[] ArmiesByNationDense = new List<Army>[DenseNationLimit];
+        public readonly List<int> ArmiesUsedNations = new();
+        public readonly Dictionary<int, List<Army>> ArmiesOverflow = new();
+
         public readonly List<int> Ports = new();
-        public readonly HashSet<int> OpenBasins = new();
         // The fleets blockading the country being traced, found once for all its formations.
         public readonly List<Fleet> Blockaders = new();
         // The countries to trace today, in the list's order (shared board only).
         public readonly List<(Nation Nation, List<Army> Armies, List<int> Held)> Due = new();
         public readonly List<Nation> LivingNations = new();
         public readonly List<Sponsorship> Level2Sponsorships = new();
+
+        public void EnsureStateCapacity(int stateIndex)
+        {
+            if ((uint)stateIndex < (uint)HubProvByState.Length) return;
+            var cap = Math.Max(stateIndex + 128, Math.Max(256, HubProvByState.Length * 2));
+            Array.Resize(ref HubProvByState, cap);
+            Array.Resize(ref HubGenByState, cap);
+            Array.Resize(ref HubFlagsByState, cap);
+            Array.Resize(ref DemandByState, cap);
+            Array.Resize(ref DemandGenByState, cap);
+            Array.Resize(ref UnreachedByState, cap);
+            Array.Resize(ref UnreachedGenByState, cap);
+            Array.Resize(ref StateByIdx, cap);
+            Array.Resize(ref StateGenByIdx, cap);
+            Array.Resize(ref HeldCountByState, cap);
+            Array.Resize(ref HeldGenByState, cap);
+        }
+
+        public void EnsureMapStampCapacity(int mapIndex)
+        {
+            if ((uint)mapIndex < (uint)CorridorStamp.Length) return;
+            var cap = Math.Max(mapIndex + 64, Math.Max(512, CorridorStamp.Length * 2));
+            Array.Resize(ref CorridorStamp, cap);
+            Array.Resize(ref PatronStamp, cap);
+        }
     }
 
     private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
@@ -96,7 +155,7 @@ public static class LogisticsSystem
     /// </summary>
     [ThreadStatic] private static Scratch _worker;
 
-    private static Scratch WorkerScratch(int length)
+    private static Scratch WorkerScratch(int length, int maxStateIndex, int maxMapIndex)
     {
         var work = _worker ??= new Scratch();
         if (work.Distance.Length < length)
@@ -105,8 +164,11 @@ public static class LogisticsSystem
             work.Source = new int[length];
             work.Stamp = new int[length];
             work.Reach = new int[length];
+            work.QueueBuf = new int[length];
             work.Generation = 0;
         }
+        if (maxStateIndex >= 0) work.EnsureStateCapacity(maxStateIndex);
+        if (maxMapIndex >= 0) work.EnsureMapStampCapacity(maxMapIndex);
         return work;
     }
 
@@ -118,7 +180,9 @@ public static class LogisticsSystem
     {
         if (campaign is null || mapIndex <= 0 || mapIndex > ushort.MaxValue ||
             !Boards.TryGetValue(campaign, out var board)) return Array.Empty<int>();
-        return board.Controlled.TryGetValue((ushort)mapIndex, out var list) ? list : Array.Empty<int>();
+        if (mapIndex < DenseMapLimit)
+            return board.ControlledDense[mapIndex] ?? (IReadOnlyList<int>)Array.Empty<int>();
+        return board.ControlledOverflow.TryGetValue((ushort)mapIndex, out var list) ? list : Array.Empty<int>();
     }
 
     /// <summary>
@@ -132,13 +196,19 @@ public static class LogisticsSystem
     {
         var topology = campaign.ProvinceMap;
         if (ReferenceEquals(shared.LandCounted, topology)) return;
-        shared.LandInState.Clear();
+        var p2s = topology.ProvinceToState;
+        var maxState = 0;
+        for (var p = 1; p <= topology.ProvinceCount; p++)
+            if (p2s[p] > maxState) maxState = p2s[p];
+        if (shared.LandCountByState.Length <= maxState)
+            shared.LandCountByState = new int[maxState + 1];
+        else
+            Array.Clear(shared.LandCountByState, 0, maxState + 1);
+        var landArr = shared.LandCountByState;
         for (var province = 1; province <= topology.ProvinceCount; province++)
             if (!topology.IsWater(province))
-            {
-                var state = topology.ProvinceToState[province];
-                shared.LandInState[state] = shared.LandInState.GetValueOrDefault(state) + 1;
-            }
+                landArr[p2s[province]]++;
+        shared.MaxStateMapIndex = maxState;
         shared.LandCounted = topology;
     }
 
@@ -146,13 +216,29 @@ public static class LogisticsSystem
     private static void CountHeld(Campaign campaign, List<int> territory, Scratch board)
     {
         var topology = campaign.ProvinceMap;
-        board.HeldInState.Clear();
-        foreach (var province in territory)
-            if (!topology.IsWater(province))
+        if (++board.HeldGen == int.MaxValue)
+        {
+            Array.Clear(board.HeldGenByState);
+            board.HeldGen = 1;
+        }
+        var hGen = board.HeldGen;
+        var p2s = topology.ProvinceToState;
+        for (var ti = 0; ti < territory.Count; ti++)
+        {
+            var province = territory[ti];
+            if (topology.IsWater(province)) continue;
+            var state = p2s[province];
+            if (state >= board.HeldGenByState.Length) board.EnsureStateCapacity(state);
+            if (board.HeldGenByState[state] != hGen)
             {
-                var state = topology.ProvinceToState[province];
-                board.HeldInState[state] = board.HeldInState.GetValueOrDefault(state) + 1;
+                board.HeldGenByState[state] = hGen;
+                board.HeldCountByState[state] = 1;
             }
+            else
+            {
+                board.HeldCountByState[state]++;
+            }
+        }
     }
 
     /// <summary>
@@ -163,16 +249,21 @@ public static class LogisticsSystem
     /// formation in it from the far side of the old border, and the front there sat
     /// under-supplied - unreinforced, worn out - for as long as the war lasted.
     /// </summary>
-    private static void ForwardDepot(Campaign campaign, int province, bool connected, Scratch board, Scratch shared)
+    private static void ForwardDepot(Campaign campaign, int province, int generation, bool connected, Scratch board, Scratch shared)
     {
         if (!connected || campaign.Defines.ForwardDepotHeldShare > 1f) return;
         var topology = campaign.ProvinceMap;
         var state = topology.ProvinceToState[province];
-        if (board.HubByState.ContainsKey(state)) return;
-        var land = shared.LandInState.GetValueOrDefault(state);
-        if (land <= 0 || board.HeldInState.GetValueOrDefault(state) < land * campaign.Defines.ForwardDepotHeldShare) return;
-        board.HubByState[state] = province;
-        board.IsForwardHub[state] = true;
+        if (state >= board.HubGenByState.Length) board.EnsureStateCapacity(state);
+        if (board.HubGenByState[state] == generation) return;
+        var land = state < shared.LandCountByState.Length ? shared.LandCountByState[state] : 0;
+        if (land <= 0) return;
+        var held = board.HeldGenByState[state] == board.HeldGen ? board.HeldCountByState[state] : 0;
+        if (held < land * campaign.Defines.ForwardDepotHeldShare) return;
+        board.HubGenByState[state] = generation;
+        board.HubProvByState[state] = province;
+        board.HubFlagsByState[state] = 2; // forward
+        board.ActiveHubStates.Add(state);
     }
 
     public static void Tick(Campaign campaign)
@@ -200,44 +291,65 @@ public static class LogisticsSystem
 
         // Who holds what. The lists are kept between ticks and emptied rather than dropped,
         // so the province scan costs the scan and nothing else.
-        foreach (var list in board.Controlled.Values) list.Clear();
+        for (var i = 0; i < board.ControlledUsedMaps.Count; i++)
+            board.ControlledDense[board.ControlledUsedMaps[i]]!.Clear();
+        board.ControlledUsedMaps.Clear();
+        if (board.ControlledOverflow.Count > 0)
+            foreach (var list in board.ControlledOverflow.Values) list.Clear();
         var scanned = 0;
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             if (++scanned % 2048 == 0 && Campaign.StageOverdue()) yield return 0;
             var map = controllers[province];
             if (map == 0) continue;
-            if (!board.Controlled.TryGetValue(map, out var list)) board.Controlled[map] = list = new List<int>();
-            list.Add(province);
+            if (map < DenseMapLimit)
+            {
+                var list = board.ControlledDense[map];
+                if (list is null) board.ControlledDense[map] = list = new List<int>();
+                if (list.Count == 0) board.ControlledUsedMaps.Add(map);
+                list.Add(province);
+            }
+            else
+            {
+                if (!board.ControlledOverflow.TryGetValue(map, out var list))
+                    board.ControlledOverflow[map] = list = new List<int>();
+                list.Add(province);
+            }
         }
 
         // One pass over the armies instead of one pass per nation. With two hundred and
         // sixty-one nations and fourteen hundred formations that is three hundred and
         // sixty-five thousand comparisons a tick turned into fourteen hundred.
-        foreach (var list in board.ArmiesByNation.Values) list.Clear();
+        for (var i = 0; i < board.ArmiesUsedNations.Count; i++)
+            board.ArmiesByNationDense[board.ArmiesUsedNations[i]]!.Clear();
+        board.ArmiesUsedNations.Clear();
+        if (board.ArmiesOverflow.Count > 0)
+            foreach (var list in board.ArmiesOverflow.Values) list.Clear();
         var indexed = 0;
         var allArmies = campaign.Armies;
         for (var ai = 0; ai < allArmies.Count; ai++)
         {
             if (++indexed % 512 == 0 && Campaign.StageOverdue()) yield return 0;
             var army = allArmies[ai];
-            if (!board.ArmiesByNation.TryGetValue(army.NationId, out var list))
-                board.ArmiesByNation[army.NationId] = list = new List<Army>();
-            list.Add(army);
+            var nid = army.NationId;
+            if ((uint)nid < (uint)board.ArmiesByNationDense.Length)
+            {
+                var list = board.ArmiesByNationDense[nid];
+                if (list is null) board.ArmiesByNationDense[nid] = list = new List<Army>();
+                if (list.Count == 0) board.ArmiesUsedNations.Add(nid);
+                list.Add(army);
+            }
+            else
+            {
+                if (!board.ArmiesOverflow.TryGetValue(nid, out var list))
+                    board.ArmiesOverflow[nid] = list = new List<Army>();
+                list.Add(army);
+            }
         }
 
         var length = topology.ProvinceCount + 1;
 
         if (Campaign.StageOverdue()) yield return 0;
-        // The countries with an army in the field, in the list's order, and then their traces
-        // side by side (DeterministicParallel). A country's trace reads the map, the wars, the
-        // fleets and its own ground, and writes only its own formations and its own
-        // reinforcement capacity, which no other country's trace reads - so each answer is the
-        // one the serial walk gave it, to the bit, on one thread or nine. Every worker has a
-        // scratch of its own (WorkerScratch); the shared board above is only read from here on.
-        //
-        // The few shared tables a trace asks for that are made on first asking are made now, on
-        // this thread, so no worker is the one that builds them.
         campaign.NationsByMapIndex();
         campaign.StateByMapIndex(1);
         if (campaign.Nations.Count > 0) campaign.StatesOf(campaign.Nations[0]);
@@ -250,12 +362,25 @@ public static class LogisticsSystem
         var nations = campaign.ActiveNations;
         var livingNations = board.LivingNations;
         livingNations.Clear();
+        var maxMapIndex = 0;
         for (var i = 0; i < nations.Count; i++)
         {
             var nation = nations[i];
+            if (nation.MapIndex > maxMapIndex) maxMapIndex = nation.MapIndex;
             if (nation.Population > 0 && nation.MapIndex > 0) livingNations.Add(nation);
-            if (!board.ArmiesByNation.TryGetValue(nation.Id, out var armies) || armies.Count == 0) continue;
-            board.Controlled.TryGetValue((ushort)nation.MapIndex, out var held);
+            var nid = nation.Id;
+            var armies = (uint)nid < (uint)board.ArmiesByNationDense.Length
+                ? board.ArmiesByNationDense[nid]
+                : board.ArmiesOverflow.GetValueOrDefault(nid);
+            if (armies is null || armies.Count == 0) continue;
+            var nMap = nation.MapIndex;
+            List<int> held = null;
+            if (nMap > 0)
+            {
+                held = nMap < DenseMapLimit
+                    ? board.ControlledDense[nMap]
+                    : board.ControlledOverflow.GetValueOrDefault((ushort)nMap);
+            }
             due.Add((nation, armies, held));
             if (held is { Count: > 0 }) EnsureLandCounted(campaign, board);
         }
@@ -267,6 +392,7 @@ public static class LogisticsSystem
             for (var i = 0; i < allSponsorships.Count; i++)
                 if (allSponsorships[i].Level >= 2) sponsorships.Add(allSponsorships[i]);
         }
+        var maxStateIndex = board.MaxStateMapIndex;
         // In handfuls, with a seam between them: a late world has three hundred countries in the
         // field, and the whole trace in one piece was a stage of its own on one thread.
         for (var start = 0; start < due.Count; start += TraceHandful)
@@ -274,7 +400,7 @@ public static class LogisticsSystem
             var end = Math.Min(due.Count, start + TraceHandful);
             DeterministicParallel.ForRange(campaign, start, end, (from, to) =>
             {
-                var work = WorkerScratch(length);
+                var work = WorkerScratch(length, maxStateIndex, maxMapIndex);
                 for (var index = from; index < to; index++)
                 {
                     var (nation, armies, held) = due[index];
@@ -302,12 +428,13 @@ public static class LogisticsSystem
             if (landless)
             {
                 CollectCorridors(campaign, nation, board, shared);
-                board.Unreached.Clear();
-                foreach (var army in armies)
-                    if (!Visiting(campaign, nation, army)) CountUnreached(topology, army, board);
+                if (++board.UnreachedGen == int.MaxValue) { Array.Clear(board.UnreachedGenByState); board.UnreachedGen = 1; }
+                for (var ai = 0; ai < armies.Count; ai++)
+                    if (!Visiting(campaign, nation, armies[ai])) CountUnreached(topology, armies[ai], board);
             }
-            foreach (var army in armies)
+            for (var ai = 0; ai < armies.Count; ai++)
             {
+                var army = armies[ai];
                 if (ProvisionVisitor(campaign, nation, army)) continue;
                 if (landless && Forage(campaign, nation, army, board)) continue;
                 SetStranded(army);
@@ -315,148 +442,164 @@ public static class LogisticsSystem
             return;
         }
 
-        board.StateById.Clear();
-        foreach (var state in campaign.StatesOf(nation)) board.StateById[state.MapIndex] = state;
+        if (++board.StateGen == int.MaxValue) { Array.Clear(board.StateGenByIdx); board.StateGen = 1; }
+        var sGen = board.StateGen;
+        var nationStates = board.NationStates;
+        nationStates.Clear();
+        var statesArr = campaign.StatesOf(nation);
+        for (var si = 0; si < statesArr.Length; si++)
+        {
+            var st = statesArr[si];
+            var idx = st.MapIndex;
+            if (idx >= board.StateGenByIdx.Length) board.EnsureStateCapacity(idx);
+            if (board.StateGenByIdx[idx] != sGen) nationStates.Add(st);
+            board.StateGenByIdx[idx] = sGen;
+            board.StateByIdx[idx] = st;
+        }
 
         // A new generation is this nation's claim on the scratch: an entry counts as
         // written only if it carries the number below. Nothing has to be cleared.
-        var generation = ++board.Generation;
+        if (++board.Generation == int.MaxValue)
+        {
+            Array.Clear(board.Stamp);
+            Array.Clear(board.Reach);
+            Array.Clear(board.HubGenByState);
+            board.Generation = 1;
+        }
+        var generation = board.Generation;
         var distance = board.Distance;
         var source = board.Source;
         var stamp = board.Stamp;
 
-        // Which of the country's ground the network actually reaches. Only that ground can
-        // hold a depot, which is a different question from which ground it owns - see
-        // CollectRoots and TraceNetwork.
         var reach = board.Reach;
         CollectCorridors(campaign, nation, board, shared);
-        // A rising holds ground it does not own: the map still says whose the provinces are,
-        // and a rebel army that looked only at owned ground found no depot anywhere and starved
-        // in its own heartland (Sakha, 2034). For a side with no land of its own, the ground it
-        // holds is where its depots stand.
         var insurgent = true;
-        foreach (var province in territory)
-            if (topology.ProvinceToNation[province] == nation.MapIndex) { insurgent = false; break; }
+        var p2n = topology.ProvinceToNation;
+        var p2s = topology.ProvinceToState;
+        for (var ti = 0; ti < territory.Count; ti++)
+            if (p2n[territory[ti]] == nation.MapIndex) { insurgent = false; break; }
         CollectRoots(campaign, nation, territory, board, shared);
         if (insurgent && board.Roots.Count == 0 && InsurgentSeat(campaign, nation, territory) is var seat and > 0) board.Roots.Add(seat);
         TraceNetwork(nation, topology, controllers, generation, board);
 
-        board.HubByState.Clear();
-        board.IsIsolatedHub.Clear();
-        board.IsForwardHub.Clear();
+        board.ActiveHubStates.Clear();
         CountHeld(campaign, territory, board);
-        foreach (var province in territory)
+        for (var ti = 0; ti < territory.Count; ti++)
         {
+            var province = territory[ti];
             // A lake keeps no depot, however much of it a country owns.
             if (topology.IsWater(province)) continue;
-            if (!insurgent && topology.ProvinceToNation[province] != nation.MapIndex)
+            if (!insurgent && p2n[province] != nation.MapIndex)
             {
-                ForwardDepot(campaign, province, reach[province] == generation, board, shared);
+                ForwardDepot(campaign, province, generation, reach[province] == generation, board, shared);
                 continue;
             }
             var isConnected = reach[province] == generation;
-            var state = topology.ProvinceToState[province];
+            var state = p2s[province];
+            if (state >= board.HubGenByState.Length) board.EnsureStateCapacity(state);
             if (isConnected)
             {
-                // A region may straddle a pocket. Prefer its connected depot regardless
-                // of province order; an isolated fragment must not cut off the whole region.
-                if (!board.HubByState.ContainsKey(state) || board.IsIsolatedHub.GetValueOrDefault(state) ||
-                    board.IsForwardHub.GetValueOrDefault(state))
-                    board.HubByState[state] = province;
-                board.IsIsolatedHub[state] = false;
-                board.IsForwardHub[state] = false;
+                if (board.HubGenByState[state] != generation)
+                {
+                    board.HubGenByState[state] = generation;
+                    board.ActiveHubStates.Add(state);
+                    board.HubProvByState[state] = province;
+                    board.HubFlagsByState[state] = 0;
+                }
+                else if (board.HubFlagsByState[state] != 0)
+                {
+                    board.HubProvByState[state] = province;
+                    board.HubFlagsByState[state] = 0;
+                }
                 continue;
             }
-            if (board.HubByState.ContainsKey(state)) continue;
-            if (!board.StateById.TryGetValue(state, out var st) || st.Buildings.GetValueOrDefault(BuildingKind.Barracks) <= 0)
+            if (board.HubGenByState[state] == generation) continue;
+            var st = board.StateGenByIdx[state] == sGen ? board.StateByIdx[state] : null;
+            if (st is null || st.Buildings.GetValueOrDefault(BuildingKind.Barracks) <= 0)
                 continue;
-            board.IsIsolatedHub[state] = true;
-            board.HubByState[state] = province;
+            board.HubGenByState[state] = generation;
+            board.ActiveHubStates.Add(state);
+            board.HubProvByState[state] = province;
+            board.HubFlagsByState[state] = 1; // isolated
         }
 
-        board.Frontier.Clear();
-        foreach (var (state, province) in board.HubByState)
+        var qBuf = board.QueueBuf;
+        var qTail = 0;
+        for (var hi = 0; hi < board.ActiveHubStates.Count; hi++)
         {
+            var state = board.ActiveHubStates[hi];
+            var province = board.HubProvByState[state];
             stamp[province] = generation;
             distance[province] = 0;
             source[province] = state;
-            board.Frontier.Enqueue(province);
+            qBuf[qTail++] = province;
         }
-        // No hop budget on the walk itself any more. A province past the trace range is at the
-        // end of a long road, not inside a ring: it is charged for the distance (the distance
-        // factor below bottoms out at a fifth of the supply) but it is not cut off. Cutting it off
-        // marooned whole fronts on their own connected ground - the far north of Russia, two
-        // dozen provinces from the nearest depot - where no breakout could help, because there was
-        // nothing to break out of, and the formations sat worn out and unreinforced for years.
-        TraceDepots(nation, topology, controllers, generation, board);
+        TraceDepots(nation, topology, controllers, generation, board, qTail);
 
-        // A region is not necessarily one land component (Kaliningrad includes detached
-        // coastal spits). The root trace correctly reached every sea entrance, but the
-        // single regional depot could sit on a spit whose land walk reached none of the
-        // mainland. SupplyBySea then rescued coast *armies* only, leaving inland troops
-        // falsely encircled. Give each root-reachable home fragment a distribution point.
-        // These points share the SAME regional source and demand/capacity, not free new
-        // throughput. A lost harbour still fails the root trace, so a real pocket stays cut.
-        foreach (var province in territory)
+        for (var ti = 0; ti < territory.Count; ti++)
         {
+            var province = territory[ti];
             if (stamp[province] == generation || reach[province] != generation || topology.IsWater(province) ||
-                topology.ProvinceToNation[province] != nation.MapIndex) continue;
-            var state = topology.ProvinceToState[province];
-            if (!board.HubByState.ContainsKey(state) || board.IsIsolatedHub.GetValueOrDefault(state)) continue;
+                p2n[province] != nation.MapIndex) continue;
+            var state = p2s[province];
+            if (state >= board.HubGenByState.Length || board.HubGenByState[state] != generation ||
+                (board.HubFlagsByState[state] & 1) != 0) continue;
             stamp[province] = generation;
             distance[province] = 0;
             source[province] = state;
-            board.Frontier.Enqueue(province);
-            TraceDepots(nation, topology, controllers, generation, board);
+            qBuf[0] = province;
+            TraceDepots(nation, topology, controllers, generation, board, 1);
         }
 
         SupplyBySea(campaign, nation, armies, controllers, generation, board);
 
-        board.DemandBySource.Clear();
-        foreach (var army in armies)
+        if (++board.DemandGen == int.MaxValue) { Array.Clear(board.DemandGenByState); board.DemandGen = 1; }
+        var dGen = board.DemandGen;
+        var throughputPerDiv = campaign.Defines.SupplyThroughputPerDivision;
+        for (var ai = 0; ai < armies.Count; ai++)
         {
+            var army = armies[ai];
             var at = army.ProvinceId;
             if (at <= 0 || at >= stamp.Length || stamp[at] != generation) continue;
             var sourceState = source[at];
-            board.DemandBySource[sourceState] = board.DemandBySource.GetValueOrDefault(sourceState) +
-                army.Divisions * campaign.Defines.SupplyThroughputPerDivision *
-                UnitTypeCatalog.Get(army.TemplateId).SupplyUse;
+            if (sourceState >= board.DemandGenByState.Length) board.EnsureStateCapacity(sourceState);
+            var addDemand = army.Divisions * throughputPerDiv * UnitTypeCatalog.Get(army.TemplateId).SupplyUse;
+            if (board.DemandGenByState[sourceState] != dGen)
+            {
+                board.DemandGenByState[sourceState] = dGen;
+                board.DemandByState[sourceState] = addDemand;
+            }
+            else
+            {
+                board.DemandByState[sourceState] += addDemand;
+            }
         }
 
-        // The land feeds its own. A rising's supply grows from one seat, so any ground it
-        // holds that an enemy province separates from that seat was a pocket - on its own
-        // ground, among its own people - and four in five of the rising formations that were
-        // ever cut off were cut off exactly so (SimBench --pockets, November 2026). Before a
-        // formation of a rising is marked cut off, at any of the three places below, the
-        // people around it are asked first. What they are asked to feed is every division of
-        // the side the road did not reach in their region, counted here, once, so that the
-        // tenth formation to crowd into a valley eats from the same pot as the first.
         var forage = Partisans.MayForage(campaign, nation);
         if (forage)
         {
-            board.Unreached.Clear();
-            foreach (var army in armies)
+            if (++board.UnreachedGen == int.MaxValue) { Array.Clear(board.UnreachedGenByState); board.UnreachedGen = 1; }
+            for (var ai = 0; ai < armies.Count; ai++)
             {
+                var army = armies[ai];
                 if (Visiting(campaign, nation, army)) continue;
                 var at = army.ProvinceId;
-                if (at > 0 && at < stamp.Length && stamp[at] == generation &&
-                    !board.IsIsolatedHub.GetValueOrDefault(source[at])) continue;
+                if (at > 0 && at < stamp.Length && stamp[at] == generation)
+                {
+                    var src = source[at];
+                    if (!(src < board.HubGenByState.Length && board.HubGenByState[src] == generation &&
+                          (board.HubFlagsByState[src] & 1) != 0))
+                        continue;
+                }
                 CountUnreached(topology, army, board);
             }
         }
 
-        // Who is blockading this country is the same answer for every formation of it, and
-        // finding it out is a walk of the fleets with a walk of the war record for each one
-        // on that mission. Asked per formation it was 2.3 microseconds each - 115 ms of the
-        // trace's 580 over seventy-seven days of a save from 2050, more than the network
-        // walk itself. Asked once, on the first formation that needs it; the loop below
-        // writes formations and nothing a blockade is made of.
         var blockadersKnown = false;
-        foreach (var army in armies)
+        for (var ai = 0; ai < armies.Count; ai++)
         {
+            var army = armies[ai];
             if (ProvisionVisitor(campaign, nation, army)) continue;
-            // A formation at sea is supplied by the ship it is on, not by the province
-            // network. Marking it cut off would starve an invasion before it landed.
             if (army.EmbarkedFleetId >= 0)
             {
                 army.CutOff = false;
@@ -474,26 +617,29 @@ public static class LogisticsSystem
                 continue;
             }
             var sourceState = source[province];
-            board.StateById.TryGetValue(sourceState, out var state);
-            // A modern state moves its army on railways and roads, not on the three
-            // divisions' worth of throughput a bare province used to allow. Infrastructure
-            // is what a player builds to widen this, so it carries the most weight; a rail
-            // network adds a little over half as much, barracks less (BuildingThroughput).
-            // Winter narrows the same road. It does not invent a second supply network.
+            var state = (uint)sourceState < (uint)board.StateGenByIdx.Length && board.StateGenByIdx[sourceState] == sGen
+                ? board.StateByIdx[sourceState]
+                : null;
+            var hubFlags = (uint)sourceState < (uint)board.HubGenByState.Length && board.HubGenByState[sourceState] == generation
+                ? board.HubFlagsByState[sourceState]
+                : (byte)0;
+            var isIsolated = (hubFlags & 1) != 0;
+            var isForward = (hubFlags & 2) != 0;
+
             var centre = topology.CenterOf(province);
             var damageFactor = state is not null ? (1f - MathF.Min(0.85f, state.WarDamage * 0.9f)) : 1f;
-            var enclaveFactor = board.IsIsolatedHub.GetValueOrDefault(sourceState) ? 0.35f :
-                board.IsForwardHub.GetValueOrDefault(sourceState) ? campaign.Defines.ForwardDepotThroughputShare : 1f;
+            var enclaveFactor = isIsolated ? 0.35f :
+                isForward ? campaign.Defines.ForwardDepotThroughputShare : 1f;
             var capacity = (campaign.Defines.BaseStateSupplyThroughput + BuildingThroughput(campaign.Defines, state)) *
                           damageFactor * enclaveFactor *
                           WaterConditions.RoadThroughput(campaign, centre.Latitude);
-            var demand = MathF.Max(0.01f, board.DemandBySource.GetValueOrDefault(sourceState));
+            var rawDemand = (uint)sourceState < (uint)board.DemandGenByState.Length && board.DemandGenByState[sourceState] == dGen
+                ? board.DemandByState[sourceState]
+                : 0f;
+            var demand = MathF.Max(0.01f, rawDemand);
             var traceRange = Math.Max(1, campaign.Defines.SupplyTraceRange);
             var lakeMultiplier = WaterConditions.LakeSupplyMultiplier(campaign, province);
 
-            // A fleet sitting off the coast takes what arrives by sea. This is the one
-            // thing a navy does that a land player feels immediately: an army on a
-            // blockaded shore stops being supplied, and stops being able to attack.
             if (!blockadersKnown)
             {
                 NavalOperations.Blockaders(campaign, nation, board.Blockaders);
@@ -509,9 +655,7 @@ public static class LogisticsSystem
             army.SupplyDistance = distance[province];
             army.SupplySourceStateMapIndex = sourceState;
             army.SupplyCongestion = congestion;
-            // Disconnected local stores buy time; they cannot draw from national depots.
-            // Only a restored route may reset the daily reserve clock.
-            if (board.IsIsolatedHub.GetValueOrDefault(sourceState))
+            if (isIsolated)
             {
                 if (forage && Forage(campaign, nation, army, board)) continue;
                 army.LivingOffLand = false;
@@ -519,15 +663,14 @@ public static class LogisticsSystem
                 continue;
             }
             army.CutOff = false;
-            // The road, or a ship, reached it: depots feed it now, not the villages.
             army.LivingOffLand = false;
             army.DaysCutOff = 0;
             army.SupplyLevel = nextSupplyLevel;
         }
 
         var barracksTotal = 0;
-        foreach (var state in board.StateById.Values)
-            barracksTotal += state.Buildings.GetValueOrDefault(BuildingKind.Barracks);
+        for (var si = 0; si < nationStates.Count; si++)
+            barracksTotal += nationStates[si].Buildings.GetValueOrDefault(BuildingKind.Barracks);
         nation.ReinforcementCapacity = (MathF.Max(80f, MilitaryBootstrap.Personnel(nation.Tag, nation.Population) *
                                             campaign.Defines.ReinforcementCapacityShare) +
                                         barracksTotal * ReinforcementPerBarracks) * ReinforcementBudget(campaign, nation) *
@@ -538,19 +681,35 @@ public static class LogisticsSystem
     /// <summary>
     /// Walk from the queued distribution points without crossing hostile controllers.
     /// </summary>
-    private static void TraceDepots(Nation nation, ProvinceTopology topology, ushort[] controllers, int generation, Scratch board)
+    private static void TraceDepots(Nation nation, ProvinceTopology topology, ushort[] controllers, int generation, Scratch board, int queueTail)
     {
-        while (board.Frontier.Count > 0)
+        var qBuf = board.QueueBuf;
+        var qHead = 0;
+        var stamp = board.Stamp;
+        var dist = board.Distance;
+        var src = board.Source;
+        var neighbors = topology.Neighbors;
+        var ownMap = (ushort)nation.MapIndex;
+        var corrStamp = board.CorridorStamp;
+        var corrGen = board.CorridorGen;
+        while (qHead < queueTail)
         {
-            var province = board.Frontier.Dequeue();
-            foreach (var neighbor in topology.Neighbors[province])
+            var province = qBuf[qHead++];
+            var adj = neighbors[province];
+            var baseD = dist[province];
+            var baseS = src[province];
+            for (var ai = 0; ai < adj.Length; ai++)
             {
-                if (board.Stamp[neighbor] == generation || !Passable(nation, controllers[neighbor], board)) continue;
-                board.Stamp[neighbor] = generation;
+                var neighbor = adj[ai];
+                if (stamp[neighbor] == generation) continue;
+                var ctrl = controllers[neighbor];
+                if (ctrl != ownMap && (ctrl == 0 || ctrl >= corrStamp.Length || corrStamp[ctrl] != corrGen))
+                    continue;
+                stamp[neighbor] = generation;
                 // Lakes do not charge extra road hops; columns still cannot march across them.
-                board.Distance[neighbor] = board.Distance[province] + (topology.IsWater(neighbor) ? 0 : 1);
-                board.Source[neighbor] = board.Source[province];
-                board.Frontier.Enqueue(neighbor);
+                dist[neighbor] = baseD + (topology.IsWater(neighbor) ? 0 : 1);
+                src[neighbor] = baseS;
+                qBuf[queueTail++] = neighbor;
             }
         }
     }
@@ -599,9 +758,12 @@ public static class LogisticsSystem
                 for (var ci = 0; ci < coasts.Length; ci++)
                 {
                     var coast = coasts[ci];
-                    if (coast < stamp.Length && stamp[coast] == generation && controllers[coast] == nation.MapIndex &&
-                        !board.IsIsolatedHub.GetValueOrDefault(board.Source[coast]))
-                        ports.Add(coast);
+                    if (coast >= stamp.Length || stamp[coast] != generation || controllers[coast] != nation.MapIndex) continue;
+                    var srcState = board.Source[coast];
+                    var isIso = (uint)srcState < (uint)board.HubGenByState.Length &&
+                                board.HubGenByState[srcState] == generation &&
+                                (board.HubFlagsByState[srcState] & 1) != 0;
+                    if (!isIso) ports.Add(coast);
                 }
             }
 
@@ -625,67 +787,6 @@ public static class LogisticsSystem
         }
     }
 
-    /// <summary>
-    /// Where a country's supply network begins: one usable government seat. After the
-    /// capital falls this is its evacuated rear, not every disconnected barracks at once.
-    ///
-    /// A province used to be a source of supply the moment the country owned it, at distance
-    /// zero. Two things followed, and a player feels both. A division encircled on a scrap of
-    /// national soil was fed from that scrap for as long as it stood there, so closing a pocket
-    /// bought nothing until the ground itself fell; and cutting the corridor between a capital
-    /// and its front cost the enemy nothing at all, because every province behind the cut was
-    /// still a source of its own. Supply begins at a root and travels over ground the country
-    /// controls, which is what makes a corridor worth taking.
-    /// </summary>
-    /// <summary>
-    /// Ground a country's supply may cross without owning it: a co-belligerent's, or a host's
-    /// that has granted it military access. A column fighting beyond an ally used to be cut off
-    /// the day it crossed the ally's border, however open the road behind it - a stack on the
-    /// far side of Saudi Arabia starved with the Saudi roads open to it. Crossing is all it is:
-    /// no depot stands on someone else's ground (only the country's own provinces become hubs),
-    /// and the trace's distance still counts every province of the way. Built only for a
-    /// country at war; at peace supply never needs to leave home.
-    /// </summary>
-    private static void CollectCorridors(Campaign campaign, Nation nation, Scratch board, Scratch shared)
-    {
-        board.Corridors.Clear();
-        // A subject's ground is its overlord's road and the overlord's is the subject's, at war and at peace.
-        var livingNations = shared.LivingNations;
-        for (var i = 0; i < livingNations.Count; i++)
-        {
-            var host = livingNations[i];
-            if (host.Id != nation.Id &&
-                (host.AnswersTo(nation.Id) || nation.AnswersTo(host.Id)) &&
-                !MilitaryAccess.Hostile(campaign, nation.Id, host.Id))
-                board.Corridors.Add((ushort)host.MapIndex);
-        }
-        var atWar = false;
-        var wars = Warfare.LiveWars(campaign);
-        for (var index = 0; index < wars.Count; index++)
-        {
-            var war = wars[index];
-            if (war.Ended || !war.Involves(nation.Id)) continue;
-            atWar = true;
-            foreach (var id in war.Side(war.IsAttacking(nation.Id)))
-                if (id != nation.Id && campaign.NationById(id) is { } friend) board.Corridors.Add((ushort)friend.MapIndex);
-        }
-        if (!atWar) return;
-        for (var i = 0; i < livingNations.Count; i++)
-        {
-            var host = livingNations[i];
-            if (host.Id != nation.Id && MilitaryAccess.Granted(campaign, nation.Id, host.Id) &&
-                !MilitaryAccess.Hostile(campaign, nation.Id, host.Id))
-                board.Corridors.Add((ushort)host.MapIndex);
-        }
-    }
-
-    private static bool Passable(Nation nation, ushort controller, Scratch board) =>
-        controller == nation.MapIndex || controller != 0 && board.Corridors.Contains(controller);
-
-    /// <summary>
-    /// Where a side with no land of its own keeps its stores: its movement's headquarters when it
-    /// holds them, otherwise the held province in the most populous region it holds.
-    /// </summary>
     private static int InsurgentSeat(Campaign campaign, Nation nation, List<int> territory)
     {
         var topology = campaign.ProvinceMap;
@@ -705,6 +806,64 @@ public static class LogisticsSystem
         return best;
     }
 
+    private static void CollectCorridors(Campaign campaign, Nation nation, Scratch board, Scratch shared)
+    {
+        if (++board.CorridorGen == int.MaxValue) { Array.Clear(board.CorridorStamp); board.CorridorGen = 1; }
+        var cGen = board.CorridorGen;
+        var livingNations = shared.LivingNations;
+        for (var i = 0; i < livingNations.Count; i++)
+        {
+            var host = livingNations[i];
+            if (host.Id != nation.Id &&
+                (host.AnswersTo(nation.Id) || nation.AnswersTo(host.Id)) &&
+                !MilitaryAccess.Hostile(campaign, nation.Id, host.Id))
+            {
+                var mi = host.MapIndex;
+                if (mi > 0)
+                {
+                    if (mi >= board.CorridorStamp.Length) board.EnsureMapStampCapacity(mi);
+                    board.CorridorStamp[mi] = cGen;
+                }
+            }
+        }
+        var atWar = false;
+        var wars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
+            if (war.Ended || !war.Involves(nation.Id)) continue;
+            atWar = true;
+            foreach (var id in war.Side(war.IsAttacking(nation.Id)))
+            {
+                if (id != nation.Id && campaign.NationById(id) is { } friend && friend.MapIndex > 0)
+                {
+                    var mi = friend.MapIndex;
+                    if (mi >= board.CorridorStamp.Length) board.EnsureMapStampCapacity(mi);
+                    board.CorridorStamp[mi] = cGen;
+                }
+            }
+        }
+        if (!atWar) return;
+        for (var i = 0; i < livingNations.Count; i++)
+        {
+            var host = livingNations[i];
+            if (host.Id != nation.Id && MilitaryAccess.Granted(campaign, nation.Id, host.Id) &&
+                !MilitaryAccess.Hostile(campaign, nation.Id, host.Id))
+            {
+                var mi = host.MapIndex;
+                if (mi > 0)
+                {
+                    if (mi >= board.CorridorStamp.Length) board.EnsureMapStampCapacity(mi);
+                    board.CorridorStamp[mi] = cGen;
+                }
+            }
+        }
+    }
+
+    private static bool Passable(Nation nation, ushort controller, Scratch board) =>
+        controller == nation.MapIndex ||
+        (controller != 0 && controller < board.CorridorStamp.Length && board.CorridorStamp[controller] == board.CorridorGen);
+
     private static void CollectRoots(Campaign campaign, Nation nation, List<int> territory, Scratch board, Scratch shared)
     {
         board.Roots.Clear();
@@ -713,109 +872,138 @@ public static class LogisticsSystem
         PatronBorders(campaign, nation, territory, board, shared);
     }
 
-    /// <summary>
-    /// A patron that ships weapons ships them over its own border. Ground the client holds
-    /// against the land of a backer at level two or more is a root of its own: the pocket
-    /// is fed from the far side of the frontier, as Idlib was through Turkey for five years
-    /// and Ukraine through Poland. Without it a besieged client with a patron next door
-    /// starved as fast as one alone on an island, and surrendered with the arms still waiting
-    /// at the crossing. The same for any country - nobody is named here.
-    /// </summary>
     private static void PatronBorders(Campaign campaign, Nation nation, List<int> territory, Scratch board, Scratch shared)
     {
         var sponsorships = shared.Level2Sponsorships;
         if (sponsorships.Count == 0) return;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        board.Patrons.Clear();
+        if (++board.PatronGen == int.MaxValue) { Array.Clear(board.PatronStamp); board.PatronGen = 1; }
+        var pGen = board.PatronGen;
+        var anyPatron = false;
         for (var i = 0; i < sponsorships.Count; i++)
         {
             var backing = sponsorships[i];
             if (backing.ClientId == nation.Id &&
                 campaign.NationById(backing.SponsorId) is { Population: > 0 } sponsor &&
                 !CampaignDiplomacy.AtWar(campaign, sponsor.Id, nation.Id))
-                board.Patrons.Add((ushort)sponsor.MapIndex);
+            {
+                var mi = sponsor.MapIndex;
+                if (mi > 0)
+                {
+                    if (mi >= board.PatronStamp.Length) board.EnsureMapStampCapacity(mi);
+                    board.PatronStamp[mi] = pGen;
+                    anyPatron = true;
+                }
+            }
         }
-        if (board.Patrons.Count == 0) return;
+        if (!anyPatron) return;
+        var patronStamp = board.PatronStamp;
+        var ownMap = (ushort)nation.MapIndex;
+        var neighbors = topology.Neighbors;
         for (var ti = 0; ti < territory.Count; ti++)
         {
             var province = territory[ti];
-            if (controllers[province] != nation.MapIndex || topology.IsWater(province)) continue;
-            foreach (var neighbor in topology.Neighbors[province])
-                if (board.Patrons.Contains(controllers[neighbor]) && !topology.IsWater(neighbor))
+            if (controllers[province] != ownMap || topology.IsWater(province)) continue;
+            var adj = neighbors[province];
+            for (var ai = 0; ai < adj.Length; ai++)
+            {
+                var neighbor = adj[ai];
+                var nCtrl = controllers[neighbor];
+                if (nCtrl < patronStamp.Length && patronStamp[nCtrl] == pGen && !topology.IsWater(neighbor))
                 {
                     board.Roots.Add(province);
                     break;
                 }
+            }
         }
     }
 
-    /// <summary>
-    /// The ground the network reaches from its roots: over land the country controls, and then,
-    /// if it holds a port, along its own coast.
-    ///
-    /// No hop budget here. The budget belongs to distance - a trace twenty provinces long is
-    /// still a trace - and spending it here would cut every country wider than twenty provinces
-    /// in half on the first day of the campaign.
-    ///
-    /// A held coast in the same sea basin is another entry into the land network. Flood
-    /// inland from that entry as well: an island depot behind its harbour is connected,
-    /// not an isolated emergency depot. Blockade still reduces the delivered throughput.
-    /// </summary>
     private static void TraceNetwork(Nation nation, ProvinceTopology topology, ushort[] controllers,
         int generation, Scratch board)
     {
         var reach = board.Reach;
-        board.Frontier.Clear();
-        foreach (var root in board.Roots)
+        var qBuf = board.QueueBuf;
+        var qHead = 0;
+        var qTail = 0;
+        var roots = board.Roots;
+        for (var ri = 0; ri < roots.Count; ri++)
         {
+            var root = roots[ri];
             if (reach[root] == generation) continue;
             reach[root] = generation;
-            board.Frontier.Enqueue(root);
+            qBuf[qTail++] = root;
         }
-        while (board.Frontier.Count > 0)
+        var ownMap = (ushort)nation.MapIndex;
+        var corrStamp = board.CorridorStamp;
+        var corrGen = board.CorridorGen;
+        var neighbors = topology.Neighbors;
+        while (qHead < qTail)
         {
-            var province = board.Frontier.Dequeue();
-            foreach (var neighbor in topology.Neighbors[province])
+            var province = qBuf[qHead++];
+            var adj = neighbors[province];
+            for (var ai = 0; ai < adj.Length; ai++)
             {
-                if (reach[neighbor] == generation || !Passable(nation, controllers[neighbor], board)) continue;
+                var neighbor = adj[ai];
+                if (reach[neighbor] == generation) continue;
+                var ctrl = controllers[neighbor];
+                if (ctrl != ownMap && (ctrl == 0 || ctrl >= corrStamp.Length || corrStamp[ctrl] != corrGen))
+                    continue;
                 reach[neighbor] = generation;
-                board.Frontier.Enqueue(neighbor);
+                qBuf[qTail++] = neighbor;
             }
         }
 
         var coasts = SeaLanes.CoastalProvinceArray(topology);
         if (coasts.Length == 0) return;
-        var openBasins = board.OpenBasins;
-        openBasins.Clear();
+        if (++board.OpenBasinGen == int.MaxValue) { Array.Clear(board.OpenBasinStamp); board.OpenBasinGen = 1; }
+        var bGen = board.OpenBasinGen;
+        var anyBasin = false;
         for (var ci = 0; ci < coasts.Length; ci++)
         {
             var coast = coasts[ci];
-            if (reach[coast] == generation && controllers[coast] == nation.MapIndex)
+            if (reach[coast] == generation && controllers[coast] == ownMap)
             {
                 var basin = SeaLanes.HarbourBasin(topology, coast);
-                if (basin >= 0) openBasins.Add(basin);
+                if (basin >= 0)
+                {
+                    if (basin >= board.OpenBasinStamp.Length)
+                        Array.Resize(ref board.OpenBasinStamp, Math.Max(basin + 32, board.OpenBasinStamp.Length * 2));
+                    board.OpenBasinStamp[basin] = bGen;
+                    anyBasin = true;
+                }
             }
         }
-        if (openBasins.Count == 0) return;
+        if (!anyBasin) return;
+        qHead = 0;
+        qTail = 0;
+        var basinStamp = board.OpenBasinStamp;
         for (var ci = 0; ci < coasts.Length; ci++)
         {
             var coast = coasts[ci];
-            if (reach[coast] != generation && controllers[coast] == nation.MapIndex &&
-                openBasins.Contains(SeaLanes.HarbourBasin(topology, coast)))
+            if (reach[coast] != generation && controllers[coast] == ownMap)
             {
-                reach[coast] = generation;
-                board.Frontier.Enqueue(coast);
+                var basin = SeaLanes.HarbourBasin(topology, coast);
+                if (basin >= 0 && basin < basinStamp.Length && basinStamp[basin] == bGen)
+                {
+                    reach[coast] = generation;
+                    qBuf[qTail++] = coast;
+                }
             }
         }
-        while (board.Frontier.Count > 0)
+        while (qHead < qTail)
         {
-            var province = board.Frontier.Dequeue();
-            foreach (var neighbor in topology.Neighbors[province])
+            var province = qBuf[qHead++];
+            var adj = neighbors[province];
+            for (var ai = 0; ai < adj.Length; ai++)
             {
-                if (reach[neighbor] == generation || !Passable(nation, controllers[neighbor], board)) continue;
+                var neighbor = adj[ai];
+                if (reach[neighbor] == generation) continue;
+                var ctrl = controllers[neighbor];
+                if (ctrl != ownMap && (ctrl == 0 || ctrl >= corrStamp.Length || corrStamp[ctrl] != corrGen))
+                    continue;
                 reach[neighbor] = generation;
-                board.Frontier.Enqueue(neighbor);
+                qBuf[qTail++] = neighbor;
             }
         }
     }
@@ -825,19 +1013,27 @@ public static class LogisticsSystem
         var at = army.ProvinceId;
         if (army.EmbarkedFleetId >= 0 || at <= 0 || at > topology.ProvinceCount) return;
         var region = topology.ProvinceToState[at];
-        board.Unreached[region] = board.Unreached.GetValueOrDefault(region) + army.Divisions;
+        if (region >= board.UnreachedGenByState.Length) board.EnsureStateCapacity(region);
+        if (board.UnreachedGenByState[region] != board.UnreachedGen)
+        {
+            board.UnreachedGenByState[region] = board.UnreachedGen;
+            board.UnreachedByState[region] = army.Divisions;
+        }
+        else
+        {
+            board.UnreachedByState[region] += army.Divisions;
+        }
     }
 
-    /// <summary>
-    /// Ask the people around a formation the road did not reach whether they will feed it. On
-    /// ground an enemy holds they feed it half as well: there is a garrison in the town.
-    /// </summary>
     private static bool Forage(Campaign campaign, Nation nation, Army army, Scratch board)
     {
         var topology = campaign.ProvinceMap;
         var at = army.ProvinceId;
         if (at <= 0 || at > topology.ProvinceCount || at >= campaign.ProvinceController.Length) return false;
-        var standing = board.Unreached.GetValueOrDefault(topology.ProvinceToState[at]);
+        var region = topology.ProvinceToState[at];
+        var standing = (uint)region < (uint)board.UnreachedGenByState.Length && board.UnreachedGenByState[region] == board.UnreachedGen
+            ? board.UnreachedByState[region]
+            : 0f;
         var amongFriends = Passable(nation, campaign.ProvinceController[at], board);
         return Partisans.LiveOffTheLand(campaign, nation, army, standing, amongFriends);
     }
@@ -918,8 +1114,8 @@ public static class LogisticsSystem
         Dictionary<int, float> cutOffDivisions = null;
         var besiegedBuilt = false;
         GenerationalStampSet besieged = null;
-        var armies = campaign.Armies;
-        for (var i = 0; i < armies.Count; i++)
+        var armies = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(campaign.Armies);
+        for (var i = 0; i < armies.Length; i++)
         {
             var army = armies[i];
             if (!army.CutOff)

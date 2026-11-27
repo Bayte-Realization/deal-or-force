@@ -54,14 +54,17 @@ static class DatePlateTests
     // Copied verbatim; RulesInStep compares each member with the game's.
 
     internal const int Slowest = 1;
-    internal const int Fastest = 5;
+    internal const int Fastest = 8;
 
     internal static int Clamp(int speed) => Math.Clamp(speed, Slowest, Fastest);
 
+    /// <summary>One step slower, never below the slowest: "slower" at 1 stays at 1.</summary>
     internal static int Slower(int speed) => Clamp(speed - 1);
 
+    /// <summary>One step faster, never above the fastest: "faster" at 5 stays at 5.</summary>
     internal static int Faster(int speed) => Clamp(speed + 1);
 
+    /// <summary>Mark `pip` (1 to 5) is lit when the speed has reached it.</summary>
     internal static bool Lit(int pip, int speed) => pip >= Slowest && pip <= Clamp(speed);
 
     internal static int PipAt(float x, float size, float gap)
@@ -76,15 +79,15 @@ static class DatePlateTests
     private static void Speeds()
     {
         Check(Slower(1) == 1, "\"slower\" at speed 1 stays at 1");
-        Check(Faster(5) == 5, "\"faster\" at speed 5 stays at 5");
+        Check(Faster(5) == 6 && Faster(8) == 8, "\"faster\" at speed 5 reaches 6 and stays at 8");
         Check(Slower(3) == 2 && Faster(3) == 4, "in between, each is one step");
         var speed = 1;
-        for (var i = 0; i < 10; i++) speed = Faster(speed);
-        Check(speed == Fastest, "ten presses of \"faster\" end at the fastest speed, not past it");
-        for (var i = 0; i < 10; i++) speed = Slower(speed);
-        Check(speed == Slowest, "ten presses of \"slower\" end at the slowest, not below it");
-        Check(Clamp(0) == 1 && Clamp(-4) == 1 && Clamp(6) == 5 && Clamp(int.MaxValue) == 5,
-            "a speed from anywhere (a save, a console command) is brought inside 1..5");
+        for (var i = 0; i < 12; i++) speed = Faster(speed);
+        Check(speed == Fastest, "twelve presses of \"faster\" end at the fastest speed, not past it");
+        for (var i = 0; i < 12; i++) speed = Slower(speed);
+        Check(speed == Slowest, "twelve presses of \"slower\" end at the slowest, not below it");
+        Check(Clamp(0) == 1 && Clamp(-4) == 1 && Clamp(9) == 8 && Clamp(int.MaxValue) == 8,
+            "a speed from anywhere (a save, a console command) is brought inside 1..8");
 
         // The engine has as many speeds as the plate has marks, and each is faster than the last.
         var campaign = Campaign.CreateBootstrap(73);
@@ -103,8 +106,12 @@ static class DatePlateTests
         // passed here while proving nothing about the button.
         var game = Source("Scripts/DealOrForceGame.cs");
         var toggle = HudResourceTests.MemberText(game, "void TogglePause()");
-        Check(toggle.Contains("_campaign.IsPaused = !_campaign.IsPaused;"), "the game's pause turns the campaign's own flag over");
-        Check(game.Contains("_speed = Mathf.Clamp(speed, 1, 5);"), "the game's SetSpeed keeps the speed inside 1..5 whatever it is handed");
+        Check(toggle.Contains("_simRunner.SetDesiredClockState(desiredPaused, _speed);") &&
+              toggle.Contains("_campaign.IsPaused = !_campaign.IsPaused;"),
+            "the game's pause updates desired clock state non-blocking or toggles the campaign flag");
+        Check(game.Contains("var maxSpeed = Math.Max(1, _campaign?.Defines?.MaxSpeed ?? 8);") &&
+              game.Contains("_speed = Mathf.Clamp(speed, 1, maxSpeed);"),
+            "the game's SetSpeed keeps the speed inside 1..MaxSpeed (8) whatever it is handed");
 
         // The marks are dimmer while paused, and the clock is paused from many places that never
         // call UpdateSpeedButtons (an event with pause_on_event, a peace conference, the save list,
@@ -122,13 +129,13 @@ static class DatePlateTests
 
     private static void Marks()
     {
-        Check(Lit(1, 3) && Lit(3, 3) && !Lit(4, 3) && !Lit(5, 3), "at speed 3 the first three marks are lit, not the last two");
-        Check(Lit(1, 1) && !Lit(2, 1) && Enumerable.Range(1, 5).All(pip => Lit(pip, 5)), "speed 1 lights one mark, speed 5 all five");
-        Check(!Lit(0, 5) && !Lit(6, 5) && Lit(1, 0), "there is no mark 0 or 6, and a speed below 1 still lights the first");
-        // Marks 8 px wide with 4 px between them (hud.speed_pips = 8, the gap half of it).
+        Check(Lit(1, 3) && Lit(3, 3) && !Lit(4, 3) && !Lit(8, 3), "at speed 3 the first three marks are lit, not the last five");
+        Check(Lit(1, 1) && !Lit(2, 1) && Enumerable.Range(1, 8).All(pip => Lit(pip, 8)), "speed 1 lights one mark, speed 8 all eight");
+        Check(!Lit(0, 8) && !Lit(9, 8) && Lit(1, 0), "there is no mark 0 or 9, and a speed below 1 still lights the first");
+        // Marks 8 px wide with 4 px between them (PipAt geometric rule).
         Check(PipAt(0, 8, 4) == 1 && PipAt(7.9f, 8, 4) == 1 && PipAt(11.9f, 8, 4) == 1, "a click on the first mark, or in the gap after it, is speed 1");
-        Check(PipAt(12, 8, 4) == 2 && PipAt(48, 8, 4) == 5 && PipAt(55, 8, 4) == 5, "the second mark starts at 12 px and the fifth at 48");
-        Check(PipAt(400, 8, 4) == 5 && PipAt(-3, 8, 4) == 1 && PipAt(float.NaN, 8, 4) == 1, "a click outside the row lands on the nearest end");
+        Check(PipAt(12, 8, 4) == 2 && PipAt(84, 8, 4) == 8 && PipAt(91, 8, 4) == 8, "the second mark starts at 12 px and the eighth at 84");
+        Check(PipAt(400, 8, 4) == 8 && PipAt(-3, 8, 4) == 1 && PipAt(float.NaN, 8, 4) == 1, "a click outside the row lands on the nearest end");
         Check(InterfaceSkin.Metric("hud.speed_pips", -1f) is >= 5f and <= 16f, "the marks' size is data (hud.speed_pips) and inside the range the plate clamps to");
     }
 
@@ -196,17 +203,17 @@ static class DatePlateTests
             ("Scripts/ui/DatePlateUI.cs", "_pause = ActionButton(\"II\", TogglePause"),
             ("Scripts/DealOrForceGame.cs", "TogglePause();")
         }),
-        new("Speeds 1 to 5", "five numbered buttons", "a click on one of the five marks on the date plate, and keys 1 to 5", new[]
+        new("Speeds 1 to 8", "numbered speed buttons", "a click on one of the eight marks on the date plate, and keys 1 to 8", new[]
         {
             ("Scripts/ui/DatePlateUI.cs", "SetSpeed(speed, resume: false);"),
             ("Scripts/DealOrForceGame.cs", "Key.Key1 or Key.Kp1 => 1"),
-            ("Scripts/DealOrForceGame.cs", "Key.Key5 or Key.Kp5 => 5")
+            ("Scripts/DealOrForceGame.cs", "Key.Key8 or Key.Kp8 => 8")
         }),
         new("Slower / faster", "keys only", "\"−\" and \"+\" on the date plate, and the minus and plus keys", new[]
         {
             ("Scripts/ui/DatePlateUI.cs", "ActionButton(\"−\", () => StepSpeed(-1)"),
             ("Scripts/ui/DatePlateUI.cs", "ActionButton(\"+\", () => StepSpeed(1)"),
-            ("Scripts/DealOrForceGame.cs", "Key.Equal or Key.Plus or Key.KpAdd => 6"),
+            ("Scripts/DealOrForceGame.cs", "Key.Equal or Key.Plus or Key.KpAdd => 9"),
             ("Scripts/DealOrForceGame.cs", "Key.Minus or Key.KpSubtract => -1")
         }),
         new("Music", "the note in the clock row", "\"Music\" in the pause menu beside Settings, and Settings' own \"Sound and artwork\"", new[]
@@ -263,9 +270,9 @@ static class DatePlateTests
     {
         var game = Source("Scripts/DealOrForceGame.cs");
         var keys = HudResourceTests.MemberText(game, "int SpeedKey(InputEventKey key)");
-        for (var speed = 1; speed <= 5; speed++)
+        for (var speed = 1; speed <= 8; speed++)
             Check(keys.Contains($"Key.Key{speed} or Key.Kp{speed} => {speed}"), $"key {speed} still sets speed {speed}");
-        Check(game.Contains("if (step is >= 1 and <= 5) { SetSpeed(step, resume: false);") && game.Contains("SetSpeed(_speed + (step > 0 ? 1 : -1), resume: false);"),
+        Check(game.Contains("if (step is >= 1 and <= 8) { SetSpeed(step, resume: false);") && game.Contains("SetSpeed(_speed + (step > 0 ? 1 : -1), resume: false);"),
             "as in Paradox games, digits and plus/minus choose the speed without starting the clock; Space and the pause button start it (owner, 17 November)");
         Check(game.Contains("if (key.Keycode != Key.Space && key.PhysicalKeycode != Key.Space) return;"), "Space still pauses");
         Check(game.Contains("else if (_hudLayer.Visible)\n            ShowPauseMenu();") ||
@@ -314,8 +321,10 @@ static class DatePlateTests
         var build = HudResourceTests.MemberText(src, "void BuildDatePlate()");
         var children = Regex.Matches(build, @"controls\.AddChild\(").Count;
         Check(children == 5, $"the controls row holds slower, pause, faster, the marks and the chip, and nothing else ({children})");
-        var size = InterfaceSkin.Metric("hud.speed_pips", 8f);
-        var marks = size * 5 + MathF.Round(size * .5f) * 4;
+        var rawSize = InterfaceSkin.Metric("hud.speed_pips", 8f);
+        var size = Math.Clamp(MathF.Round(rawSize * .64f), 5f, 10f);
+        var gap = Math.Clamp(MathF.Round(size * .4f), 2f, 4f);
+        var marks = size * Fastest + gap * (Fastest - 1);
         var width = plate.OffsetRight - plate.OffsetLeft;
         var fixedPart = 2 + 16 + 58 + 8 + 28 + 34 + 28 + marks + 3 * 4;
         var chipRoom = width - fixedPart - 4;

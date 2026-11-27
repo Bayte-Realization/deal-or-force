@@ -41,6 +41,7 @@ public static partial class NativeKernelsLoader
     public const uint CapEconomyDemo = 1u << 7;
     public const uint CapIncrementalRaster = 1u << 8;
     public const uint CapWartimeGraph = 1u << 9;
+    public const uint CapEconCombat = 1u << 10;
 
     /// <summary>Allows differential and fallback tests to force the pure-C# path cleanly in-process.</summary>
     public static volatile bool SimulateUnavailableForTests;
@@ -53,7 +54,7 @@ public static partial class NativeKernelsLoader
     /// <c>DOF_NATIVE_DIPLOMACY=0|1</c>, <c>DOF_NATIVE_MARKET=0|1</c>, <c>DOF_NATIVE_DISTANCE=0|1</c>,
     /// <c>DOF_NATIVE_ECONOMY_DEMO=0|1</c>, <c>DOF_NATIVE_DEMO_AGGREGATE=0|1</c>,
     /// <c>DOF_NATIVE_INCREMENTAL_RASTER=0|1</c>, <c>DOF_NATIVE_WARTIME_GRAPH=0|1</c>,
-    /// <c>DOF_NATIVE_POLITICAL_COHORTS=0|1</c>.
+    /// <c>DOF_NATIVE_POLITICAL_COHORTS=0|1</c>, <c>DOF_NATIVE_ECON_COMBAT=0|1</c>.
     /// </summary>
     public static bool EnableRasterDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_RASTER", defaultValue: true);
     public static bool EnableDistanceFieldDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_DISTANCE_FIELD", defaultValue: true);
@@ -67,6 +68,7 @@ public static partial class NativeKernelsLoader
     public static readonly bool EnableIncrementalRasterDefault = ReadEnvFlag("DOF_NATIVE_INCREMENTAL_RASTER", defaultValue: true);
     public static readonly bool EnableWartimeGraphDefault = ReadEnvFlag("DOF_NATIVE_WARTIME_GRAPH", defaultValue: true);
     public static readonly bool EnablePoliticalCohortsDefault = ReadEnvFlag("DOF_NATIVE_POLITICAL_COHORTS", defaultValue: true);
+    public static bool EnableEconCombatDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_ECON_COMBAT", defaultValue: true);
 
     public static bool IsAvailable
     {

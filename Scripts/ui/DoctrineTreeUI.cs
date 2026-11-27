@@ -235,7 +235,7 @@ public partial class DealOrForceGame
     private void SelectDoctrineBook(string id)
     {
         _doctrineBook = id;
-        _doctrineStructure = "";
+        _doctrineStructure = ""; ResetDoctrineAbandonConfirm();
         ResetDoctrineZoom();
         if (_doctrineScroll is not null)
         {
@@ -445,14 +445,7 @@ public partial class DealOrForceGame
                     node.Days, Fmt.Number(node.RushCost));
 
             var row = body.GetNodeOrNull<Control>("Buttons_" + node.Id);
-            var study = row?.GetNodeOrNull<Button>("StudyArticle_" + node.Id);
-            if (study is not null)
-                DoctrineButton(study, n, branch, node, false, known, learning,
-                    Loc.Format("Study · {0}", Fmt.Number(node.Cost)));
-            var rush = row?.GetNodeOrNull<Button>("RushArticle_" + node.Id);
-            if (rush is not null)
-                DoctrineButton(rush, n, branch, node, true, known, learning,
-                    Loc.Format("Rush · {0}", Fmt.Number(node.RushCost)));
+            RefreshDoctrineCardButtons(row, n, branch, node, known, learning);
             FitDoctrineTypography(card);
             var cardSize = new Vector2(DoctrineCardWidth, DoctrineCardHeight);
             card.CustomMinimumSize = cardSize;
@@ -585,6 +578,7 @@ public partial class DealOrForceGame
         rush.ExpandIcon = false;
         rush.AddThemeConstantOverride("icon_max_width", 18);
         buttons.AddChild(rush);
+        AddDoctrineCancelButton(buttons, branch.Id, node.Id);
 
         card.TooltipText = Ui.Tip(Tr(node.Name) + "\n" + Tr(node.Description));
         return card;

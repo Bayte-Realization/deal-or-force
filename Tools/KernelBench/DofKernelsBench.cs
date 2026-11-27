@@ -44,6 +44,7 @@ internal static class DofKernelsBench
         failures += BenchFrontierDirtyRect(samples, warmup);
         failures += BenchPoliticalCohortsDrift(samples, warmup);
         failures += BenchGraphWartimeKernels(samples, warmup);
+        failures += BenchTradeAffinityAndEconCombat(samples, warmup);
         return failures == 0 ? 0 : 1;
     }
 
@@ -903,6 +904,210 @@ internal static class DofKernelsBench
         bool visOk = csReach.AsSpan().SequenceEqual(nvReach);
         Report($"graph_vision_seed ({ownedArr.Length} own)", csVis, nvVis, visOk ? "BIT-EXACT" : "MISMATCH");
         if (!visOk) failures++;
+
+        return failures;
+    }
+
+    private static int BenchTradeAffinityAndEconCombat(int samples, int warmup)
+    {
+        int failures = 0;
+        var rng = new Random(909);
+
+        // 1. Trade ComputeAffinity SIMD (160x160 = 25,600 pairs)
+        const int bCnt = 160;
+        const int sCnt = 160;
+        var campaign = new Campaign(909);
+        var arena = NativeTradeArena.ForCampaign(campaign, 512);
+        var bIds = new int[bCnt]; var sIds = new int[sCnt];
+        var bMap = new ushort[bCnt]; var sMap = new ushort[sCnt];
+        var bReach = new float[bCnt]; var sReach = new float[sCnt];
+        var dist = new float[bCnt * sCnt];
+        var op = new float[bCnt * sCnt];
+        var st = new byte[bCnt * sCnt];
+        var fl = new byte[bCnt * sCnt];
+        var csAff = new float[bCnt * sCnt];
+        var nvAff = new float[bCnt * sCnt];
+        for (int i = 0; i < bCnt; i++)
+        {
+            bIds[i] = i; sIds[i] = i;
+            bMap[i] = (ushort)(i + 1); sMap[i] = (ushort)(i + 1);
+            bReach[i] = 0.45f + (float)(rng.NextDouble() * 1.05);
+            sReach[i] = 0.45f + (float)(rng.NextDouble() * 1.05);
+        }
+        for (int b = 0; b < bCnt; b++)
+        {
+            for (int s = 0; s < sCnt; s++)
+            {
+                int idx = b * sCnt + s;
+                dist[idx] = (idx % 11 == 0) ? 0f : (float)(150 + rng.NextDouble() * 9000);
+                op[idx] = (float)(rng.NextDouble() * 320 - 160);
+                st[idx] = (byte)(rng.Next(0, 3));
+                byte f = (byte)(rng.Next(0, 3) != 0 ? 1 : 0);
+                if (rng.Next(0, 16) == 0) f |= 2;
+                if (rng.Next(0, 4) == 0) f |= 8;
+                if (rng.Next(0, 8) == 0) f |= 4;
+                if (rng.Next(0, 7) == 0) f |= 16;
+                if (b == s) f |= 32;
+                fl[idx] = f;
+            }
+        }
+        void ManagedAff()
+        {
+            for (int b = 0; b < bCnt; b++)
+            {
+                float br = bReach[b];
+                int row = b * sCnt;
+                for (int s = 0; s < sCnt; s++)
+                {
+                    int idx = row + s;
+                    byte f = fl[idx];
+                    if ((f & 32) != 0) { csAff[idx] = 0f; continue; }
+                    if ((f & 2) != 0) { csAff[idx] = -1f; continue; }
+                    float sc = 1f;
+                    if ((f & 1) != 0)
+                    {
+                        sc *= M.Clamp(1f + op[idx] / 160f, 0.35f, 1.65f);
+                        if (st[idx] == 1) sc *= 1.30f;
+                        else if (st[idx] == 2) sc *= 0.68f;
+                    }
+                    if ((f & 8) != 0) sc *= (f & 4) != 0 ? 1.35f : 0.85f;
+                    if ((f & 16) == 0)
+                    {
+                        float d = dist[idx] > 0f ? dist[idx] : 12000f;
+                        float span = d / 4200f;
+                        float falloff = 1f / (1f + span * span);
+                        float reach = (br + sReach[s]) * 0.5f;
+                        sc *= falloff * reach;
+                    }
+                    csAff[idx] = sc;
+                }
+            }
+        }
+        var csA = Measure(warmup, samples, ManagedAff);
+        var nvA = Measure(warmup, samples, () => arena!.TryComputeAffinity(
+            bIds, bMap, bReach, sIds, sMap, sReach, dist, sCnt, sCnt,
+            op, st, fl, sCnt, 4200f, 1.35f, 0.85f, nvAff, sCnt));
+        ManagedAff();
+        arena!.TryComputeAffinity(bIds, bMap, bReach, sIds, sMap, sReach, dist, sCnt, sCnt,
+            op, st, fl, sCnt, 4200f, 1.35f, 0.85f, nvAff, sCnt);
+        bool affOk = true;
+        for (int i = 0; i < csAff.Length; i++)
+            if (BitConverter.SingleToInt32Bits(csAff[i]) != BitConverter.SingleToInt32Bits(nvAff[i]))
+            { affOk = false; break; }
+        Report($"trade_affinity ({bCnt}x{sCnt})", csA, nvA, affOk ? "BIT-EXACT" : "MISMATCH");
+        if (!affOk) failures++;
+
+        // 2. CombatLineProfile + CombatSideTotals (N=64)
+        const int cN = 64;
+        var div = new float[cN]; var hard = new float[cN]; var arm = new float[cN];
+        var prc = new float[cN]; var sup = new float[cN]; var rec = new float[cN];
+        var rpow = new float[cN]; var off = new float[cN]; var atr = new float[cN];
+        var ast = new float[cN]; var ar = new float[cN]; var mun = new float[cN];
+        var enc = new float[cN]; var spr = new float[cN]; var ca = new float[cN];
+        var ds = new float[cN]; var dtr = new float[cN]; var dst = new float[cN];
+        var dr = new float[cN]; var cd = new float[cN]; var ent = new float[cN];
+        for (int i = 0; i < cN; i++)
+        {
+            div[i] = i == 0 ? 0.001f : (float)(0.5 + rng.NextDouble() * 8.0);
+            hard[i] = (float)rng.NextDouble(); arm[i] = (float)(rng.NextDouble() * 80);
+            prc[i] = (float)(rng.NextDouble() * 80); sup[i] = (float)(rng.NextDouble() * 1.2 - 0.1);
+            rec[i] = (float)rng.NextDouble();
+            rpow[i] = i == 3 ? 0.002f : (float)(0.5 + rng.NextDouble() * 10);
+            off[i] = (float)(5 + rng.NextDouble() * 30); atr[i] = (float)(0.8 + rng.NextDouble() * 0.4);
+            ast[i] = (float)(0.85 + rng.NextDouble() * 0.3); ar[i] = (float)(0.9 + rng.NextDouble() * 0.25);
+            mun[i] = (float)(0.6 + rng.NextDouble() * 0.4); enc[i] = (float)(0.7 + rng.NextDouble() * 0.3);
+            spr[i] = (float)(0.9 + rng.NextDouble() * 0.2); ca[i] = (float)(0.9 + rng.NextDouble() * 0.2);
+            ds[i] = (float)(5 + rng.NextDouble() * 30); dtr[i] = (float)(0.8 + rng.NextDouble() * 0.4);
+            dst[i] = (float)(0.85 + rng.NextDouble() * 0.3); dr[i] = (float)(0.9 + rng.NextDouble() * 0.25);
+            cd[i] = (float)(0.9 + rng.NextDouble() * 0.2); ent[i] = (float)rng.NextDouble();
+        }
+        float ch = 0, caOut = 0, cp = 0, csOut = 0, cr = 0;
+        float nh = 0, na = 0, np = 0, ns = 0, nr = 0;
+        var csLp = Measure(warmup, samples, () => NativeCombatSupportKernels.ManagedCombatLineProfile(div, hard, arm, prc, sup, rec, out ch, out caOut, out cp, out csOut, out cr));
+        var nvLp = Measure(warmup, samples, () => NativeCombatSupportKernels.TryNativeCombatLineProfile(div, hard, arm, prc, sup, rec, out nh, out na, out np, out ns, out nr));
+        bool lpOk = BitConverter.SingleToInt32Bits(ch) == BitConverter.SingleToInt32Bits(nh) &&
+                    BitConverter.SingleToInt32Bits(caOut) == BitConverter.SingleToInt32Bits(na) &&
+                    BitConverter.SingleToInt32Bits(cp) == BitConverter.SingleToInt32Bits(np) &&
+                    BitConverter.SingleToInt32Bits(csOut) == BitConverter.SingleToInt32Bits(ns) &&
+                    BitConverter.SingleToInt32Bits(cr) == BitConverter.SingleToInt32Bits(nr);
+        Report($"combat_line_profile (N={cN})", csLp, nvLp, lpOk ? "BIT-EXACT" : "MISMATCH");
+        if (!lpOk) failures++;
+
+        var csTot = new double[9]; var nvTot = new double[9];
+        var csSt = Measure(warmup, samples, () => NativeCombatSupportKernels.ManagedCombatSideTotals(rpow, off, atr, ast, ar, mun, enc, spr, ca, ds, dtr, dst, dr, cd, ent, true, csTot));
+        var nvSt = Measure(warmup, samples, () => NativeCombatSupportKernels.TryNativeCombatSideTotals(rpow, off, atr, ast, ar, mun, enc, spr, ca, ds, dtr, dst, dr, cd, ent, true, nvTot));
+        bool stOk = true;
+        for (int k = 0; k < 9; k++)
+            if (BitConverter.DoubleToInt64Bits(csTot[k]) != BitConverter.DoubleToInt64Bits(nvTot[k]))
+            { stOk = false; break; }
+        Report($"combat_side_totals (N={cN})", csSt, nvSt, stOk ? "BIT-EXACT" : "MISMATCH");
+        if (!stOk) failures++;
+
+        // 3. SupportAttritionBatch + SupportReachBatch (N=128)
+        const int sN = 128;
+        var th = new float[sN]; var mf = new float[sN];
+        var str1 = new float[sN]; var str2 = new float[sN];
+        var exp1 = new float[sN]; var exp2 = new float[sN];
+        var loss1 = new float[sN]; var loss2 = new float[sN];
+        var bLat = new float[sN]; var bLon = new float[sN]; var rk = new float[sN];
+        var rw1 = new float[sN]; var rw2 = new float[sN];
+        for (int i = 0; i < sN; i++)
+        {
+            th[i] = i % 5 == 0 ? 0f : (float)(rng.NextDouble() * 15);
+            mf[i] = 0.8f + (float)(rng.NextDouble() * 0.4);
+            str1[i] = str2[i] = (float)(0.2 + rng.NextDouble() * 0.8);
+            exp1[i] = exp2[i] = (float)(rng.NextDouble() * 0.8);
+            bLat[i] = (float)(35 + rng.NextDouble() * 25);
+            bLon[i] = (float)(10 + rng.NextDouble() * 30);
+            rk[i] = 400f + i * 8f;
+        }
+        var csAt = Measure(warmup, samples, () => NativeCombatSupportKernels.ManagedSupportAttritionBatch(th, mf, 0.12f, 8f, 0.1f, str1, exp1, loss1));
+        var nvAt = Measure(warmup, samples, () => NativeCombatSupportKernels.TryNativeSupportAttritionBatch(th, mf, 0.12f, 8f, 0.1f, str2, exp2, loss2));
+        for (int i = 0; i < sN; i++) { str1[i] = str2[i] = 0.8f; exp1[i] = exp2[i] = 0.25f; }
+        NativeCombatSupportKernels.ManagedSupportAttritionBatch(th, mf, 0.12f, 8f, 0.1f, str1, exp1, loss1);
+        NativeCombatSupportKernels.TryNativeSupportAttritionBatch(th, mf, 0.12f, 8f, 0.1f, str2, exp2, loss2);
+        bool atOk = true;
+        for (int i = 0; i < sN; i++)
+            if (BitConverter.SingleToInt32Bits(str1[i]) != BitConverter.SingleToInt32Bits(str2[i]) ||
+                BitConverter.SingleToInt32Bits(exp1[i]) != BitConverter.SingleToInt32Bits(exp2[i]) ||
+                BitConverter.SingleToInt32Bits(loss1[i]) != BitConverter.SingleToInt32Bits(loss2[i]))
+            { atOk = false; break; }
+        Report($"support_attrition (N={sN})", csAt, nvAt, atOk ? "BIT-EXACT" : "MISMATCH");
+        if (!atOk) failures++;
+
+        var csRc = Measure(warmup, samples, () => NativeCombatSupportKernels.ManagedSupportReachBatch(48f, 20f, bLat, bLon, rk, str1, exp1, rw1));
+        var nvRc = Measure(warmup, samples, () => NativeCombatSupportKernels.TryNativeSupportReachBatch(48f, 20f, bLat, bLon, rk, str1, exp1, rw2));
+        bool rcOk = true;
+        for (int i = 0; i < sN; i++)
+            if (MathF.Abs(rw1[i] - rw2[i]) > 1e-5f) { rcOk = false; break; }
+        Report($"support_reach (N={sN})", csRc, nvRc, rcOk ? "MATCH" : "MISMATCH");
+        if (!rcOk) failures++;
+
+        // 4. EconStateWeekPost (N=700)
+        const int eN = 700;
+        var nSol = new float[eN]; var wRad = new float[eN]; var cRad = new float[eN];
+        var sSol1 = new float[eN]; var sSol2 = new float[eN];
+        var sRad1 = new float[eN]; var sRad2 = new float[eN];
+        for (int i = 0; i < eN; i++)
+        {
+            nSol[i] = (float)rng.NextDouble();
+            wRad[i] = (float)(rng.NextDouble() * 0.04 - 0.02);
+            cRad[i] = (float)(rng.NextDouble() * 0.01);
+            sSol1[i] = sSol2[i] = (float)rng.NextDouble();
+            sRad1[i] = sRad2[i] = (float)rng.NextDouble();
+        }
+        var csEc = Measure(warmup, samples, () => NativeCombatSupportKernels.ManagedEconStateWeekPost(nSol, wRad, cRad, sSol1, sRad1));
+        var nvEc = Measure(warmup, samples, () => NativeCombatSupportKernels.TryNativeEconStateWeekPost(nSol, wRad, cRad, sSol2, sRad2));
+        for (int i = 0; i < eN; i++) { sSol1[i] = sSol2[i] = 0.5f; sRad1[i] = sRad2[i] = 0.25f; }
+        NativeCombatSupportKernels.ManagedEconStateWeekPost(nSol, wRad, cRad, sSol1, sRad1);
+        NativeCombatSupportKernels.TryNativeEconStateWeekPost(nSol, wRad, cRad, sSol2, sRad2);
+        bool ecOk = true;
+        for (int i = 0; i < eN; i++)
+            if (BitConverter.SingleToInt32Bits(sSol1[i]) != BitConverter.SingleToInt32Bits(sSol2[i]) ||
+                BitConverter.SingleToInt32Bits(sRad1[i]) != BitConverter.SingleToInt32Bits(sRad2[i]))
+            { ecOk = false; break; }
+        Report($"econ_state_week_post (N={eN})", csEc, nvEc, ecOk ? "BIT-EXACT" : "MISMATCH");
+        if (!ecOk) failures++;
 
         return failures;
     }

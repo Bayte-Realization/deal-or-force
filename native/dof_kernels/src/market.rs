@@ -480,7 +480,94 @@ pub fn clear_nations_batch(
         let mut gross_output = 0.0f32;
         let mut real = 0.0f32;
 
-        for g in 0..good_count {
+        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64")))]
+        let mut g = 0usize;
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64"))]
+        let mut g: usize;
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx2") {
+                g = unsafe {
+                    clear_nations_row_avx2(
+                        good_count,
+                        base_price,
+                        essential_weight,
+                        &production[row..row + good_count],
+                        &demand[row..row + good_count],
+                        &imports[row..row + good_count],
+                        &exports[row..row + good_count],
+                        &relieved[row..row + good_count],
+                        &satisfaction[row..row + good_count],
+                        &price[row..row + good_count],
+                        tariff,
+                        price_share,
+                        band_low,
+                        band_high,
+                        &mut shortages,
+                        &mut trade,
+                        &mut tariffs,
+                        &mut gross_output,
+                        &mut real,
+                    )
+                };
+            } else {
+                g = unsafe {
+                    clear_nations_row_sse2(
+                        good_count,
+                        base_price,
+                        essential_weight,
+                        &production[row..row + good_count],
+                        &demand[row..row + good_count],
+                        &imports[row..row + good_count],
+                        &exports[row..row + good_count],
+                        &relieved[row..row + good_count],
+                        &satisfaction[row..row + good_count],
+                        &price[row..row + good_count],
+                        tariff,
+                        price_share,
+                        band_low,
+                        band_high,
+                        &mut shortages,
+                        &mut trade,
+                        &mut tariffs,
+                        &mut gross_output,
+                        &mut real,
+                    )
+                };
+            }
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            if std::arch::is_aarch64_feature_detected!("neon") {
+                g = unsafe {
+                    clear_nations_row_neon(
+                        good_count,
+                        base_price,
+                        essential_weight,
+                        &production[row..row + good_count],
+                        &demand[row..row + good_count],
+                        &imports[row..row + good_count],
+                        &exports[row..row + good_count],
+                        &relieved[row..row + good_count],
+                        &satisfaction[row..row + good_count],
+                        &price[row..row + good_count],
+                        tariff,
+                        price_share,
+                        band_low,
+                        band_high,
+                        &mut shortages,
+                        &mut trade,
+                        &mut tariffs,
+                        &mut gross_output,
+                        &mut real,
+                    )
+                };
+            } else {
+                g = 0;
+            }
+        }
+
+        while g < good_count {
             let idx = row + g;
             let prod = production[idx];
             let dem = demand[idx];
@@ -507,6 +594,7 @@ pub fn clear_nations_batch(
             };
             gross_output += sold * (bp + price_share * (clamped_p - bp));
             real += prod * bp;
+            g += 1;
         }
 
         let shortage_idx = if total_weight <= 0.0f32 {
@@ -523,4 +611,322 @@ pub fn clear_nations_batch(
     }
 
     Ok(())
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn clear_nations_row_avx2(
+    good_count: usize,
+    base_price: &[f32],
+    essential_weight: &[f32],
+    production: &[f32],
+    demand: &[f32],
+    imports: &[f32],
+    exports: &[f32],
+    relieved: &[f32],
+    satisfaction: &[f32],
+    price: &[f32],
+    tariff: f32,
+    price_share: f32,
+    band_low: f32,
+    band_high: f32,
+    shortages: &mut f32,
+    trade: &mut f32,
+    tariffs: &mut f32,
+    gross_output: &mut f32,
+    real: &mut f32,
+) -> usize {
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+    use crate::simd::x86_avx2::{clamp, max0};
+
+    let one = _mm256_set1_ps(1.0f32);
+    let tar_v = _mm256_set1_ps(tariff);
+    let ps_v = _mm256_set1_ps(price_share);
+    let bl_v = _mm256_set1_ps(band_low);
+    let bh_v = _mm256_set1_ps(band_high);
+    let nan_v = _mm256_set1_ps(f32::NAN);
+
+    let mut b_sh = [0.0f32; 8];
+    let mut b_tr = [0.0f32; 8];
+    let mut b_tf = [0.0f32; 8];
+    let mut b_go = [0.0f32; 8];
+    let mut b_rl = [0.0f32; 8];
+
+    let mut g = 0usize;
+    while g + 8 <= good_count {
+        let prod = _mm256_loadu_ps(production.as_ptr().add(g));
+        let dem = _mm256_loadu_ps(demand.as_ptr().add(g));
+        let imp = _mm256_loadu_ps(imports.as_ptr().add(g));
+        let exp = _mm256_loadu_ps(exports.as_ptr().add(g));
+        let rel = _mm256_loadu_ps(relieved.as_ptr().add(g));
+        let sat = _mm256_loadu_ps(satisfaction.as_ptr().add(g));
+        let pr = _mm256_loadu_ps(price.as_ptr().add(g));
+        let bp = _mm256_loadu_ps(base_price.as_ptr().add(g));
+        let ew = _mm256_loadu_ps(essential_weight.as_ptr().add(g));
+
+        let sh_v = _mm256_mul_ps(_mm256_sub_ps(one, sat), ew);
+        let tr_v = _mm256_mul_ps(_mm256_sub_ps(exp, imp), pr);
+        let tf_v = _mm256_mul_ps(_mm256_mul_ps(max0(_mm256_sub_ps(imp, rel)), pr), tar_v);
+
+        let clamped_p = clamp(pr, _mm256_mul_ps(bp, bl_v), _mm256_mul_ps(bp, bh_v));
+        let domestic = _mm256_add_ps(max0(_mm256_sub_ps(dem, imp)), exp);
+        let lt = _mm256_cmp_ps(prod, domestic, _CMP_LT_OQ);
+        let nan_any = _mm256_or_ps(
+            _mm256_cmp_ps(prod, prod, _CMP_UNORD_Q),
+            _mm256_cmp_ps(domestic, domestic, _CMP_UNORD_Q),
+        );
+        let sold = _mm256_blendv_ps(_mm256_blendv_ps(domestic, prod, lt), nan_v, nan_any);
+        let adj_bp = _mm256_add_ps(bp, _mm256_mul_ps(ps_v, _mm256_sub_ps(clamped_p, bp)));
+        let go_v = _mm256_mul_ps(sold, adj_bp);
+        let rl_v = _mm256_mul_ps(prod, bp);
+
+        _mm256_storeu_ps(b_sh.as_mut_ptr(), sh_v);
+        _mm256_storeu_ps(b_tr.as_mut_ptr(), tr_v);
+        _mm256_storeu_ps(b_tf.as_mut_ptr(), tf_v);
+        _mm256_storeu_ps(b_go.as_mut_ptr(), go_v);
+        _mm256_storeu_ps(b_rl.as_mut_ptr(), rl_v);
+
+        for k in 0..8 {
+            *shortages += b_sh[k];
+            *trade += b_tr[k];
+            *tariffs += b_tf[k];
+            *gross_output += b_go[k];
+            *real += b_rl[k];
+        }
+        g += 8;
+    }
+    g
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "sse2")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn clear_nations_row_sse2(
+    good_count: usize,
+    base_price: &[f32],
+    essential_weight: &[f32],
+    production: &[f32],
+    demand: &[f32],
+    imports: &[f32],
+    exports: &[f32],
+    relieved: &[f32],
+    satisfaction: &[f32],
+    price: &[f32],
+    tariff: f32,
+    price_share: f32,
+    band_low: f32,
+    band_high: f32,
+    shortages: &mut f32,
+    trade: &mut f32,
+    tariffs: &mut f32,
+    gross_output: &mut f32,
+    real: &mut f32,
+) -> usize {
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+    use crate::simd::x86_sse2::{clamp, max0, select};
+
+    let one = _mm_set1_ps(1.0f32);
+    let tar_v = _mm_set1_ps(tariff);
+    let ps_v = _mm_set1_ps(price_share);
+    let bl_v = _mm_set1_ps(band_low);
+    let bh_v = _mm_set1_ps(band_high);
+    let nan_v = _mm_set1_ps(f32::NAN);
+
+    let mut b_sh = [0.0f32; 4];
+    let mut b_tr = [0.0f32; 4];
+    let mut b_tf = [0.0f32; 4];
+    let mut b_go = [0.0f32; 4];
+    let mut b_rl = [0.0f32; 4];
+
+    let mut g = 0usize;
+    while g + 4 <= good_count {
+        let prod = _mm_loadu_ps(production.as_ptr().add(g));
+        let dem = _mm_loadu_ps(demand.as_ptr().add(g));
+        let imp = _mm_loadu_ps(imports.as_ptr().add(g));
+        let exp = _mm_loadu_ps(exports.as_ptr().add(g));
+        let rel = _mm_loadu_ps(relieved.as_ptr().add(g));
+        let sat = _mm_loadu_ps(satisfaction.as_ptr().add(g));
+        let pr = _mm_loadu_ps(price.as_ptr().add(g));
+        let bp = _mm_loadu_ps(base_price.as_ptr().add(g));
+        let ew = _mm_loadu_ps(essential_weight.as_ptr().add(g));
+
+        let sh_v = _mm_mul_ps(_mm_sub_ps(one, sat), ew);
+        let tr_v = _mm_mul_ps(_mm_sub_ps(exp, imp), pr);
+        let tf_v = _mm_mul_ps(_mm_mul_ps(max0(_mm_sub_ps(imp, rel)), pr), tar_v);
+
+        let clamped_p = clamp(pr, _mm_mul_ps(bp, bl_v), _mm_mul_ps(bp, bh_v));
+        let domestic = _mm_add_ps(max0(_mm_sub_ps(dem, imp)), exp);
+        let lt = _mm_cmplt_ps(prod, domestic);
+        let nan_any = _mm_or_ps(_mm_cmpunord_ps(prod, prod), _mm_cmpunord_ps(domestic, domestic));
+        let sold = select(nan_any, nan_v, select(lt, prod, domestic));
+        let adj_bp = _mm_add_ps(bp, _mm_mul_ps(ps_v, _mm_sub_ps(clamped_p, bp)));
+        let go_v = _mm_mul_ps(sold, adj_bp);
+        let rl_v = _mm_mul_ps(prod, bp);
+
+        _mm_storeu_ps(b_sh.as_mut_ptr(), sh_v);
+        _mm_storeu_ps(b_tr.as_mut_ptr(), tr_v);
+        _mm_storeu_ps(b_tf.as_mut_ptr(), tf_v);
+        _mm_storeu_ps(b_go.as_mut_ptr(), go_v);
+        _mm_storeu_ps(b_rl.as_mut_ptr(), rl_v);
+
+        for k in 0..4 {
+            *shortages += b_sh[k];
+            *trade += b_tr[k];
+            *tariffs += b_tf[k];
+            *gross_output += b_go[k];
+            *real += b_rl[k];
+        }
+        g += 4;
+    }
+    g
+}
+
+#[cfg(target_arch = "aarch64")]
+#[target_feature(enable = "neon")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn clear_nations_row_neon(
+    good_count: usize,
+    base_price: &[f32],
+    essential_weight: &[f32],
+    production: &[f32],
+    demand: &[f32],
+    imports: &[f32],
+    exports: &[f32],
+    relieved: &[f32],
+    satisfaction: &[f32],
+    price: &[f32],
+    tariff: f32,
+    price_share: f32,
+    band_low: f32,
+    band_high: f32,
+    shortages: &mut f32,
+    trade: &mut f32,
+    tariffs: &mut f32,
+    gross_output: &mut f32,
+    real: &mut f32,
+) -> usize {
+    use std::arch::aarch64::*;
+    use crate::simd::arm64_neon::{clamp, max0};
+
+    let one = vdupq_n_f32(1.0f32);
+    let tar_v = vdupq_n_f32(tariff);
+    let ps_v = vdupq_n_f32(price_share);
+    let bl_v = vdupq_n_f32(band_low);
+    let bh_v = vdupq_n_f32(band_high);
+    let nan_v = vdupq_n_f32(f32::NAN);
+
+    let mut b_sh = [0.0f32; 4];
+    let mut b_tr = [0.0f32; 4];
+    let mut b_tf = [0.0f32; 4];
+    let mut b_go = [0.0f32; 4];
+    let mut b_rl = [0.0f32; 4];
+
+    let mut g = 0usize;
+    while g + 4 <= good_count {
+        let prod = vld1q_f32(production.as_ptr().add(g));
+        let dem = vld1q_f32(demand.as_ptr().add(g));
+        let imp = vld1q_f32(imports.as_ptr().add(g));
+        let exp = vld1q_f32(exports.as_ptr().add(g));
+        let rel = vld1q_f32(relieved.as_ptr().add(g));
+        let sat = vld1q_f32(satisfaction.as_ptr().add(g));
+        let pr = vld1q_f32(price.as_ptr().add(g));
+        let bp = vld1q_f32(base_price.as_ptr().add(g));
+        let ew = vld1q_f32(essential_weight.as_ptr().add(g));
+
+        let sh_v = vmulq_f32(vsubq_f32(one, sat), ew);
+        let tr_v = vmulq_f32(vsubq_f32(exp, imp), pr);
+        let tf_v = vmulq_f32(vmulq_f32(max0(vsubq_f32(imp, rel)), pr), tar_v);
+
+        let clamped_p = clamp(pr, vmulq_f32(bp, bl_v), vmulq_f32(bp, bh_v));
+        let domestic = vaddq_f32(max0(vsubq_f32(dem, imp)), exp);
+        let lt = vcltq_f32(prod, domestic);
+        let nan_any = vorrq_u32(
+            vmvnq_u32(vceqq_f32(prod, prod)),
+            vmvnq_u32(vceqq_f32(domestic, domestic)),
+        );
+        let sold = vbslq_f32(nan_any, nan_v, vbslq_f32(lt, prod, domestic));
+        let adj_bp = vaddq_f32(bp, vmulq_f32(ps_v, vsubq_f32(clamped_p, bp)));
+        let go_v = vmulq_f32(sold, adj_bp);
+        let rl_v = vmulq_f32(prod, bp);
+
+        vst1q_f32(b_sh.as_mut_ptr(), sh_v);
+        vst1q_f32(b_tr.as_mut_ptr(), tr_v);
+        vst1q_f32(b_tf.as_mut_ptr(), tf_v);
+        vst1q_f32(b_go.as_mut_ptr(), go_v);
+        vst1q_f32(b_rl.as_mut_ptr(), rl_v);
+
+        for k in 0..4 {
+            *shortages += b_sh[k];
+            *trade += b_tr[k];
+            *tariffs += b_tf[k];
+            *gross_output += b_go[k];
+            *real += b_rl[k];
+        }
+        g += 4;
+    }
+    g
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clear_nations_simd_matches_scalar_bit_exact() {
+        let nc = 3;
+        let gc = 23;
+        let bp: Vec<f32> = (0..gc).map(|g| 5.0 + (g as f32) * 1.25).collect();
+        let ew: Vec<f32> = (0..gc).map(|g| 0.2 + (g as f32) * 0.1).collect();
+        let tar = [0.05f32, 0.15f32, 0.25f32];
+        let total = nc * gc;
+        let prod: Vec<f32> = (0..total).map(|i| ((i * 7) % 19) as f32 * 3.1).collect();
+        let dem: Vec<f32> = (0..total).map(|i| ((i * 5) % 23) as f32 * 2.8).collect();
+        let imp: Vec<f32> = (0..total).map(|i| ((i * 3) % 11) as f32 * 1.4).collect();
+        let exp: Vec<f32> = (0..total).map(|i| ((i * 11) % 13) as f32 * 0.9).collect();
+        let rel: Vec<f32> = (0..total).map(|i| ((i * 2) % 7) as f32 * 0.7).collect();
+        let sat: Vec<f32> = (0..total).map(|i| ((i % 10) as f32) * 0.1).collect();
+        let pr: Vec<f32> = (0..total).map(|i| 4.0 + (i % 17) as f32 * 0.9).collect();
+
+        let (mut go, mut rl, mut sh, mut ma, mut tb, mut ti) =
+            (vec![0.0; nc], vec![0.0; nc], vec![0.0; nc], vec![0.0; nc], vec![0.0; nc], vec![0.0; nc]);
+        clear_nations_batch(
+            nc, gc, gc, &bp, &ew, &tar, &prod, &dem, &imp, &exp, &rel, &sat, &pr,
+            0.35, 0.65, 0.4, &mut go, &mut rl, &mut sh, &mut ma, &mut tb, &mut ti,
+        )
+        .unwrap();
+
+        let total_w: f32 = ew.iter().sum();
+        for ni in 0..nc {
+            let mut s_sh = 0.0f32;
+            let mut s_tr = 0.0f32;
+            let mut s_tf = 0.0f32;
+            let mut s_go = 0.0f32;
+            let mut s_rl = 0.0f32;
+            for g in 0..gc {
+                let idx = ni * gc + g;
+                s_sh += (1.0f32 - sat[idx]) * ew[g];
+                s_tr += (exp[idx] - imp[idx]) * pr[idx];
+                s_tf += max0_f32(imp[idx] - rel[idx]) * pr[idx] * tar[ni];
+                let cp = clamp_f32(pr[idx], bp[g] * 0.6f32, bp[g] * 1.4f32);
+                let dom = max0_f32(dem[idx] - imp[idx]) + exp[idx];
+                let sold = if prod[idx] < dom { prod[idx] } else { dom };
+                s_go += sold * (bp[g] + 0.65f32 * (cp - bp[g]));
+                s_rl += prod[idx] * bp[g];
+            }
+            let si = clamp01_f32(s_sh / total_w);
+            assert_eq!(go[ni].to_bits(), s_go.to_bits());
+            assert_eq!(rl[ni].to_bits(), s_rl.to_bits());
+            assert_eq!(sh[ni].to_bits(), si.to_bits());
+            assert_eq!(ma[ni].to_bits(), (1.0f32 - si).to_bits());
+            assert_eq!(tb[ni].to_bits(), (s_tr * 0.35f32).to_bits());
+            assert_eq!(ti[ni].to_bits(), (s_tf * 0.35f32).to_bits());
+        }
+    }
 }

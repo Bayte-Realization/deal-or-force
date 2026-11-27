@@ -8,8 +8,8 @@ namespace DealOrForce;
 
 /// <summary>
 /// Zero-copy Forward+ (Vulkan / D3D12) GLSL 450 Compute Shader backend for <see cref="PoliticalPlate"/>
-/// (1920x960 RGBA8 + mipmaps) and <see cref="FrontierField"/> (5760x2880 R8 via 5-pass Jump Flooding
-/// Algorithm + separable Gaussian + mipmaps).
+/// (1920x960 RGBA8 + mipmaps) and <see cref="FrontierField"/> (half-res 2880x1440 R8 via 5-pass
+/// subpixel edge-centroid 1+JFA + phase-invariant 7-tap separable Gaussian + mipmaps).
 ///
 /// Outputs directly into GPU-resident <see cref="Texture2Drd"/> textures with zero RAM-to-VRAM image
 /// transfers (only a 128 KB province override LUT + 256 KB palette buffer are updated per repaint).
@@ -30,11 +30,21 @@ internal sealed class GpuMapCompute
     private bool _hasFrontier;
     private bool _texturesBoundOnMainThread;
 
-    // Shared dynamic buffers
+    // Shared dynamic 3-slot ring buffers eliminate per-dispatch byte[].Clone() allocations
+    private const int DispatchRingSlots = 3;
     private Rid _provLutBuf;
     private Rid _paletteBuf;
-    private readonly byte[] _provLutBytes = new byte[65536 * 2];
-    private readonly byte[] _paletteBytes = new byte[65536 * 4];
+    private readonly byte[][] _provLutRing = CreateByteRing(DispatchRingSlots, 65536 * 2);
+    private readonly byte[][] _paletteRing = CreateByteRing(DispatchRingSlots, 65536 * 4);
+    private int _lutRingSlot;
+    private int _paletteRingSlot;
+
+    private static byte[][] CreateByteRing(int slots, int length)
+    {
+        var ring = new byte[slots][];
+        for (var i = 0; i < slots; i++) ring[i] = new byte[length];
+        return ring;
+    }
 
     // Static map buffers
     private Rid _plateCellsBuf;
@@ -136,23 +146,24 @@ internal sealed class GpuMapCompute
         _plateMips = MipCount(_plateW, _plateH);
 
         _hasFrontier = frontierAuthored is not null && frontierProvinces is not null &&
-                       frontierW > 0 && frontierH > 0 &&
+                       frontierW >= 2 && frontierH >= 2 &&
                        frontierAuthored.Length >= frontierW * frontierH &&
                        frontierProvinces.Length >= frontierW * frontierH;
-        _frontierW = _hasFrontier ? frontierW : 0;
-        _frontierH = _hasFrontier ? frontierH : 0;
+        _frontierW = _hasFrontier ? frontierW / 2 : 0;
+        _frontierH = _hasFrontier ? frontierH / 2 : 0;
         _frontierMips = _hasFrontier ? MipCount(_frontierW, _frontierH) : 0;
 
         var plateCells = PackHolderProvinceBytes(plateSource.Holders, plateSource.Provinces, _plateW * _plateH);
         var plateGeo = PadBytesTo4(plateSource.Geography, _plateW * _plateH);
         var frontierCells = _hasFrontier
-            ? PackHolderProvinceBytes(frontierAuthored, frontierProvinces, _frontierW * _frontierH)
+            ? PackFrontierHalfResBytes(frontierAuthored, frontierProvinces, frontierW, frontierH, _frontierW, _frontierH)
             : null;
-        var hasOverride = FillProvLut(initialOwners, authoredOwners, _provLutBytes);
-        FillPalette(colors, _paletteBytes);
-
-        var plateLutCopy = (byte[])_provLutBytes.Clone();
-        var paletteCopy = (byte[])_paletteBytes.Clone();
+        var initLut = _provLutRing[0];
+        var initPalette = _paletteRing[0];
+        _lutRingSlot = 1;
+        _paletteRingSlot = 1;
+        var hasOverride = FillProvLut(initialOwners, authoredOwners, initLut);
+        FillPalette(colors, initPalette);
 
         PlateTexture = new Texture2Drd();
         if (_hasFrontier) FrontierTexture = new Texture2Drd();
@@ -167,7 +178,7 @@ internal sealed class GpuMapCompute
             }
             var ok = InitializeOnRenderThread(
                 plateCells, plateGeo, frontierCells,
-                plateLutCopy, paletteCopy, hasOverride, shades);
+                initLut, initPalette, hasOverride, shades);
             if (System.Threading.Volatile.Read(ref _disposedFlag) != 0)
             {
                 FreeOwnedRidsOnRenderThread(_rd);
@@ -193,13 +204,15 @@ internal sealed class GpuMapCompute
         var doFrontier = updateFrontier && _hasFrontier;
         if (!updatePlate && !doFrontier) return true;
 
-        var hasOverride = FillProvLut(owners, authoredOwners, _provLutBytes);
-        var lutCopy = (byte[])_provLutBytes.Clone();
-        byte[] palCopy = null;
+        var lutBuf = _provLutRing[_lutRingSlot];
+        _lutRingSlot = (_lutRingSlot + 1) % DispatchRingSlots;
+        var hasOverride = FillProvLut(owners, authoredOwners, lutBuf);
+        byte[] palBuf = null;
         if (updateColors && colors is not null)
         {
-            FillPalette(colors, _paletteBytes);
-            palCopy = (byte[])_paletteBytes.Clone();
+            palBuf = _paletteRing[_paletteRingSlot];
+            _paletteRingSlot = (_paletteRingSlot + 1) % DispatchRingSlots;
+            FillPalette(colors, palBuf);
         }
         var doPlate = updatePlate;
 
@@ -210,9 +223,9 @@ internal sealed class GpuMapCompute
                 _rd is null) return;
             try
             {
-                _rd.BufferUpdate(_provLutBuf, 0, (uint)lutCopy.Length, lutCopy);
-                if (palCopy is not null)
-                    _rd.BufferUpdate(_paletteBuf, 0, (uint)palCopy.Length, palCopy);
+                _rd.BufferUpdate(_provLutBuf, 0, (uint)lutBuf.Length, lutBuf);
+                if (palBuf is not null)
+                    _rd.BufferUpdate(_paletteBuf, 0, (uint)palBuf.Length, palBuf);
 
                 if (doPlate)
                     DispatchPlateOnRenderThread(hasOverride, shades);
@@ -396,10 +409,10 @@ internal sealed class GpuMapCompute
 
                 _blurHShader = CompileCompute("dof_jfa_blur_h", JfaBlurHGlsl);
                 _blurHPipe = Track(_rd.ComputePipelineCreate(_blurHShader));
-                // 6-pass 1+JFA (1, 16, 8, 4, 2, 1): A->B->A->B->A->B->A => final seeds live in _jfaTexA!
+                // 5-pass 1+JFA (1, 8, 4, 2, 1): A->B->A->B->A->B => final seeds live in _jfaTexB!
                 _blurHUset = Track(_rd.UniformSetCreate(new Godot.Collections.Array<RDUniform>
                 {
-                    ImageUniform(0, _jfaTexA),
+                    ImageUniform(0, _jfaTexB),
                     ImageUniform(1, _blurHTex)
                 }, _blurHShader, 0));
 
@@ -447,8 +460,10 @@ internal sealed class GpuMapCompute
         WriteUInt(pc, 4, (uint)_plateH);
         WriteUInt(pc, 8, hasOverride ? 1u : 0u);
         WriteUInt(pc, 12, 0u);
-        WriteFloat(pc, 16, shades.Country);
-        WriteFloat(pc, 20, shades.Region);
+        var countryShade = _hasFrontier ? shades.Inland : shades.Country;
+        var regionShade = _hasFrontier ? shades.Inland : shades.Region;
+        WriteFloat(pc, 16, countryShade);
+        WriteFloat(pc, 20, regionShade);
         WriteFloat(pc, 24, shades.Inland);
         WriteFloat(pc, 28, 0f);
 
@@ -499,9 +514,9 @@ internal sealed class GpuMapCompute
         _rd.ComputeListSetPushConstant(cl, pc16, 16);
         _rd.ComputeListDispatch(cl, gx, gy, 1);
 
-        // 2. 6-pass 1+JFA (steps 1, 16, 8, 4, 2, 1 => range 31 >= Cap, eliminates 1-pixel Voronoi errors; ends in _jfaTexA)
+        // 2. 5-pass 1+JFA (steps 1, 8, 4, 2, 1 => range 15 >= halfCap 10 at half-res 2880x1440; ends in _jfaTexB)
         _rd.ComputeListBindComputePipeline(cl, _jfaStepPipe);
-        ReadOnlySpan<int> steps = stackalloc int[] { 1, 16, 8, 4, 2, 1 };
+        ReadOnlySpan<int> steps = stackalloc int[] { 1, 8, 4, 2, 1 };
         for (var i = 0; i < steps.Length; i++)
         {
             _rd.ComputeListAddBarrier(cl);
@@ -514,7 +529,7 @@ internal sealed class GpuMapCompute
             _rd.ComputeListDispatch(cl, gx, gy, 1);
         }
 
-        // 3. Fused distance eval + horizontal 7-tap Gaussian (sigma=1.0) into _blurHTex
+        // 3. Subpixel distance eval (full-res cells) + horizontal 7-tap Gaussian into _blurHTex
         _rd.ComputeListAddBarrier(cl);
         WriteUInt(pc16, 0, (uint)_frontierW);
         WriteUInt(pc16, 4, (uint)_frontierH);
@@ -624,6 +639,38 @@ internal sealed class GpuMapCompute
         var dst = MemoryMarshal.Cast<byte, uint>(bytes.AsSpan());
         for (var i = 0; i < cells; i++)
             dst[i] = holders[i] | ((uint)provs[i] << 16);
+        return bytes;
+    }
+
+    private static byte[] PackFrontierHalfResBytes(
+        ushort[] holders, ushort[] provs, int srcWidth, int srcHeight, int halfWidth, int halfHeight)
+    {
+        // Border-preserving 2x2 packing (uvec4 per half-res cell): retains all 4 subpixel
+        // (authoredHolder, provinceId) entries so 1-cell coastlines and enclaves never vanish.
+        var bytes = new byte[halfWidth * halfHeight * 16];
+        var dst = MemoryMarshal.Cast<byte, uint>(bytes.AsSpan());
+        for (var hy = 0; hy < halfHeight; hy++)
+        {
+            var sy0 = hy * 2;
+            var sy1 = Math.Min(sy0 + 1, srcHeight - 1);
+            var row0 = sy0 * srcWidth;
+            var row1 = sy1 * srcWidth;
+            var outRow = hy * halfWidth;
+            for (var hx = 0; hx < halfWidth; hx++)
+            {
+                var sx0 = hx * 2;
+                var sx1 = Math.Min(sx0 + 1, srcWidth - 1);
+                var i00 = row0 + sx0;
+                var i10 = row0 + sx1;
+                var i01 = row1 + sx0;
+                var i11 = row1 + sx1;
+                var dstIdx = (outRow + hx) * 4;
+                dst[dstIdx] = holders[i00] | ((uint)provs[i00] << 16);
+                dst[dstIdx + 1] = holders[i10] | ((uint)provs[i10] << 16);
+                dst[dstIdx + 2] = holders[i01] | ((uint)provs[i01] << 16);
+                dst[dstIdx + 3] = holders[i11] | ((uint)provs[i11] << 16);
+            }
+        }
         return bytes;
     }
 
@@ -778,43 +825,61 @@ void main() {
     private const string JfaInitGlsl = """
 #version 450
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
-
-layout(set = 0, binding = 0, std430) readonly buffer FrontierCells { uint packed_hp[]; };
+layout(set = 0, binding = 0, std430) readonly buffer FrontierCells { uvec4 packed_blocks[]; };
 layout(set = 0, binding = 1, std430) readonly buffer ProvLut { uint prov_lut[]; };
 layout(set = 0, binding = 2, r32ui) writeonly uniform uimage2D out_seed;
+layout(push_constant) uniform Params { uint width; uint height; uint has_override; uint pad0; } params;
 
-layout(push_constant) uniform Params {
-    uint width;
-    uint height;
-    uint has_override;
-    uint pad0;
-} params;
-
-uint effective_holder(uint idx) {
-    uint hp = packed_hp[idx];
+uint effective_holder(uint hp) {
     uint ah = hp & 0xFFFFu;
     if (ah == 0u || params.has_override == 0u) return ah;
     uint prov = hp >> 16;
     uint ov = (prov_lut[prov >> 1] >> ((prov & 1u) * 16u)) & 0xFFFFu;
     return ov == 0u ? ah : ov;
 }
-
+int round_div(int num, int den) {
+    return num >= 0 ? (num + den / 2) / den : -((-num + den / 2) / den);
+}
 void main() {
-    uint x = gl_GlobalInvocationID.x;
-    uint y = gl_GlobalInvocationID.y;
+    uint x = gl_GlobalInvocationID.x, y = gl_GlobalInvocationID.y;
     if (x >= params.width || y >= params.height) return;
+    uint row = y * params.width, cell = row + x;
+    uvec4 blk = packed_blocks[cell];
+    uint h00 = effective_holder(blk.x), h10 = effective_holder(blk.y);
+    uint h01 = effective_holder(blk.z), h11 = effective_holder(blk.w);
 
-    uint row = y * params.width;
-    uint cell = row + x;
-    uint here = effective_holder(cell);
+    // Quarter-full-res-cell edge centroid relative to block center (2x+1, 2y+1) -> (8x+4, 8y+4).
+    int sx_sum = 0, sy_sum = 0, cnt = 0;
+    if (h00 != h10) { sy_sum -= 2; cnt++; }
+    if (h01 != h11) { sy_sum += 2; cnt++; }
+    if (h00 != h01) { sx_sum -= 2; cnt++; }
+    if (h10 != h11) { sx_sum += 2; cnt++; }
     uint east_x = (x + 1u == params.width) ? 0u : (x + 1u);
     uint west_x = (x == 0u) ? (params.width - 1u) : (x - 1u);
-    bool frontier =
-        effective_holder(row + east_x) != here ||
-        effective_holder(row + west_x) != here ||
-        (y > 0u && effective_holder(cell - params.width) != here) ||
-        (y + 1u < params.height && effective_holder(cell + params.width) != here);
-    uint seed = frontier ? (x | (y << 16)) : 0xFFFFFFFFu;
+    uvec4 eb = packed_blocks[row + east_x], wb = packed_blocks[row + west_x];
+    if (effective_holder(eb.x) != h10) { sx_sum += 4; sy_sum -= 2; cnt++; }
+    if (effective_holder(eb.z) != h11) { sx_sum += 4; sy_sum += 2; cnt++; }
+    if (effective_holder(wb.y) != h00) { sx_sum -= 4; sy_sum -= 2; cnt++; }
+    if (effective_holder(wb.w) != h01) { sx_sum -= 4; sy_sum += 2; cnt++; }
+    if (y > 0u) {
+        uvec4 nb = packed_blocks[cell - params.width];
+        if (effective_holder(nb.z) != h00) { sx_sum -= 2; sy_sum -= 4; cnt++; }
+        if (effective_holder(nb.w) != h10) { sx_sum += 2; sy_sum -= 4; cnt++; }
+    }
+    if (y + 1u < params.height) {
+        uvec4 sb = packed_blocks[cell + params.width];
+        if (effective_holder(sb.x) != h01) { sx_sum -= 2; sy_sum += 4; cnt++; }
+        if (effective_holder(sb.y) != h11) { sx_sum += 2; sy_sum += 4; cnt++; }
+    }
+    uint seed = 0xFFFFFFFFu;
+    if (cnt > 0) {
+        int w8 = int(params.width) * 8;
+        int sx = int(x) * 8 + 4 + round_div(sx_sum, cnt);
+        if (sx < 0) sx += w8;
+        else if (sx >= w8) sx -= w8;
+        int sy = clamp(int(y) * 8 + 4 + round_div(sy_sum, cnt), 0, int(params.height) * 8 - 1);
+        seed = uint(sx) | (uint(sy) << 16);
+    }
     imageStore(out_seed, ivec2(int(x), int(y)), uvec4(seed, 0u, 0u, 0u));
 }
 """;
@@ -822,28 +887,18 @@ void main() {
     private const string JfaStepGlsl = """
 #version 450
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
-
 layout(set = 0, binding = 0, r32ui) readonly uniform uimage2D in_seed;
 layout(set = 0, binding = 1, r32ui) writeonly uniform uimage2D out_seed;
-
-layout(push_constant) uniform Params {
-    uint width;
-    uint height;
-    int step_size;
-    uint pad0;
-} params;
+layout(push_constant) uniform Params { uint width; uint height; int step_size; uint pad0; } params;
 
 void main() {
-    int x = int(gl_GlobalInvocationID.x);
-    int y = int(gl_GlobalInvocationID.y);
-    int w = int(params.width);
-    int h = int(params.height);
+    int x = int(gl_GlobalInvocationID.x), y = int(gl_GlobalInvocationID.y);
+    int w = int(params.width), h = int(params.height);
     if (x >= w || y >= h) return;
 
+    int w8 = w * 8, cx = x * 8 + 4, cy = y * 8 + 4, st = params.step_size;
     uint best_seed = 0xFFFFFFFFu;
     float best_d2 = 1e30;
-    int st = params.step_size;
-
     for (int oy = -1; oy <= 1; oy++) {
         int ny = y + oy * st;
         if (ny < 0 || ny >= h) continue;
@@ -853,16 +908,12 @@ void main() {
             else if (nx >= w) nx -= w;
             uint s = imageLoad(in_seed, ivec2(nx, ny)).r;
             if (s == 0xFFFFFFFFu) continue;
-            int sx = int(s & 0xFFFFu);
-            int sy = int(s >> 16);
-            int dx = abs(sx - x);
-            dx = min(dx, w - dx);
-            int dy = sy - y;
-            float d2 = float(dx * dx + dy * dy);
-            if (d2 < best_d2) {
-                best_d2 = d2;
-                best_seed = s;
-            }
+            int sx = int(s & 0xFFFFu), sy = int(s >> 16);
+            int dx = abs(sx - cx);
+            dx = min(dx, w8 - dx);
+            float fdx = float(dx), fdy = float(sy - cy);
+            float d2 = fdx * fdx + fdy * fdy;
+            if (d2 < best_d2) { best_d2 = d2; best_seed = s; }
         }
     }
     imageStore(out_seed, ivec2(x, y), uvec4(best_seed, 0u, 0u, 0u));
@@ -872,41 +923,29 @@ void main() {
     private const string JfaBlurHGlsl = """
 #version 450
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
-
 layout(set = 0, binding = 0, r32ui) readonly uniform uimage2D in_seed;
 layout(set = 0, binding = 1, r32f) writeonly uniform image2D out_blur_h;
+layout(push_constant) uniform Params { uint width; uint height; float cap; uint pad0; } params;
 
-layout(push_constant) uniform Params {
-    uint width;
-    uint height;
-    float cap;
-    uint pad0;
-} params;
-
-// Normalized 7-tap Gaussian weights for sigma = 1.0 (radius = 3)
+// Normalized 7-tap Gaussian at half-res (sigma = 0.72 half-res = 1.44 full-res cells)
 const float W[7] = float[7](
-    0.004431848, 0.054005583, 0.242036229, 0.399052680,
-    0.242036229, 0.054005583, 0.004431848
+    0.000094, 0.011697, 0.211188, 0.554042,
+    0.211188, 0.011697, 0.000094
 );
-
 float seed_distance(int x, int y, int w, float cap) {
     uint s = imageLoad(in_seed, ivec2(x, y)).r;
     if (s == 0xFFFFFFFFu) return cap;
-    int sx = int(s & 0xFFFFu);
-    int sy = int(s >> 16);
-    int dx = abs(sx - x);
-    dx = min(dx, w - dx);
-    int dy = sy - y;
-    return min(cap, sqrt(float(dx * dx + dy * dy)) + 0.5);
+    int sx = int(s & 0xFFFFu), sy = int(s >> 16);
+    int dx = abs(sx - (x * 8 + 4));
+    dx = min(dx, w * 8 - dx);
+    float fdx = float(dx), fdy = float(sy - (y * 8 + 4));
+    // Floor at 1.0 full-res cell eliminates half-res even/odd phase pulsation completely.
+    return min(cap, max(1.0, sqrt(fdx * fdx + fdy * fdy) * 0.25));
 }
-
 void main() {
-    int x = int(gl_GlobalInvocationID.x);
-    int y = int(gl_GlobalInvocationID.y);
-    int w = int(params.width);
-    int h = int(params.height);
+    int x = int(gl_GlobalInvocationID.x), y = int(gl_GlobalInvocationID.y);
+    int w = int(params.width), h = int(params.height);
     if (x >= w || y >= h) return;
-
     float sum = 0.0;
     for (int k = -3; k <= 3; k++) {
         int col = x + k;
@@ -921,36 +960,26 @@ void main() {
     private const string JfaBlurVPackGlsl = """
 #version 450
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
-
 layout(set = 0, binding = 0, r32f) readonly uniform image2D in_blur_h;
 layout(set = 0, binding = 1, r8) writeonly uniform image2D out_frontier;
-
-layout(push_constant) uniform Params {
-    uint width;
-    uint height;
-    float cap;
-    uint pad0;
-} params;
+layout(push_constant) uniform Params { uint width; uint height; float cap; uint pad0; } params;
 
 const float W[7] = float[7](
-    0.004431848, 0.054005583, 0.242036229, 0.399052680,
-    0.242036229, 0.054005583, 0.004431848
+    0.000094, 0.011697, 0.211188, 0.554042,
+    0.211188, 0.011697, 0.000094
 );
-
 void main() {
-    int x = int(gl_GlobalInvocationID.x);
-    int y = int(gl_GlobalInvocationID.y);
-    int w = int(params.width);
-    int h = int(params.height);
+    int x = int(gl_GlobalInvocationID.x), y = int(gl_GlobalInvocationID.y);
+    int w = int(params.width), h = int(params.height);
     if (x >= w || y >= h) return;
-
     float sum = 0.0;
     for (int k = -3; k <= 3; k++) {
-        int line = clamp(y + k, 0, h - 1);
-        sum += imageLoad(in_blur_h, ivec2(x, line)).r * W[k + 3];
+        sum += imageLoad(in_blur_h, ivec2(x, clamp(y + k, 0, h - 1))).r * W[k + 3];
     }
-    float norm = clamp(sum / params.cap, 0.0, 1.0);
-    imageStore(out_frontier, ivec2(x, y), vec4(norm, 0.0, 0.0, 0.0));
+    // Remove the near-border floor bias so borders align with CPU FrontierField (~0.93 cells)
+    // while inland distances (>= 4.5 cells) remain exact Euclidean distances.
+    float aligned = max(0.0, sum - 0.55 * (1.0 - smoothstep(1.45, 4.5, sum)));
+    imageStore(out_frontier, ivec2(x, y), vec4(clamp(aligned / params.cap, 0.0, 1.0), 0.0, 0.0, 0.0));
 }
 """;
 

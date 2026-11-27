@@ -1,0 +1,21 @@
+{
+  "id": "world_tactical",
+  "name": "Tactical World",
+  "name_en": "Tactical World",
+  "name_ru": "Тактический мир",
+  "description": "Tactical province layout with coarsened Siberia, unified Eastern Ukraine, and streamlined poles.",
+  "description_en": "Tactical province layout with coarsened Siberia, unified Eastern Ukraine, and streamlined poles.",
+  "description_ru": "Тактическая нарезка провинций с укрупнённой Сибирью, без микрофрагментации Восточной Украины и сжатыми полюсами.",
+  "author": "Bayte Realization",
+  "cells_per_province": 250,
+  "disputed_cells_per_province": 250,
+  "polar_from_latitude": 60,
+  "populated_share": 0.72,
+  "siberia_multiplier": 3.5,
+  "polar_multiplier": 5,
+  "minimum_province_cells": 32,
+  "inherit_base_hydrology": true,
+  "provinces": "provinces.png",
+  "definition": "definition.csv",
+  "ownership": "ownership.csv"
+}

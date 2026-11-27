@@ -1,0 +1,22 @@
+{
+  "chronicle.doctrine_abandoned": "{0} abandons its war doctrine: {2}.",
+  "chronicle.strategy_abandoned": "{0} abandons its grand strategy: {2}.",
+  "doctrine.err.not_held": "This doctrine is not in force.",
+  "doctrine.err.abandon_cost": "Abandoning this doctrine costs {0} political points.",
+  "doctrine.err.not_studying": "This doctrine is not currently studying an article.",
+  "doctrine.err.no_strategy": "No strategic course is currently in force.",
+  "doctrine.ui.abandon_doctrine_btn": "Abandon doctrine",
+  "doctrine.ui.abandon_short_btn": "Abandon",
+  "doctrine.ui.cancel_first_study_btn": "Cancel study",
+  "doctrine.ui.confirm_abandon_pp_fmt": "Confirm abandon (−{0} PP)?",
+  "doctrine.ui.confirm_abandon_free": "Confirm abandon?",
+  "doctrine.ui.abandon_doctrine_tip_fmt": "Abandon {0}: clears all learned articles in this book, costs {1} political points, and imposes {2} days of retraining. Click again to confirm.",
+  "doctrine.ui.abandon_doctrine_free_tip_fmt": "Abandon {0}: clears all learned articles in this book and imposes {1} days of retraining. Click again to confirm.",
+  "doctrine.ui.cancel_first_study_tip_fmt": "Cancel the initial study of {0} before the book takes effect (free, no retraining). Experience already spent is not refunded.",
+  "doctrine.ui.cancel_study_btn": "Cancel study",
+  "doctrine.ui.cancel_study_tip": "Cancel the article currently being studied. Learned articles are kept; experience already spent is not refunded.",
+  "doctrine.ui.abandon_course_btn": "Abandon course",
+  "doctrine.ui.abandon_course_tip": "Abandon the active strategic course (0 political points). Its modifiers end immediately; adopting a new course later costs its full political price. Click again to confirm.",
+  "doctrine.ui.adopt_paid_fmt": "Take this course ({0})",
+  "doctrine.ui.inspect_shelf_manage_tip": "Open this shelf in the Book of War to study articles, cancel study, or abandon an active doctrine."
+}

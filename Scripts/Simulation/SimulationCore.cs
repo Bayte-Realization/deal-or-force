@@ -639,6 +639,8 @@ public sealed partial class Campaign
     /// <summary>Era features started in the 'restricted' state (disabled until unlocked by tech/event). Null when none.</summary>
     public HashSet<string> RestrictedFeatures;
     public string ScenarioId = "2024";
+    /// <summary>Identifier of the world map pack this campaign runs on (<see cref="MapCatalog.StandardId"/> for vanilla).</summary>
+    public string MapId { get; set; } = MapCatalog.StandardId;
     /// <summary>The era overlay the scenario chose (SkinOverlays); empty for the base look. Saved, never simulated.</summary>
     public string SkinOverlay = "";
     public Dictionary<string, int[]> ScenarioTerritories = new(StringComparer.OrdinalIgnoreCase);
@@ -808,6 +810,7 @@ public sealed partial class Campaign
     public static Campaign CreateBootstrap(int seed, IEnumerable<string> scenarioRoots = null)
     {
         var campaign = ScenarioCatalog.CreateBaseCampaign(seed);
+        campaign.MapId = MapCatalog.ActiveMapId;
         campaign.SkinOverlay = ScenarioLibrary.SkinOf(campaign.ScenarioId, scenarioRoots);
         return campaign;
     }

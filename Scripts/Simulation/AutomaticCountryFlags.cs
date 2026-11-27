@@ -41,10 +41,11 @@ public static partial class FlagCatalog
     /// army can change its banner without changing its unit ID, position or template.</summary>
     public static int VisualStateHash(Campaign campaign)
     {
+        var qualifiers = All;
         HashSet<int> atWar = null;
-        foreach (var qualifier in All)
+        for (var qi = 0; qi < qualifiers.Count; qi++)
         {
-            if (qualifier.Source != "war") continue;
+            if (qualifiers[qi].Source != "war") continue;
             atWar = _visualWarNations ??= new HashSet<int>();
             atWar.Clear();
             var active = WarsForFlags(campaign);
@@ -59,16 +60,21 @@ public static partial class FlagCatalog
             break;
         }
         var hash = new HashCode();
-        foreach (var nation in campaign.Nations)
+        var nations = campaign.Nations;
+        for (var ni = 0; ni < nations.Count; ni++)
         {
+            var nation = nations[ni];
             hash.Add(nation.Id); hash.Add(nation.Tag); hash.Add(nation.CustomFlag); hash.Add(nation.Color);
             hash.Add(nation.CustomFlagDesignJson);
             hash.Add(nation.FoundNameKind); hash.Add(nation.FoundNameId); hash.Add(nation.FoundedInRevolt);
             hash.Add(nation.SecededFromId); hash.Add(nation.ReleasedFromId);
-            foreach (var qualifier in All)
+            for (var qi = 0; qi < qualifiers.Count; qi++)
+            {
+                var qualifier = qualifiers[qi];
                 hash.Add(qualifier.Source == "war"
                     ? (atWar.Contains(nation.Id) ? "at_war" : "at_peace")
                     : ValueOf(qualifier.Source, campaign, nation));
+            }
         }
         return hash.ToHashCode();
     }

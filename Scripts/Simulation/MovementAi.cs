@@ -27,6 +27,62 @@ public sealed partial class Defines
 public static class MovementAi
 {
     [ThreadStatic] private static List<ScenarioState> _uprisingCandidates;
+    [ThreadStatic] private static WeakReference<Campaign> _warCacheCampaignRef;
+    [ThreadStatic] private static int _warCacheRev = int.MinValue;
+    [ThreadStatic] private static bool[] _warMask;
+    [ThreadStatic] private static List<Nation> _warClients;
+    [ThreadStatic] private static List<ScenarioState> _lowStabilityCandidates;
+    [ThreadStatic] private static bool _lowStabilityValid;
+    [ThreadStatic] private static List<ScenarioState> _hospitalEligibleStates;
+    [ThreadStatic] private static bool _hospitalEligibleValid;
+    [ThreadStatic] private static int[] _recOpinionTokens;
+    [ThreadStatic] private static float[] _recOpinions;
+    [ThreadStatic] private static int _recOpinionToken;
+
+    private static void EnsureAtWarCache(Campaign campaign)
+    {
+        if (campaign is null) return;
+        if (_warCacheCampaignRef?.TryGetTarget(out var cachedCampaign) == true && ReferenceEquals(cachedCampaign, campaign) && _warCacheRev == campaign.WarRevision && _warMask is not null) return;
+
+        var nations = campaign.Nations;
+        var maxId = nations.Count;
+        for (var i = 0; i < nations.Count; i++) if (nations[i].Id >= maxId) maxId = nations[i].Id + 1;
+        if (_warMask is null || _warMask.Length < maxId) _warMask = new bool[Math.Max(maxId, 256)]; else Array.Clear(_warMask, 0, maxId);
+
+        var live = Warfare.LiveWars(campaign);
+        for (var i = 0; i < live.Count; i++)
+        {
+            var war = live[i];
+            if (war.Ended) continue;
+            MarkAtWar(_warMask, war.AttackerId); MarkAtWar(_warMask, war.DefenderId);
+            foreach (var aid in war.AttackerAllies) MarkAtWar(_warMask, aid);
+            foreach (var did in war.DefenderAllies) MarkAtWar(_warMask, did);
+        }
+
+        var clients = _warClients ??= new List<Nation>(32);
+        clients.Clear();
+        for (var i = 0; i < nations.Count; i++)
+        {
+            var n = nations[i];
+            if (n.Movement is null && (uint)n.Id < (uint)_warMask.Length && _warMask[n.Id]) clients.Add(n);
+        }
+
+        if (_warCacheCampaignRef is null) _warCacheCampaignRef = new WeakReference<Campaign>(campaign); else _warCacheCampaignRef.SetTarget(campaign);
+        _warCacheRev = campaign.WarRevision;
+    }
+
+    private static void MarkAtWar(bool[] mask, int id)
+    {
+        if ((uint)id < (uint)mask.Length) mask[id] = true;
+    }
+
+    private static bool IsAtWarFast(Campaign campaign, int nationId)
+    {
+        if (campaign is null || nationId < 0) return false;
+        EnsureAtWarCache(campaign);
+        return (uint)nationId < (uint)_warMask.Length ? _warMask[nationId] : InAnyLiveWar(campaign, nationId);
+    }
+
     /// <summary>A public crisis is an opening, not free support, cadres or a successful
     /// uprising. Think still validates every command, cost, occupation and methods gate.</summary>
     internal static float UprisingAppetite(Campaign c, Nation movement, MovementDefinition definition,
@@ -39,11 +95,7 @@ public static class MovementAi
             !MovementDefinition.Listed(definition.Homeland,region.Id) ||
             !float.IsFinite(chance) || chance < c.Defines.MovementAiHomelandOpeningChance) return basic;
         var host = MovementRules.OwnerOf(c,region);
-        var hostAtWar = false;
-        foreach (var w in Warfare.OpenWars(c))
-        {
-            if (host is not null && !w.Ended && w.Involves(host.Id)) { hostAtWar = true; break; }
-        }
+        var hostAtWar = host is not null && IsAtWarFast(c, host.Id);
         if (host is null || host.Id == movement.Id ||
             (host.Stability >= .4f && !hostAtWar)) return basic;
         return MathF.Max(basic,M.Clamp01(c.Defines.MovementAiHomelandOpeningAppetite));
@@ -61,45 +113,59 @@ public static class MovementAi
         if (campaign.ElapsedDays == 0) yield break;
         var week = Math.Max(1, campaign.Defines.EconomyTickDays);
         var cadence = campaign.Defines.AiCalmCadenceDays;
-        // On the same day as its week (MovementRules.Tick), so it acts on what that week made
-        // of it. The walk goes by index (Id == index): a think can found a nation, and the
-        // founder takes its turn tomorrow rather than stretching this pass.
-        for (var id = 0; id < campaign.Nations.Count; id++)
+        EnsureAtWarCache(campaign);
+        _lowStabilityValid = false;
+        _hospitalEligibleValid = false;
+        MovementRules.BeginUprisingGarrisonScope(campaign);
+        try
         {
-            var nation = campaign.Nations[id];
-            if (nation.Movement is not { Dissolved: false } || nation.IsHuman) continue;
-            var calm = cadence > 1 && nation.Movement.Landless && !AiStatecraft.InAnyWar(campaign, id);
-            var cycle = calm ? cadence : week;
-            if (!MovementRules.OnItsDay(campaign, id, cycle)) continue;
-            if (MovementRules.NeedsPeopleIndex(campaign))
+            // On the same day as its week (MovementRules.Tick), so it acts on what that week made
+            // of it. The walk goes by index (Id == index): a think can found a nation, and the
+            // founder takes its turn tomorrow rather than stretching this pass.
+            for (var id = 0; id < campaign.Nations.Count; id++)
             {
-                using var indexStages = MovementRules.EnsurePeopleIndexedStages(campaign, insideMovRules: false).GetEnumerator();
+                var nation = campaign.Nations[id];
+                if (nation.Movement is not { Dissolved: false } || nation.IsHuman) continue;
+                var calm = cadence > 1 && nation.Movement.Landless && !IsAtWarFast(campaign, id);
+                var cycle = calm ? cadence : week;
+                if (!MovementRules.OnItsDay(campaign, id, cycle)) continue;
+                if (MovementRules.NeedsPeopleIndex(campaign))
+                {
+                    using var indexStages = MovementRules.EnsurePeopleIndexedStages(campaign, insideMovRules: false).GetEnumerator();
+                    while (true)
+                    {
+                        bool indexMore;
+                        using (SimProfiler.Measure("movements"))
+                        using (SimProfiler.Measure("  mov:ai"))
+                            indexMore = indexStages.MoveNext();
+                        if (!indexMore) break;
+                        yield return 0;
+                    }
+                }
+                // Host, the region owner, the population stamp and patience are this think's
+                // inputs. When they are the ones left by the last think, the orders are the
+                // same orders and the search is not run again. The memory is this campaign's.
+                if (QuietSinceLastThink(campaign, nation)) continue;
+                using var thinkStages = ThinkStages(campaign, nation).GetEnumerator();
                 while (true)
                 {
-                    bool indexMore;
+                    bool hasNext;
                     using (SimProfiler.Measure("movements"))
                     using (SimProfiler.Measure("  mov:ai"))
-                        indexMore = indexStages.MoveNext();
-                    if (!indexMore) break;
+                    using (SimProfiler.Measure("    mov:think"))
+                        hasNext = thinkStages.MoveNext();
+                    if (!hasNext) break;
                     yield return 0;
                 }
+                RememberQuietThink(campaign, nation);
             }
-            // Host, the region owner, the population stamp and patience are this think's
-            // inputs. When they are the ones left by the last think, the orders are the
-            // same orders and the search is not run again. The memory is this campaign's.
-            if (QuietSinceLastThink(campaign, nation)) continue;
-            using var thinkStages = ThinkStages(campaign, nation).GetEnumerator();
-            while (true)
-            {
-                bool hasNext;
-                using (SimProfiler.Measure("movements"))
-                using (SimProfiler.Measure("  mov:ai"))
-                using (SimProfiler.Measure("    mov:think"))
-                    hasNext = thinkStages.MoveNext();
-                if (!hasNext) break;
-                yield return 0;
-            }
-            RememberQuietThink(campaign, nation);
+        }
+        finally
+        {
+            MovementRules.EndUprisingGarrisonScope();
+            _lowStabilityValid = _hospitalEligibleValid = false;
+            _warClients?.Clear(); _lowStabilityCandidates?.Clear(); _hospitalEligibleStates?.Clear();
+            _warCacheCampaignRef?.SetTarget(null); _warCacheRev = int.MinValue;
         }
         // And what the countries do about them.
         using (var dealingStages = MovementDealings.AiStages(campaign).GetEnumerator())
@@ -165,10 +231,22 @@ public static class MovementAi
                 uprisingCandidates.Clear();
                 if (forHire)
                 {
-                    var states = campaign.States;
-                    for (var si = 0; si < states.Count; si++)
+                    if (!_lowStabilityValid)
                     {
-                        var st = states[si];
+                        var lowList = _lowStabilityCandidates ??= new List<ScenarioState>(32);
+                        lowList.Clear();
+                        var states = campaign.States;
+                        for (var si = 0; si < states.Count; si++)
+                        {
+                            var st = states[si];
+                            if (st.Stability <= 0.35f) lowList.Add(st);
+                        }
+                        _lowStabilityValid = true;
+                    }
+                    var cachedLow = _lowStabilityCandidates;
+                    for (var si = 0; si < cachedLow.Count; si++)
+                    {
+                        var st = cachedLow[si];
                         if (st.NationMapIndex != nation.MapIndex && st.Stability <= 0.35f)
                             uprisingCandidates.Add(st);
                     }
@@ -236,7 +314,7 @@ public static class MovementAi
 
         // The street is its army: at war with ground of its own, it hands out rifles where it is
         // followed, and before a rising it sends fighters in ahead.
-        var atWar = InAnyLiveWar(campaign, nation.Id);
+        var atWar = IsAtWarFast(campaign, nation.Id);
         if (!state.Landless && atWar)
             foreach (var held in campaign.StatesOf(nation))
                 if (state.Support.GetValueOrDefault(held.MapIndex) >= 0.2f && TryAction(campaign, nation, ref done, "call_to_arms", held.MapIndex)) break;
@@ -280,13 +358,27 @@ public static class MovementAi
         yield return 0;
         if (definition.Has("hospitallers") && done < 2 && nation.Movement is not null && state.MovingToStateMapIndex < 0)
         {
+            if (!_hospitalEligibleValid)
+            {
+                var eligibleList = _hospitalEligibleStates ??= new List<ScenarioState>(64);
+                eligibleList.Clear();
+                var allStates = campaign.States;
+                for (var si = 0; si < allStates.Count; si++)
+                {
+                    var region = allStates[si];
+                    if (region.Population <= 0 || region.WarDamage < .02f && region.StandardOfLiving >= .8f) continue;
+                    eligibleList.Add(region);
+                }
+                _hospitalEligibleValid = true;
+            }
+            var eligible = _hospitalEligibleStates;
             ScenarioState bestHospital = null;
             var bestNeed = float.NegativeInfinity;
-            var eligibleCount = 0;
-            foreach (var region in campaign.States)
+            var eligibleCount = eligible.Count;
+            for (var ei = 0; ei < eligibleCount; ei++)
             {
+                var region = eligible[ei];
                 if (region.Population <= 0 || region.WarDamage < .02f && region.StandardOfLiving >= .8f) continue;
-                eligibleCount++;
                 var need = region.WarDamage * 2f + (1f - region.StandardOfLiving);
                 if (bestHospital is null || need > bestNeed)
                 {
@@ -302,8 +394,9 @@ public static class MovementAi
                 {
                     var candidates = _hospitalCandidates ??= new List<(float Score, int Order, ScenarioState Region)>();
                     candidates.Clear();
-                    foreach (var region in campaign.States)
+                    for (var ei = 0; ei < eligibleCount; ei++)
                     {
+                        var region = eligible[ei];
                         if (region.Population <= 0 || region.WarDamage < .02f && region.StandardOfLiving >= .8f) continue;
                         if (ReferenceEquals(region, bestHospital)) continue;
                         candidates.Add((region.WarDamage * 2f + (1f - region.StandardOfLiving), candidates.Count, region));
@@ -327,19 +420,13 @@ public static class MovementAi
         yield return 0;
         if (definition.Has("for_hire") && state.ContractNationId < 0 && done < 2 && nation.Movement is not null)
         {
-            var fighting = _liveWarNations ??= new HashSet<int>();
-            fighting.Clear();
-            foreach (var war in Warfare.LiveWars(campaign))
-            {
-                fighting.Add(war.AttackerId);
-                fighting.Add(war.DefenderId);
-                foreach (var ally in war.AttackerAllies) fighting.Add(ally);
-                foreach (var ally in war.DefenderAllies) fighting.Add(ally);
-            }
+            EnsureAtWarCache(campaign);
             Nation client = null;
-            foreach (var other in campaign.Nations)
+            var warClients = _warClients;
+            for (var ci = 0; ci < warClients.Count; ci++)
             {
-                if (other.Movement is not null || !fighting.Contains(other.Id)) continue;
+                var other = warClients[ci];
+                if (other.Movement is not null) continue;
                 if (client is null || other.Treasury > client.Treasury)
                     client = other;
             }
@@ -391,12 +478,17 @@ public static class MovementAi
         if (!MovementActions.CanDo(campaign, nation, action, region, target)) return false;
         new MovementActionCommand { IssuerId = nation.Id, Action = action, StateMapIndex = region, TargetNationId = target }
             .Apply(campaign);
+        if (action == "rise")
+        {
+            _lowStabilityValid = false;
+            MovementRules.InvalidateUprisingGarrisonScope();
+            _warCacheRev = int.MinValue;
+        }
         done++;
         return true;
     }
 
     [ThreadStatic] private static List<(float Score, int Order, ScenarioState Region)> _hospitalCandidates;
-    [ThreadStatic] private static HashSet<int> _liveWarNations;
 
     private static bool InAnyLiveWar(Campaign campaign, int nationId)
     {
@@ -414,6 +506,7 @@ public static class MovementAi
     sealed class OpinionIndex
     {
         public bool Built;
+        public int KnownPairCount = -1;
         public List<DiplomaticRelation>[] ByNation = Array.Empty<List<DiplomaticRelation>>();
         public readonly HashSet<long> Seen = new();
     }
@@ -424,7 +517,7 @@ public static class MovementAi
     internal static void NoteNewRelation(Campaign campaign, DiplomaticRelation relation)
     {
         if (campaign is null || relation is null || !OpinionIndexes.TryGetValue(campaign, out var index) || !index.Built) return;
-        AddRelation(index, relation);
+        if (AddRelation(index, relation) && index.KnownPairCount >= 0) index.KnownPairCount++;
     }
 
     /// <summary>
@@ -459,12 +552,51 @@ public static class MovementAi
         var nations = campaign.Nations;
         var visits = 0;
         var covered = false;
+
+        // Scatter the movement's recorded relations into a thread-local stamped dense array
+        // so the prefix walk reads O(1) opinions without per-nation dictionary hashing.
+        var maxOpId = nations.Count;
+        var token = 0;
+        var tokens = _recOpinionTokens;
+        var opinions = _recOpinions;
+        if (links is not null && links.Count > 0)
+        {
+            for (var li = 0; li < links.Count; li++)
+            {
+                var oid = links[li].Other(nation.Id);
+                if (oid >= maxOpId && oid < 65536) maxOpId = oid + 1;
+            }
+            if (tokens is null || tokens.Length < maxOpId)
+            {
+                _recOpinionTokens = tokens = new int[Math.Max(maxOpId, 256)];
+                _recOpinions = opinions = new float[tokens.Length];
+            }
+            if (++_recOpinionToken == int.MaxValue)
+            {
+                Array.Clear(tokens, 0, tokens.Length);
+                _recOpinionToken = 1;
+            }
+            token = _recOpinionToken;
+            for (var li = 0; li < links.Count; li++)
+            {
+                var rel = links[li];
+                var oid = rel.Other(nation.Id);
+                if ((uint)oid < (uint)tokens.Length)
+                {
+                    tokens[oid] = token;
+                    opinions[oid] = rel.Opinion;
+                }
+            }
+        }
+
         for (var i = 0; i < nations.Count; i++)
         {
             visits++;
             var other = nations[i];
             if (!CanRecognise(campaign, nation, state, other)) continue;
-            var opinion = CampaignDiplomacy.Peek(campaign, other.Id, nation.Id)?.Opinion ?? 0f;
+            var opinion = token != 0 && (uint)other.Id < (uint)tokens.Length
+                ? (tokens[other.Id] == token ? opinions[other.Id] : 0f)
+                : (token == 0 && other.Id >= 0 ? 0f : CampaignDiplomacy.Peek(campaign, other.Id, nation.Id)?.Opinion ?? 0f);
             if (asked is null || opinion > warmest)
             {
                 warmest = opinion;
@@ -499,7 +631,8 @@ public static class MovementAi
 
     static bool CanRecognise(Campaign campaign, Nation nation, MovementState state, Nation other) =>
         other is not null && other.Movement is null && other.Id != nation.Id &&
-        !state.RecognisedBy.Contains(other.Id) && campaign.HasOwnedLand(other);
+        (state.RecognisedBy.Count == 0 || !state.RecognisedBy.Contains(other.Id)) &&
+        campaign.HasOwnedLand(other);
 
     /// <summary>
     /// The same index <see cref="LinksOf"/> builds, built a slice at a time. The relations are
@@ -514,9 +647,17 @@ public static class MovementAi
     {
         if (campaign is null) yield break;
         var index = OpinionIndexes.GetValue(campaign, static _ => new OpinionIndex());
-        if (index.Built) yield break;
+        var totalPairs = campaign.Relations.Count + campaign.DormantRelations.Count;
+        if (index.Built && index.KnownPairCount == totalPairs) yield break;
         var awake = campaign.Relations.Count;
         var asleep = campaign.DormantRelations.Count;
+        if (index.Built)
+        {
+            foreach (var relation in campaign.Relations.Values) AddRelation(index, relation);
+            foreach (var relation in campaign.DormantRelations.Values) AddRelation(index, relation);
+            index.KnownPairCount = campaign.Relations.Count + campaign.DormantRelations.Count;
+            yield break;
+        }
         var rows = System.Buffers.ArrayPool<DiplomaticRelation>.Shared.Rent(Math.Max(1, awake + asleep));
         try
         {
@@ -539,29 +680,33 @@ public static class MovementAi
             foreach (var relation in campaign.Relations.Values) AddRelation(index, relation);
             foreach (var relation in campaign.DormantRelations.Values) AddRelation(index, relation);
         }
+        index.KnownPairCount = campaign.Relations.Count + campaign.DormantRelations.Count;
         index.Built = true;
     }
 
     static List<DiplomaticRelation> LinksOf(Campaign campaign, int nationId)
     {
         var index = OpinionIndexes.GetValue(campaign, static _ => new OpinionIndex());
-        if (!index.Built)
+        var totalPairs = campaign.Relations.Count + campaign.DormantRelations.Count;
+        if (!index.Built || index.KnownPairCount != totalPairs)
         {
             foreach (var relation in campaign.Relations.Values) AddRelation(index, relation);
             foreach (var relation in campaign.DormantRelations.Values) AddRelation(index, relation);
+            index.KnownPairCount = totalPairs;
             index.Built = true;
         }
         if ((uint)nationId >= (uint)index.ByNation.Length) return null;
         return index.ByNation[nationId];
     }
 
-    static void AddRelation(OpinionIndex index, DiplomaticRelation relation)
+    static bool AddRelation(OpinionIndex index, DiplomaticRelation relation)
     {
-        if (relation is null) return;
+        if (relation is null) return false;
         var key = ((long)relation.A << 32) | (uint)relation.B;
-        if (!index.Seen.Add(key)) return;
+        if (!index.Seen.Add(key)) return false;
         Push(index, relation.A, relation);
         if (relation.B != relation.A) Push(index, relation.B, relation);
+        return true;
     }
 
     static void Push(OpinionIndex index, int id, DiplomaticRelation relation)

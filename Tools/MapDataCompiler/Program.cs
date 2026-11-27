@@ -1,25 +1,174 @@
+using System.Globalization;
+using System.Text;
 using DealOrForce.Simulation;
 using SourceEarthData = DealOrForce.Simulation.WorldMapSource;
 
-var projectRoot = args.Length > 0 ? Path.GetFullPath(args[0]) : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-var output = Path.Combine(projectRoot, "game", "map_data");
+string? positionalRoot = null;
+string? mapPackId = null;
+string? outDirArg = null;
+int? cellsOverride = null;
+int? disputedCellsOverride = null;
+float? siberiaMultOverride = null;
+float? polarMultOverride = null;
+int? minCellsOverride = null;
+bool writeMapJson = false;
+string? nameEnArg = null;
+string? nameRuArg = null;
+string? descEnArg = null;
+string? descRuArg = null;
+string? authorArg = null;
+
+for (var i = 0; i < args.Length; i++)
+{
+    var arg = args[i];
+    string? NextValue() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"Missing value after {arg}");
+    switch (arg)
+    {
+        case "--map-pack": mapPackId = NextValue()?.Trim(); break;
+        case "--out-dir": outDirArg = NextValue(); break;
+        case "--cells": cellsOverride = int.Parse(NextValue()!, CultureInfo.InvariantCulture); break;
+        case "--disputed-cells": disputedCellsOverride = int.Parse(NextValue()!, CultureInfo.InvariantCulture); break;
+        case "--siberia-mult": siberiaMultOverride = float.Parse(NextValue()!, CultureInfo.InvariantCulture); break;
+        case "--polar-mult": polarMultOverride = float.Parse(NextValue()!, CultureInfo.InvariantCulture); break;
+        case "--min-cells": minCellsOverride = int.Parse(NextValue()!, CultureInfo.InvariantCulture); break;
+        case "--write-map-json": writeMapJson = true; break;
+        case "--name-en": nameEnArg = NextValue(); break;
+        case "--name-ru": nameRuArg = NextValue(); break;
+        case "--desc-en": descEnArg = NextValue(); break;
+        case "--desc-ru": descRuArg = NextValue(); break;
+        case "--author": authorArg = NextValue(); break;
+        case "--root": positionalRoot = NextValue(); break;
+        default:
+            if (arg.StartsWith("--", StringComparison.Ordinal))
+                throw new ArgumentException($"Unknown option: {arg}");
+            positionalRoot ??= arg;
+            break;
+    }
+}
+
+var projectRoot = !string.IsNullOrWhiteSpace(positionalRoot)
+    ? Path.GetFullPath(positionalRoot)
+    : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 Directory.SetCurrentDirectory(projectRoot);
+
+var isPackCompile = !string.IsNullOrWhiteSpace(mapPackId);
+var output = isPackCompile
+    ? (!string.IsNullOrWhiteSpace(outDirArg)
+        ? Path.GetFullPath(outDirArg, projectRoot)
+        : Path.Combine(projectRoot, "game", "maps", mapPackId!))
+    : (!string.IsNullOrWhiteSpace(outDirArg)
+        ? Path.GetFullPath(outDirArg, projectRoot)
+        : Path.Combine(projectRoot, "game", "map_data"));
+
+var profile = isPackCompile ? MapCatalog.BuiltInProfileFor(mapPackId) : ProvinceBuildProfile.Standard;
+if (cellsOverride.HasValue || disputedCellsOverride.HasValue || siberiaMultOverride.HasValue ||
+    polarMultOverride.HasValue || minCellsOverride.HasValue)
+{
+    profile = profile with
+    {
+        CellsPerProvince = cellsOverride ?? profile.CellsPerProvince,
+        DisputedCellsPerProvince = disputedCellsOverride ?? profile.DisputedCellsPerProvince,
+        SiberiaMultiplier = siberiaMultOverride ?? profile.SiberiaMultiplier,
+        PolarMultiplier = polarMultOverride ?? profile.PolarMultiplier,
+        MinimumProvinceCells = minCellsOverride ?? profile.MinimumProvinceCells
+    };
+}
 
 var campaign = Campaign.CreateBootstrap(20260830);
 TerritorialTopology.ResetCatalog();
 HydrologyCatalog.ResetCatalog();
 var repairs = TerritorialTopology.Apply(campaign, SourceEarthData.Control, SourceEarthData.States, SourceEarthData.Width, SourceEarthData.Height);
-var provinces = ProvinceTopology.Build(SourceEarthData.States, SourceEarthData.Control,
-    SourceEarthData.Width, SourceEarthData.Height, cell => SourceEarthData.DisputeAt(cell) != 0);
+var provinces = ProvinceTopology.Build(
+    SourceEarthData.States,
+    SourceEarthData.Control,
+    SourceEarthData.Width,
+    SourceEarthData.Height,
+    cell => SourceEarthData.DisputeAt(cell) != 0,
+    profile);
 var grown = provinces.ProvinceCount;
-provinces = provinces.AbsorbSlivers();
-Console.WriteLine($"Folded {grown - provinces.ProvinceCount:N0} leftover pockets under {ProvinceTopology.MinimumProvinceCells} cells into their neighbours");
+provinces = provinces.AbsorbSlivers(profile.MinimumProvinceCells);
+Console.WriteLine($"Folded {grown - provinces.ProvinceCount:N0} leftover pockets under {profile.MinimumProvinceCells} cells into their neighbours");
 provinces = provinces.RelaxShapes(SourceEarthData.States, SourceEarthData.Control);
+
+if (isPackCompile)
+{
+    campaign.MapId = mapPackId!;
+    Directory.CreateDirectory(output);
+    MapRasterCatalog.ExportPack(output, provinces, SourceEarthData.States);
+
+    var (defaultEn, defaultRu, defaultDescEn, defaultDescRu) = mapPackId switch
+    {
+        MapCatalog.TacticalId => (
+            "Tactical World",
+            "Тактический мир",
+            "Tactical province layout with coarsened Siberia, unified Eastern Ukraine, and streamlined poles.",
+            "Тактическая нарезка провинций с укрупнённой Сибирью, без микрофрагментации Восточной Украины и сжатыми полюсами."
+        ),
+        MapCatalog.CompactId => (
+            "Compact World",
+            "Компактный мир",
+            "Fast grand-strategy layout tuned for rapid pace and mobile play.",
+            "Компактная карта для высокого темпа и мобильной игры."
+        ),
+        _ => (
+            mapPackId!,
+            mapPackId!,
+            $"Custom compiled map pack '{mapPackId}'.",
+            $"Пользовательский пакет карты «{mapPackId}»."
+        )
+    };
+
+    if (writeMapJson || isPackCompile)
+    {
+        var manifest = MapCatalog.SerializeManifest(
+            id: mapPackId!,
+            nameEn: nameEnArg ?? defaultEn,
+            nameRu: nameRuArg ?? defaultRu,
+            descriptionEn: descEnArg ?? defaultDescEn,
+            descriptionRu: descRuArg ?? defaultDescRu,
+            author: authorArg ?? "Bayte Realization",
+            profile: profile,
+            inheritsBaseHydrology: true);
+        File.WriteAllText(Path.Combine(output, MapCatalog.ManifestFile), manifest, new UTF8Encoding(false));
+    }
+
+    MapRasterCatalog.ResetCatalog();
+    MapRasterCatalog.ApplyDirectory(output, null);
+    if (!MapRasterCatalog.TryBuildProvinceTopology(SourceEarthData.States, SourceEarthData.Control,
+            SourceEarthData.Width, SourceEarthData.Height, out var packRoundTrip, out var packError))
+        throw new InvalidDataException($"Province pack round trip failed: {packError}");
+    if (packRoundTrip.ProvinceCount != provinces.ProvinceCount || packRoundTrip.EdgeCount != provinces.EdgeCount ||
+        !packRoundTrip.CellToProvince.AsSpan().SequenceEqual(provinces.CellToProvince))
+        throw new InvalidDataException("Province pack PNG round trip changed IDs, cells or adjacency.");
+
+    ProvinceOwnership.Clear();
+    campaign.AttachProvinceTopology(provinces);
+    var packOwnership = ProvinceOwnership.Export(campaign, provinces, out var packOwnedProvinces);
+    File.WriteAllText(Path.Combine(output, "ownership.csv"), packOwnership, new UTF8Encoding(false));
+
+    Console.WriteLine($"Wrote map pack '{mapPackId}' ({provinces.ProvinceCount:N0} provinces, {provinces.EdgeCount:N0} edges) to {output}");
+    Console.WriteLine($"Wrote pack ownership: {packOwnedProvinces:N0} owned provinces");
+    return;
+}
 
 // The compiler deliberately builds physical pixels from the vector sources. Existing
 // PNGs are outputs, not inputs, so repeated compilation is deterministic.
 var hydrology = HydrologyCatalog.BuildVectorRaster(SourceEarthData.Width, SourceEarthData.Height);
 MapRasterCatalog.Export(output, provinces, hydrology, SourceEarthData.States);
+
+if (writeMapJson)
+{
+    var manifest = MapCatalog.SerializeManifest(
+        id: MapCatalog.StandardId,
+        nameEn: nameEnArg ?? "Standard World",
+        nameRu: nameRuArg ?? "Стандартный мир",
+        descriptionEn: descEnArg ?? "Standard high-detail 34,138-province world map.",
+        descriptionRu: descRuArg ?? "Стандартная детализированная карта мира.",
+        author: authorArg ?? "Bayte Realization",
+        profile: profile,
+        inheritsBaseHydrology: true);
+    File.WriteAllText(Path.Combine(output, MapCatalog.ManifestFile), manifest, new UTF8Encoding(false));
+}
 
 MapRasterCatalog.ResetCatalog();
 if (!MapRasterCatalog.TryBuildProvinceTopology(SourceEarthData.States, SourceEarthData.Control,

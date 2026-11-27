@@ -134,6 +134,12 @@ public static class ProvinceOwnership
         PointEntries.Clear();
         _byOwner = null;
         _setByOwner = null;
+        var packOwnership = MapCatalog.ResolveOwnershipPath();
+        if (!string.IsNullOrEmpty(packOwnership) && File.Exists(packOwnership))
+        {
+            Merge(File.ReadAllText(packOwnership), $"maps/{MapCatalog.ActiveMapId}/ownership.csv", null);
+            return;
+        }
         var directory = FindDirectory();
         if (directory is not null) LoadDirectory(directory, null);
     }

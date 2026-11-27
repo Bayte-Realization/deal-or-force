@@ -21,6 +21,7 @@ internal sealed class ShellMinimapView
 
     private PanelContainer _panel;
     private Control _canvas;
+    private Image _minimapImage;
     private ImageTexture _texture;
     private Campaign _world;
     private int _revision = int.MinValue;
@@ -65,9 +66,17 @@ internal sealed class ShellMinimapView
         };
         _canvas.Draw += DrawMinimap;
         _canvas.GuiInput += OnMinimapInput;
+        _panel.TreeExiting += DisposeResources;
         _panel.AddChild(_canvas);
         _panel.TooltipText = Ui.Tip(Loc.Get("Click on the minimap to jump the camera there."));
         _ctx.AttachPlateFrame(_panel, chamfer: 4.0f);
+    }
+
+    public void DisposeResources()
+    {
+        _minimapImage?.Dispose();
+        _minimapImage = null;
+        _texture = null;
     }
 
     public void Layout(ShellLayoutProfile profile)
@@ -258,9 +267,12 @@ internal sealed class ShellMinimapView
             }
         }
 
-        var img = Image.CreateFromData(MinimapW, MinimapH, false, Image.Format.Rgba8, _bytes);
-        if (_texture is null) _texture = ImageTexture.CreateFromImage(img);
-        else _texture.Update(img);
+        if (_minimapImage is null)
+            _minimapImage = Image.CreateFromData(MinimapW, MinimapH, false, Image.Format.Rgba8, _bytes);
+        else
+            _minimapImage.SetData(MinimapW, MinimapH, false, Image.Format.Rgba8, _bytes);
+        if (_texture is null) _texture = ImageTexture.CreateFromImage(_minimapImage);
+        else _texture.Update(_minimapImage);
         _canvas?.QueueRedraw();
     }
 

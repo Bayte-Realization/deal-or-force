@@ -18,6 +18,7 @@ static class ContentShapeTests
     private static readonly Regex StateIsoFileRule = new(@"^history/states/[^/]+/[A-Z0-9]{3}\.json$", RegexOptions.Compiled);
     private static readonly Regex SnakeCaseIdRule = new(@"^[a-z0-9_]+(\.[a-z0-9_]+)*$", RegexOptions.Compiled);
     private static readonly Regex EraSkinFileRule = new(@"^skins/[a-z0-9_]+/skin\.json$", RegexOptions.Compiled);
+    private static readonly Regex MapPackJsonFileRule = new(@"^maps/[a-z0-9_]+/(map|compiled)\.json$", RegexOptions.Compiled);
 
     private static readonly HashSet<string> SkippedMetaNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -89,7 +90,7 @@ static class ContentShapeTests
         "common/flags", "common/governance", "common/inflation", "common/militia", "common/news",
         "common/performance", "common/programme", "common/secession", "common/stability",
         "common/world_layers", "history/conflicts", "history/diplomacy", "history/factions",
-        "history/provinces", "history/units", "map_data", "interface", "gui", "fonts", "sound",
+        "history/provinces", "history/units", "map_data", "maps", "interface", "gui", "fonts", "sound",
         "music", "gfx", "presentation", "skins"
     };
 
@@ -101,7 +102,7 @@ static class ContentShapeTests
         "common/governance", "common/handbook", "common/naming", "common/news",
         "common/organizations", "common/peace_terms", "common/programme", "common/rulers",
         "history/conflicts", "history/diplomacy", "history/factions", "history/faiths", "history/pops",
-        "map_data", "interface", "gui", "fonts", "sound", "music", "gfx", "presentation", "skins"
+        "map_data", "maps", "interface", "gui", "fonts", "sound", "music", "gfx", "presentation", "skins"
     };
 
     private static readonly HashSet<string> ForbiddenWrapperKeys = new(StringComparer.OrdinalIgnoreCase)
@@ -236,6 +237,8 @@ static class ContentShapeTests
         {
             if (EraSkinFileRule.IsMatch(dataRel))
                 CountException(acceptedExceptions, "filename:skins/<id>/skin.json");
+            else if (MapPackJsonFileRule.IsMatch(dataRel))
+                CountException(acceptedExceptions, "filename:maps/<id>/(map|compiled).json");
             else if (StateIsoFileRule.IsMatch(dataRel))
                 CountException(acceptedExceptions, "filename:history/states/<TAG>");
             else if (!isTemplateTree && LegacyGameFileNames.Contains(dataRel))

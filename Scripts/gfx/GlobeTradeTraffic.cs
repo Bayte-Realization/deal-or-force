@@ -213,7 +213,9 @@ void fragment() {
                     LengthMetres = MathF.Max(1f, length), OwnMaterials = own,
                     Layer = new MultiMeshInstance3D
                     {
-                        Name = "Trade_" + name, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                        Name = "Trade_" + name,
+                        CustomAabb = new Aabb(new Vector3(-120f, -120f, -120f), new Vector3(240f, 240f, 240f)),
+                        CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                         Multimesh = new MultiMesh
                         {
                             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh,

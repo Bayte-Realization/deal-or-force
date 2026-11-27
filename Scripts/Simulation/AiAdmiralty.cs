@@ -67,6 +67,10 @@ public static class AiAdmiralty
         foreach (var _ in TickStages(campaign)) { }
     }
 
+    [ThreadStatic] private static Dictionary<(int Nation, int Berth), List<Fleet>> _concentrateGroupsScratch;
+    [ThreadStatic] private static Stack<List<Fleet>> _concentratePoolScratch;
+    [ThreadStatic] private static HashSet<int> _openWarNationsScratch;
+
     /// <summary>The same daily admiralty pass, yielded between batches of fleets.</summary>
     public static IEnumerable<int> TickStages(Campaign campaign)
     {
@@ -76,7 +80,10 @@ public static class AiAdmiralty
         // that is not the start of one.
         if (!campaign.StepOpensNewDay) yield break;
         ForgetGround();
-        if (campaign.ElapsedDays % 7 == 0) Concentrate(campaign);
+        var atWarSet = _openWarNationsScratch ??= new HashSet<int>();
+        var warRev = campaign.WarRevision;
+        FillOpenWarNations(campaign, atWarSet);
+        if (campaign.ElapsedDays % 7 == 0) Concentrate(campaign, atWarSet);
         yield return 0;
 
         var ticked = 0;
@@ -108,7 +115,12 @@ public static class AiAdmiralty
             if (fleet.HasOrder) continue;
             if (fleet.InPort && !fleet.IsLoaded && !Fit(campaign, fleet)) continue;
 
-            var war = FindWar(campaign, nation);
+            if (warRev != campaign.WarRevision)
+            {
+                warRev = campaign.WarRevision;
+                FillOpenWarNations(campaign, atWarSet);
+            }
+            var war = atWarSet.Contains(nation.Id) ? FindWar(campaign, nation) : null;
             if (war is null)
             {
                 SendHome(campaign, fleet);
@@ -146,32 +158,69 @@ public static class AiAdmiralty
         }
     }
 
+    private static void FillOpenWarNations(Campaign campaign, HashSet<int> atWarSet)
+    {
+        atWarSet.Clear();
+        foreach (var w in Warfare.OpenWars(campaign))
+        {
+            if (w.Ended) continue;
+            atWarSet.Add(w.AttackerId);
+            atWarSet.Add(w.DefenderId);
+            foreach (var p in w.AttackerAllies) atWarSet.Add(p);
+            foreach (var p in w.DefenderAllies) atWarSet.Add(p);
+        }
+    }
+
     /// <summary>
     /// At war, squadrons lying in the same port sail as one. Fifteen small squadrons each
     /// sent out on its own were fifteen chances to be beaten in detail; an admiralty
     /// concentrates before it gives battle (FleetGroups). Once a week, ports only, never a
     /// convoy or a fleet under orders.
     /// </summary>
-    private static void Concentrate(Campaign campaign)
+    private static void Concentrate(Campaign campaign, HashSet<int> atWarSet)
     {
-        var groups = new Dictionary<(int Nation, int Berth), List<Fleet>>();
-        foreach (var fleet in campaign.Fleets)
+        var groups = _concentrateGroupsScratch ??= new Dictionary<(int Nation, int Berth), List<Fleet>>();
+        var pool = _concentratePoolScratch ??= new Stack<List<Fleet>>();
+        foreach (var existing in groups.Values)
         {
+            existing.Clear();
+            pool.Push(existing);
+        }
+        groups.Clear();
+
+        var fleetsList = campaign.Fleets;
+        for (var i = 0; i < fleetsList.Count; i++)
+        {
+            var fleet = fleetsList[i];
             if (fleet.Hulls <= 0 || !fleet.InPort || fleet.IsLoaded || fleet.HasOrder || fleet.HullsOrdered > 0 ||
                 SeaLift.Holds(campaign, fleet)) continue;
             var key = (fleet.NationId, fleet.BerthProvinceId);
-            if (!groups.TryGetValue(key, out var list)) groups[key] = list = new List<Fleet>();
+            if (!groups.TryGetValue(key, out var list))
+                groups[key] = list = pool.Count > 0 ? pool.Pop() : new List<Fleet>(4);
             list.Add(fleet);
         }
         foreach (var ((nationId, _), fleets) in groups)
         {
             if (fleets.Count < 2) continue;
+            if (!atWarSet.Contains(nationId)) continue;
             var nation = campaign.NationById(nationId);
             if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Navy))) continue;
             if (FindWar(campaign, nation) is null) continue;
-            var into = fleets.OrderByDescending(fleet => fleet.Hulls).ThenBy(fleet => fleet.Id).First();
+            var into = fleets[0];
+            for (var fi = 1; fi < fleets.Count; fi++)
+            {
+                var candidate = fleets[fi];
+                if (candidate.Hulls > into.Hulls || (candidate.Hulls == into.Hulls && candidate.Id < into.Id))
+                    into = candidate;
+            }
             FleetGroups.Merge(campaign, into, fleets);
         }
+        foreach (var existing in groups.Values)
+        {
+            existing.Clear();
+            pool.Push(existing);
+        }
+        groups.Clear();
     }
 
     private static bool Spent(Campaign campaign, Fleet fleet)

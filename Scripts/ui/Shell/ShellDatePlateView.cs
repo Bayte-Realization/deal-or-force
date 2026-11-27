@@ -31,7 +31,7 @@ internal sealed class ShellDatePlateView
     private StyleBoxFlat _dateHoverStyle;
 
     private PanelContainer _speedWell;
-    private readonly Button[] _speedChevrons = new Button[5];
+    private readonly Button[] _speedChevrons = new Button[8];
 
     private Button _worldBtn;
     private HBoxContainer _worldRow;
@@ -201,7 +201,7 @@ internal sealed class ShellDatePlateView
         _speedWell.AddChild(row);
 
         var empty = new StyleBoxEmpty();
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < _speedChevrons.Length; i++)
         {
             var speedVal = i + 1;
             var btn = new Button
@@ -220,7 +220,7 @@ internal sealed class ShellDatePlateView
                 _ctx.SetSpeed?.Invoke(speedVal);
                 Refresh();
             };
-            btn.TooltipText = Ui.Tip(Loc.Format("Simulation speed {0} (keys 1-5).", speedVal));
+            btn.TooltipText = Ui.Tip(Loc.Format("Simulation speed {0} (keys 1-8).", speedVal));
             btn.Draw += () => DrawChevronMark(btn, speedVal);
             row.AddChild(btn);
             _speedChevrons[i] = btn;
@@ -241,7 +241,7 @@ internal sealed class ShellDatePlateView
             new(0.5f, h - 1f),
             new(w * 0.42f, h * 0.5f)
         };
-        var curSpeed = Math.Clamp(_ctx.GetSpeed?.Invoke() ?? 1, 1, 5);
+        var curSpeed = Math.Clamp(_ctx.GetSpeed?.Invoke() ?? 1, 1, _speedChevrons.Length);
         var paused = _ctx.IsPaused?.Invoke() ?? true;
         Color col;
         Color rim;
@@ -487,14 +487,14 @@ internal sealed class ShellDatePlateView
 
         var botY = touch ? 54f : (compact ? 32f : 45f);
         var botH = touch ? 42f : (compact ? 21f : 30f);
-        var speedW = touch ? Math.Clamp(MathF.Round((divX - 24f) * 0.48f), 164f, 184f) : (compact ? 86f : 112f);
+        var speedW = touch ? Math.Clamp(MathF.Round((divX - 24f) * 0.50f), 194f, 224f) : (compact ? 114f : 146f);
         ShellContext.PlaceRect(_speedWell, new ShellRect(d1X, botY, speedW, botH));
-        var touchPipW = Math.Clamp(MathF.Floor((speedW - 18f) / 5f), 26f, 34f);
+        var touchPipW = Math.Clamp(MathF.Floor((speedW - 22f) / 8f), 21f, 25f);
         var touchPipH = Math.Max(24f, botH - 6f);
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < _speedChevrons.Length; i++)
             _speedChevrons[i].CustomMinimumSize = touch
                 ? new Vector2(touchPipW, touchPipH)
-                : new Vector2(compact ? 13 : 17, compact ? 15 : 21);
+                : new Vector2(compact ? 11 : 14, compact ? 15 : 21);
 
         var worldX = d1X + speedW + (touch ? 6f : (compact ? 6f : 8f));
         var worldW = Math.Max(touch ? 136f : 100f, divX - worldX - (touch ? 8f : (compact ? 6f : 8f)));
@@ -531,7 +531,7 @@ internal sealed class ShellDatePlateView
         ApplyDateAndClockState(
             _ctx.GetPresentationDate?.Invoke() ?? world.Date,
             hud?.IsPaused ?? (_ctx.IsPaused?.Invoke() ?? true),
-            Math.Clamp(_ctx.GetSpeed?.Invoke() ?? (hud?.Speed ?? 1), 1, 5),
+            Math.Clamp(_ctx.GetSpeed?.Invoke() ?? (hud?.Speed ?? 1), 1, _speedChevrons.Length),
             _ctx.IsObserverMode?.Invoke() ?? (hud?.ObserverMode ?? world.ObserverMode));
     }
 

@@ -157,18 +157,11 @@ public partial class DealOrForceGame
             _selectedState.Radicalism > 0.45f ? "state.negative" :
             _selectedState.Radicalism > 0.25f ? "state.warning" : "state.positive");
 
-        // A region has a settledness of its own now, and the country's is what these add
-        // up to - the capital weighing far above its size. It belongs next to the things
-        // that decide it rather than only as a national figure on another screen.
         var isCapital = owner is not null && _selectedState.MapIndex == owner.CapitalStateMapIndex;
         DetailRow("Stability", Fmt.Percent(_selectedState.Stability),
-            isCapital
-                ? Tr("How settled this region is - and it is the capital, so it decides far more "
-                     + "of the country's stability than its size alone would earn it.")
-                : Tr("How settled this region is: what it lives on, what it thinks, who its "
-                     + "people are, and whose soldiers are standing in it."),
-            _selectedState.Stability < 0.35f ? "state.negative" :
-            _selectedState.Stability < 0.55f ? "state.warning" : "state.positive");
+            isCapital ? Tr("How settled this region is - and it is the capital, so it decides far more of the country's stability than its size alone would earn it.")
+                      : Tr("How settled this region is: what it lives on, what it thinks, who its people are, and whose soldiers are standing in it."),
+            _selectedState.Stability < 0.35f ? "state.negative" : _selectedState.Stability < 0.55f ? "state.warning" : "state.positive");
 
         var cultures = EconomySystem.Cultures(_selectedState);
         if (cultures.Count > 0)
@@ -245,22 +238,22 @@ public partial class DealOrForceGame
         var garrison = _campaign.Armies.Count(army => army.StateMapIndex == _selectedState.MapIndex &&
                                                       CampaignIntel.PlayerCanSeeArmy(_campaign, army));
         DetailHeading("GROUND");
-        DetailRow("Provinces", provinces.ToString("N0"),
-            "Tactical provinces this region is made of. A border drawn through them splits the region in two.");
-        DetailRow("Divisions here", garrison.ToString("N0"),
-            "Formations you can see standing inside the region. Foreign forces are hidden by fog of war.");
-
+        DetailRow("Provinces", provinces.ToString("N0"), "Tactical provinces this region is made of. A border drawn through them splits the region in two.");
+        DetailRow("Divisions here", garrison.ToString("N0"), "Formations you can see standing inside the region. Foreign forces are hidden by fog of war.");
+        var regMovements = CardTelemetryAudit.ReadRegionMovements(_campaign, _selectedState, observing);
+        AppendClassicRegionMovements(regMovements);
         SetRegionalActionsEnabled(owned);
     }
 
-    /// <summary>
-    /// Who lives here: the peoples, their faiths, their trades and the classes they fall in.
-    ///
-    /// Four compositions rather than four lists of numbers. A region is a thing you are
-    /// supposed to be able to recognise at a glance - one people or five, one faith or a
-    /// fault line through the middle of it, a countryside or a city - and a column of
-    /// percentages does not do that however accurate it is.
-    /// </summary>
+    private void AppendClassicRegionMovements(IReadOnlyList<CardTelemetryAudit.RegionMovementEntry> regMovements)
+    {
+        if (regMovements.Count == 0) return;
+        DetailHeading(Loc.Get("shell.audit.movements_in_region"));
+        for (var mi = 0; mi < Math.Min(4, regMovements.Count); mi++)
+            DetailRow(regMovements[mi].Name, Fmt.Percent(regMovements[mi].ResidentSupport) + (regMovements[mi].IsHeadquarters ? $" · {Loc.Get("shell.audit.hq_short")}" : ""), Loc.Get("shell.audit.movements_section_tip"), regMovements[mi].HighRisingRisk ? "state.negative" : "state.warning");
+    }
+
+    /// <summary>Who lives here: peoples, faiths, politics, trades, classes and sectors.</summary>
     private void ShowRegionPopulation()
     {
         if (_selectedState is null) return;
@@ -501,20 +494,22 @@ public partial class DealOrForceGame
                 : "Only an owned region can receive construction orders.");
             return;
         }
-        var before = _campaign.Construction.Count;
-        for (var i = 0; i < Math.Max(1, count); i++)
+        var queued = CommitImmediateCampaignWrite(c =>
         {
-            var was = _campaign.Construction.Count;
-            _campaign.Commands.Enqueue(new QueueConstructionCommand
+            var before = c.Construction.Count;
+            for (var i = 0; i < Math.Max(1, count); i++)
             {
-                IssuerId = player.Id,
-                StateMapIndex = _selectedState.MapIndex,
-                Building = kind
-            });
-            _campaign.Commands.ApplyAll(_campaign);
-            if (_campaign.Construction.Count == was) break;
-        }
-        var queued = _campaign.Construction.Count - before;
+                var was = c.Construction.Count;
+                ImmediateCampaignCommands.Commit(c, new QueueConstructionCommand
+                {
+                    IssuerId = player.Id,
+                    StateMapIndex = _selectedState.MapIndex,
+                    Building = kind
+                });
+                if (c.Construction.Count == was) break;
+            }
+            return c.Construction.Count - before;
+        }, refreshHud: true, wakeGlobe: true);
         _regionActionFeedback.Text = queued > 1
             ? Simulation.Loc.Format("{0} × {1} added to the {2} queue.",
                 queued, Tr(BuildingCatalog.Get(kind).Name), _selectedState.DisplayName)

@@ -435,7 +435,7 @@ public sealed class CampaignRenderSnapshot
         rankMapRev: -1,
         rankWarRev: -1,
         rankPlayerId: -1,
-        nationRanksById: new Dictionary<int, int>(0));
+        nationRanksById: new Dictionary<int, int>(0), rankingRows: Array.Empty<CountryRankings.Row>());
 
     public readonly long Version;
     public readonly int ElapsedDays;
@@ -467,7 +467,7 @@ public sealed class CampaignRenderSnapshot
     private readonly int[] _slotByMapIndex;
     public readonly int PlayerOverallRank;
     public readonly double PlayerOverallScore;
-    public readonly IReadOnlyDictionary<int, int> NationRanksById;
+    public readonly IReadOnlyDictionary<int, int> NationRanksById; public readonly IReadOnlyList<CountryRankings.Row> RankingRows;
 
     internal readonly int RankWeek;
     internal readonly int RankMapRev;
@@ -486,7 +486,7 @@ public sealed class CampaignRenderSnapshot
         NationSnapshot[] nations, int[] slotById, int[] slotByMapIndex,
         int playerOverallRank, double playerOverallScore,
         int rankWeek, int rankMapRev, int rankWarRev, int rankPlayerId,
-        IReadOnlyDictionary<int, int> nationRanksById)
+        IReadOnlyDictionary<int, int> nationRanksById, IReadOnlyList<CountryRankings.Row> rankingRows = null)
     {
         Version = version;
         ElapsedDays = elapsedDays;
@@ -522,7 +522,7 @@ public sealed class CampaignRenderSnapshot
         RankMapRev = rankMapRev;
         RankWarRev = rankWarRev;
         RankPlayerId = rankPlayerId;
-        NationRanksById = nationRanksById;
+        NationRanksById = nationRanksById; RankingRows = rankingRows ?? Array.Empty<CountryRankings.Row>();
     }
 
     public bool TryGetNation(int nationId, out NationSnapshot summary)
@@ -677,14 +677,14 @@ public sealed class CampaignRenderSnapshot
         var rankPlayerId = campaign.Player?.Id ?? -1;
         var overallRank = previous.PlayerOverallRank;
         var overallScore = previous.PlayerOverallScore;
-        var ranksById = previous.NationRanksById;
+        var ranksById = previous.NationRanksById; var rankingRows = previous.RankingRows;
         var rankWeek = previous.RankWeek;
         var rankMapRev = previous.RankMapRev;
         var rankWarRev = previous.RankWarRev;
         if (previous.Version == 0 ||
             rankWeek != week ||
             previous.RankPlayerId != rankPlayerId ||
-            ranksById.Count == 0 ||
+            ranksById.Count == 0 || rankingRows.Count == 0 ||
             (campaign.IsPaused && (rankMapRev != campaign.MapRevision || rankWarRev != campaign.WarRevision)))
         {
             var rows = CountryRankings.Read(campaign, rankWeights);
@@ -701,7 +701,7 @@ public sealed class CampaignRenderSnapshot
                     overallScore = r.Overall;
                 }
             }
-            ranksById = map;
+            ranksById = map; rankingRows = rows;
             rankWeek = week;
             rankMapRev = campaign.MapRevision;
             rankWarRev = campaign.WarRevision;
@@ -742,7 +742,7 @@ public sealed class CampaignRenderSnapshot
             rankMapRev,
             rankWarRev,
             rankPlayerId,
-            ranksById);
+            ranksById, rankingRows);
     }
 
     private static ushort[] ReuseProvinceRow(ushort[] previous, int previousRevision, ushort[] source, int revision)
@@ -788,7 +788,7 @@ public sealed class CampaignRenderSnapshot
             RankMapRev,
             RankWarRev,
             RankPlayerId,
-            NationRanksById);
+            NationRanksById, RankingRows);
 }
 
 /// <summary>
@@ -1228,6 +1228,8 @@ public sealed class BackgroundSimRunner : IDisposable
     private volatile Campaign _campaign;
     private volatile bool _pausedDesired = true;
     private volatile int _speedDesired = 1;
+    private int _clockDesiredVersion;
+    private int _clockAppliedVersion;
     private long _snapshotVersion;
     private sealed class PublishedClock
     {
@@ -1257,12 +1259,15 @@ public sealed class BackgroundSimRunner : IDisposable
     private PublishedClock _publishedClock;
     private CampaignHudSnapshot _hudSnapshot = CampaignHudSnapshot.Empty;
     private readonly LockFreeTripleBuffer<WorldVisualState> _visualBuffer = new(() => new WorldVisualState());
+    private readonly SmoothTimePacer _pacer = new();
     private long _presentedVisualVersion;
     private long _lastPresentedTicks;
     private long _lastSnapshotPublishedTicks;
+    private long _lastHudSnapshotTicks;
     private int _lastSnapshotMapRev = int.MinValue;
     private int _lastSnapshotOwnerRev = int.MinValue;
     private int _lastSnapshotWarRev = int.MinValue;
+    private int _smoothMode = (int)SmoothTimeMode.Adaptive;
     private bool _pendingStepEvent;
     private bool _pendingStepOpensNewDay;
     private bool _pendingAutosave;
@@ -1286,6 +1291,13 @@ public sealed class BackgroundSimRunner : IDisposable
 
     public CountryRankings.Weights RankingWeights { get; set; } = CountryRankings.Weights.Default;
     public bool MobilePacing { get; set; }
+    /// <summary>Smooth Time 2.0 real-time pacing profile; affects wall-clock cadence only, never simulation state.</summary>
+    public SmoothTimeMode SmoothMode
+    {
+        get => (SmoothTimeMode)Volatile.Read(ref _smoothMode);
+        set => Volatile.Write(ref _smoothMode, (int)value);
+    }
+    public SmoothTimePacer Pacer => _pacer;
     /// <summary>
     /// Adaptive step length on every platform (1h/2h/4h/8h/24h for Speed 1..5 when the defined
     /// step is one hour). Runtime-only: <see cref="Campaign.RuntimeStepHoursOverride"/> is not
@@ -1294,12 +1306,14 @@ public sealed class BackgroundSimRunner : IDisposable
     public bool AdaptiveStepPacing { get; set; } = true;
     public double MinSpeed5DayIntervalMs { get; set; }
     internal bool MeasurePacing { get; set; }
+    public bool DesiredPaused => _pausedDesired;
+    public int DesiredSpeed => _speedDesired;
 
     internal static int AdaptiveStepHours(int speed) => MobileAdaptiveStepHours(speed);
 
     /// <summary>
-    /// Wall seconds per campaign day under adaptive steps. Mobile keeps its tuned table; desktop
-    /// is slightly calmer at the low speeds and still uncapped at Speed 5.
+    /// Wall seconds per campaign day under adaptive steps across speeds 1..8.
+    /// Speed 8 runs uncapped (0.0s), matching MaxSpeed turbo semantics.
     /// </summary>
     internal static double AdaptiveStepSecondsPerDay(Defines defines, int speed, bool mobilePacing)
     {
@@ -1307,10 +1321,13 @@ public sealed class BackgroundSimRunner : IDisposable
         var baseSecondsPerDay = (double)(defines?.SecondsPerDay ?? 5f);
         return speed switch
         {
-            <= 1 => baseSecondsPerDay * 0.60,
-            2 => baseSecondsPerDay * 0.24,
-            3 => baseSecondsPerDay * 0.090,
-            4 => baseSecondsPerDay * 0.025,
+            <= 1 => baseSecondsPerDay * 2.40,
+            2 => baseSecondsPerDay * 1.20,
+            3 => baseSecondsPerDay * 0.60,
+            4 => baseSecondsPerDay * 0.28,
+            5 => baseSecondsPerDay * 0.13,
+            6 => baseSecondsPerDay * 0.055,
+            7 => baseSecondsPerDay * 0.020,
             _ => 0.0
         };
     }
@@ -1318,9 +1335,12 @@ public sealed class BackgroundSimRunner : IDisposable
     internal static int MobileAdaptiveStepHours(int speed) => speed switch
     {
         <= 1 => 1,
-        2 => 2,
-        3 => 4,
-        4 => 8,
+        2 => 1,
+        3 => 1,
+        4 => 2,
+        5 => 4,
+        6 => 6,
+        7 => 12,
         _ => 24
     };
 
@@ -1329,10 +1349,13 @@ public sealed class BackgroundSimRunner : IDisposable
         var baseSecondsPerDay = (double)(defines?.SecondsPerDay ?? 5f);
         return speed switch
         {
-            <= 1 => baseSecondsPerDay * 0.44,
-            2 => baseSecondsPerDay * 0.18,
-            3 => baseSecondsPerDay * 0.068,
-            4 => baseSecondsPerDay * 0.020,
+            <= 1 => baseSecondsPerDay * 1.80,
+            2 => baseSecondsPerDay * 0.90,
+            3 => baseSecondsPerDay * 0.45,
+            4 => baseSecondsPerDay * 0.20,
+            5 => baseSecondsPerDay * 0.095,
+            6 => baseSecondsPerDay * 0.042,
+            7 => baseSecondsPerDay * 0.016,
             _ => 0.0
         };
     }
@@ -1394,14 +1417,11 @@ public sealed class BackgroundSimRunner : IDisposable
     /// </summary>
     public void NotifyVisualFramePresented(long snapshotVersion)
     {
-        var prev = Volatile.Read(ref _presentedVisualVersion);
-        if (snapshotVersion > prev)
+        if (snapshotVersion > Volatile.Read(ref _presentedVisualVersion))
             Volatile.Write(ref _presentedVisualVersion, snapshotVersion);
         Volatile.Write(ref _lastPresentedTicks, Stopwatch.GetTimestamp());
         if (Volatile.Read(ref _snapshotVersion) - snapshotVersion <= 2)
-        {
             lock (_wakeLock) Monitor.PulseAll(_wakeLock);
-        }
     }
 
     public void Start(Campaign campaign)
@@ -1413,15 +1433,13 @@ public sealed class BackgroundSimRunner : IDisposable
         _campaign = campaign;
         _pausedDesired = campaign.IsPaused;
         _speedDesired = campaign.Speed;
-        _stopRequested = false;
-        _pendingStepEvent = false;
-        _pendingStepOpensNewDay = false;
-        _pendingAutosave = false;
-        _pendingException = null;
-        _workerFault = null;
+        _clockAppliedVersion = Volatile.Read(ref _clockDesiredVersion);
+        _stopRequested = _pendingStepEvent = _pendingStepOpensNewDay = _pendingAutosave = false;
+        _pendingException = _workerFault = null;
         _workerStepStartHours = -1;
         _workerAcquireTicks = _workerWorkTicks = _workerReleaseTicks = 0;
-        _snapshotTicks = _snapshotBytes = _snapshotCount = 0;
+        _snapshotTicks = _snapshotBytes = _snapshotCount = _lastHudSnapshotTicks = 0;
+        _pacer.Reset();
         Volatile.Write(ref _presentedVisualVersion, 0);
         Volatile.Write(ref _lastPresentedTicks, 0);
         _sawPendingPlayerEvent = campaign.HasPendingPlayerEvent();
@@ -1432,20 +1450,14 @@ public sealed class BackgroundSimRunner : IDisposable
         {
             campaign.FinishStep();
             campaign.RuntimeStepHoursOverride = 0;
+            if (campaign.ProvinceMap is not null) { CampaignIntel.InvalidateActors(campaign); if (campaign.Player is { IsHuman: true } p) CampaignIntel.Vision(campaign, p.Id); }
             Volatile.Write(ref _publishedClock, new PublishedClock(campaign));
             PublishSnapshotLocked(campaign, force: true);
         }
-        finally
-        {
-            campaign.AccessGate.ExitWrite();
-        }
+        finally { campaign.AccessGate.ExitWrite(); }
 
         _workerRunning = true;
-        _thread = new Thread(WorkerLoop)
-        {
-            IsBackground = true,
-            Name = "DoF-Sim"
-        };
+        _thread = new Thread(WorkerLoop) { IsBackground = true, Name = "DoF-Sim" };
         _thread.Start();
     }
 
@@ -1464,13 +1476,12 @@ public sealed class BackgroundSimRunner : IDisposable
         var thread = _thread;
         if (thread is not null && thread.IsAlive && !ReferenceEquals(thread, Thread.CurrentThread))
         {
-            // Once claimed, capture owns the campaign until it has detached its save data.
-            // Stop can cancel work waiting for the gate without waiting for a reader to leave.
             if (finishCapture) thread.Join();
             else thread.Join(millisecondsTimeout: 2000);
         }
         _thread = null;
         _workerRunning = false;
+        _pacer.SyncGcLatencyMode(wantLowLatency: false, MobilePacing);
         if (campaign is not null)
         {
             campaign.DeferMainThreadNotifications = false;
@@ -1483,14 +1494,26 @@ public sealed class BackgroundSimRunner : IDisposable
         Volatile.Write(ref _lastPresentedTicks, 0);
     }
 
+    public void SetDesiredClockState(bool paused, int speed)
+    {
+        var maxSpeed = Math.Max(1, _campaign?.Defines?.MaxSpeed ?? 8);
+        var clamped = Math.Clamp(speed, 1, maxSpeed);
+        _pausedDesired = paused;
+        _speedDesired = clamped;
+        Interlocked.Increment(ref _clockDesiredVersion);
+        lock (_wakeLock) Monitor.PulseAll(_wakeLock);
+    }
+
     public void SyncClockState(bool paused, int speed)
     {
-        var clamped = Math.Max(1, speed);
+        var maxSpeed = Math.Max(1, _campaign?.Defines?.MaxSpeed ?? 8);
+        var clamped = Math.Clamp(speed, 1, maxSpeed);
         var changed = _pausedDesired != paused || _speedDesired != clamped;
         _pausedDesired = paused;
         _speedDesired = clamped;
         if (changed)
         {
+            Interlocked.Increment(ref _clockDesiredVersion);
             lock (_wakeLock) Monitor.PulseAll(_wakeLock);
         }
     }
@@ -1517,6 +1540,7 @@ public sealed class BackgroundSimRunner : IDisposable
             {
                 _pausedDesired = campaign.IsPaused;
                 _speedDesired = campaign.Speed;
+                _clockAppliedVersion = Volatile.Read(ref _clockDesiredVersion);
                 if (!campaign.IsPaused) lock (_wakeLock) Monitor.PulseAll(_wakeLock);
             }
         }
@@ -1545,6 +1569,7 @@ public sealed class BackgroundSimRunner : IDisposable
             {
                 _pausedDesired = campaign.IsPaused;
                 _speedDesired = campaign.Speed;
+                _clockAppliedVersion = Volatile.Read(ref _clockDesiredVersion);
                 if (!campaign.IsPaused) lock (_wakeLock) Monitor.PulseAll(_wakeLock);
             }
         }
@@ -1558,6 +1583,8 @@ public sealed class BackgroundSimRunner : IDisposable
         try
         {
             if (campaign.MidStep) campaign.FinishStep();
+            _pausedDesired = campaign.IsPaused; _speedDesired = campaign.Speed; _clockAppliedVersion = Volatile.Read(ref _clockDesiredVersion);
+            if (campaign.ProvinceMap is not null) { CampaignIntel.InvalidateActors(campaign); if (campaign.Player is { IsHuman: true } p) CampaignIntel.Vision(campaign, p.Id); }
             PublishSnapshotLocked(campaign, force: true);
         }
         finally
@@ -1591,7 +1618,9 @@ public sealed class BackgroundSimRunner : IDisposable
         if (clock is not null && ReferenceEquals(clock.Campaign, campaign)) clock.Publish(campaign.Date);
     }
 
-    private void PublishSnapshotLocked(Campaign campaign, bool force, double minIntervalMs = 16.0)
+    private void PublishSnapshotLocked(
+        Campaign campaign, bool force, double minIntervalMs = 16.0,
+        double mapCoalesceMs = 0.0, double hudMinIntervalMs = 0.0)
     {
         var now = Stopwatch.GetTimestamp();
         var mapRev = campaign.MapRevision;
@@ -1599,33 +1628,31 @@ public sealed class BackgroundSimRunner : IDisposable
         var warRev = campaign.WarRevision;
         var prevRender = campaign.RenderSnapshot;
         var elapsedMs = Stopwatch.GetElapsedTime(_lastSnapshotPublishedTicks).TotalMilliseconds;
-        if (!force &&
-            mapRev == _lastSnapshotMapRev &&
-            ownerRev == _lastSnapshotOwnerRev &&
-            warRev == _lastSnapshotWarRev &&
-            !campaign.IsPaused &&
-            prevRender is { Version: > 0 } &&
-            prevRender.NationRanksById.Count > 0 &&
-            elapsedMs < minIntervalMs)
+        var revsChanged = mapRev != _lastSnapshotMapRev || ownerRev != _lastSnapshotOwnerRev || warRev != _lastSnapshotWarRev;
+        if (!force && !campaign.IsPaused && prevRender is { Version: > 0 } && prevRender.NationRanksById.Count > 0 &&
+            ((!revsChanged && elapsedMs < minIntervalMs) || (revsChanged && mapCoalesceMs > 0.0 && elapsedMs < mapCoalesceMs)))
         {
             if (prevRender.ElapsedDays != campaign.ElapsedDays || prevRender.ElapsedHours != campaign.ElapsedHours || elapsedMs >= 24.0)
             {
                 var clockSnap = prevRender.WithClock(Interlocked.Increment(ref _snapshotVersion), campaign);
-                _visualBuffer.WriteBuffer.CaptureFrom(campaign, clockSnap);
-                _visualBuffer.PublishWrite();
+                if (mapCoalesceMs <= 0.0 || elapsedMs >= 16.0) { _visualBuffer.WriteBuffer.CaptureFrom(campaign, clockSnap); _visualBuffer.PublishWrite(); }
                 campaign.PublishRenderSnapshot(clockSnap);
                 PublishCompletedDate(campaign);
             }
             return;
         }
-
         var nextVer = Interlocked.Increment(ref _snapshotVersion);
         var measurePacing = MeasurePacing;
         var captureStarted = measurePacing ? Stopwatch.GetTimestamp() : 0;
         var allocated = measurePacing ? GC.GetAllocatedBytesForCurrentThread() : 0;
         var prevHud = Volatile.Read(ref _hudSnapshot);
         var snap = CampaignRenderSnapshot.Capture(campaign, prevRender, RankingWeights, nextVer);
-        var hudSnap = CampaignHudSnapshot.Capture(campaign, nextVer, prevHud);
+        var hudElapsedMs = _lastHudSnapshotTicks == 0 ? double.PositiveInfinity : Stopwatch.GetElapsedTime(_lastHudSnapshotTicks).TotalMilliseconds;
+        var reuseHud = !force && hudMinIntervalMs > 0.0 && hudElapsedMs < hudMinIntervalMs && !revsChanged && prevHud is { Version: > 0 } &&
+            prevHud.PlayerId == (campaign.Player?.Id ?? -1) && prevHud.Speed == campaign.Speed && prevHud.IsPaused == campaign.IsPaused &&
+            campaign.PendingEvents.Count == 0 && prevHud.PendingEventCount == 0;
+        var hudSnap = reuseHud ? prevHud : CampaignHudSnapshot.Capture(campaign, nextVer, prevHud);
+        if (!reuseHud) _lastHudSnapshotTicks = now;
         _visualBuffer.WriteBuffer.CaptureFrom(campaign, snap);
         _visualBuffer.PublishWrite();
         if (measurePacing)
@@ -1634,7 +1661,7 @@ public sealed class BackgroundSimRunner : IDisposable
             Interlocked.Add(ref _snapshotBytes, GC.GetAllocatedBytesForCurrentThread() - allocated);
             Interlocked.Increment(ref _snapshotCount);
         }
-        Volatile.Write(ref _hudSnapshot, hudSnap);
+        if (!reuseHud) Volatile.Write(ref _hudSnapshot, hudSnap);
         campaign.PublishRenderSnapshot(snap);
         PublishCompletedDate(campaign);
         _lastSnapshotPublishedTicks = now;
@@ -1712,13 +1739,61 @@ public sealed class BackgroundSimRunner : IDisposable
         }
     }
 
+    private void WaitForVisualBackpressure(int speed, WorkerSlicePolicy policy, ref long lastTickTime)
+    {
+        var presentedTicks = Volatile.Read(ref _lastPresentedTicks);
+        if (presentedTicks == 0 || Stopwatch.GetElapsedTime(presentedTicks).TotalMilliseconds >= 250.0) return;
+        if (Volatile.Read(ref _snapshotVersion) - Volatile.Read(ref _presentedVisualVersion) < policy.MaxVisualLeadSnapshots) return;
+        var bpStart = Stopwatch.GetTimestamp();
+        while (!_stopRequested && !_pausedDesired && _speedDesired == speed &&
+               Volatile.Read(ref _snapshotVersion) - Volatile.Read(ref _presentedVisualVersion) >= policy.MaxVisualLeadSnapshots &&
+               Stopwatch.GetElapsedTime(bpStart).TotalMilliseconds < policy.MaxBackpressureWaitMs)
+        {
+            lock (_wakeLock)
+            {
+                if (!_stopRequested && !_pausedDesired &&
+                    Volatile.Read(ref _snapshotVersion) - Volatile.Read(ref _presentedVisualVersion) >= policy.MaxVisualLeadSnapshots)
+                    Monitor.Wait(_wakeLock, 3);
+            }
+        }
+        lastTickTime = Stopwatch.GetTimestamp();
+    }
+
+    private void PaceCompletedMaxSpeedDay(Campaign campaign, SmoothTimeMode smoothMode, int speed, bool mobilePacing, ref long lastDayTicks, ref long lastTickTime)
+    {
+        var nowDayTicks = Stopwatch.GetTimestamp();
+        if (lastDayTicks != 0)
+        {
+            var elapsedDayMs = Stopwatch.GetElapsedTime(lastDayTicks, nowDayTicks).TotalMilliseconds;
+            var waitMs = _pacer.ComputePostDayWaitMs(smoothMode, speed, mobilePacing, MinSpeed5DayIntervalMs, elapsedDayMs);
+            if (waitMs > 0.5)
+            {
+                var waitTarget = lastDayTicks + (long)((elapsedDayMs + waitMs) * (Stopwatch.Frequency / 1000.0));
+                while (!_stopRequested && !_pausedDesired && _speedDesired >= 8 && _saveRequest is null && !campaign.AccessGate.HasWriteWaiter)
+                {
+                    var remMs = (int)Math.Ceiling(Stopwatch.GetElapsedTime(Stopwatch.GetTimestamp(), waitTarget).TotalMilliseconds);
+                    if (remMs <= 0) break;
+                    lock (_wakeLock)
+                    {
+                        if (!_stopRequested && !_pausedDesired && _speedDesired >= 8 && _saveRequest is null)
+                            Monitor.Wait(_wakeLock, Math.Min(remMs, 10));
+                    }
+                }
+            }
+        }
+        lastDayTicks = Stopwatch.GetTimestamp();
+        lastTickTime = lastDayTicks;
+    }
+
     private void WorkerLoop()
     {
         var lastTickTime = Stopwatch.GetTimestamp();
         var accumulator = 0.0;
+        var dayWorkMs = 0.0;
         var lastSpeed = -1;
+        var lastSmoothMode = SmoothMode;
+        var priorityLowered = false;
         long lastSpeed5DayTicks = 0;
-        var emaSpeed5DayMs = 0.0;
         try
         {
             while (!_stopRequested && ReferenceEquals(_thread, Thread.CurrentThread))
@@ -1726,11 +1801,44 @@ public sealed class BackgroundSimRunner : IDisposable
                 var campaign = _campaign;
                 if (campaign is null) break;
 
-                // In flight, an ordinary step reaches its own bounded finish. A paused
-                // world can finish an already-started step without opening another one.
+                var mobilePacing = MobilePacing;
+                var smoothMode = SmoothMode;
+                var adaptiveSteps = AdaptiveStepPacing || mobilePacing;
+                var desiredVer = Volatile.Read(ref _clockDesiredVersion);
+                if (desiredVer != _clockAppliedVersion)
+                {
+                    if (campaign.AccessGate.HasWriteWaiter) { Thread.Yield(); continue; }
+                    campaign.AccessGate.EnterWrite(asBackgroundWorker: true);
+                    try
+                    {
+                        if (!ReferenceEquals(_thread, Thread.CurrentThread)) break;
+                        desiredVer = Volatile.Read(ref _clockDesiredVersion);
+                        _clockAppliedVersion = desiredVer;
+                        var targetPaused = _pausedDesired;
+                        var maxSpd = Math.Max(1, campaign.Defines?.MaxSpeed ?? 8);
+                        var targetSpeed = Math.Clamp(_speedDesired, 1, maxSpd);
+                        var clockChanged = campaign.IsPaused != targetPaused || campaign.Speed != targetSpeed;
+                        campaign.IsPaused = targetPaused;
+                        campaign.Speed = targetSpeed;
+                        if (!campaign.MidStep)
+                            campaign.RuntimeStepHoursOverride = adaptiveSteps && !targetPaused ? AdaptiveStepHours(targetSpeed) : 0;
+                        if (clockChanged) PublishSnapshotLocked(campaign, force: true);
+                    }
+                    finally
+                    {
+                        campaign.AccessGate.ExitWrite(yieldToRequestedReader: true,
+                            readerWindowMs: mobilePacing ? 10 : 18,
+                            readerWorkAheadMs: mobilePacing ? 20 : 0);
+                    }
+                    _sawPendingPlayerEvent = campaign.HasPendingPlayerEvent();
+                    lastTickTime = Stopwatch.GetTimestamp();
+                    continue;
+                }
+
                 if (_saveRequest is not null && (!campaign.MidStep || _pausedDesired || campaign.IsPaused ||
                     _workerFault is not null || campaign.SimulationFault.Length > 0))
                 {
+                    _pacer.SyncGcLatencyMode(wantLowLatency: false, mobilePacing);
                     PrepareQueuedSave(campaign);
                     lastTickTime = Stopwatch.GetTimestamp();
                     continue;
@@ -1738,14 +1846,13 @@ public sealed class BackgroundSimRunner : IDisposable
 
                 if (_pausedDesired || _workerFault is not null || campaign.IsPaused || campaign.SimulationFault.Length > 0)
                 {
-                    if (!(AdaptiveStepPacing || MobilePacing) && !campaign.MidStep) campaign.RuntimeStepHoursOverride = 0;
-                    accumulator = 0.0;
-                    lastSpeed5DayTicks = 0;
-                    emaSpeed5DayMs = 0.0;
-                    lastTickTime = Stopwatch.GetTimestamp();
+                    if (!adaptiveSteps && !campaign.MidStep) campaign.RuntimeStepHoursOverride = 0;
+                    accumulator = dayWorkMs = 0.0; lastSpeed5DayTicks = 0; _pacer.Reset();
+                    _pacer.SyncGcLatencyMode(wantLowLatency: false, mobilePacing);
                     lock (_wakeLock)
                     {
                         if (!_stopRequested && _saveRequest is null &&
+                            Volatile.Read(ref _clockDesiredVersion) == _clockAppliedVersion &&
                             (_pausedDesired || _workerFault is not null || campaign.IsPaused || campaign.SimulationFault.Length > 0))
                             Monitor.Wait(_wakeLock, 25);
                     }
@@ -1753,16 +1860,15 @@ public sealed class BackgroundSimRunner : IDisposable
                     continue;
                 }
 
-                // Pause worker progression momentarily when a brand-new player decision modal arrives
-                // so Speed 5 cannot advance past unread events before the UI pauses it.
                 if (_sawPendingPlayerEvent)
                 {
-                    accumulator = 0.0;
-                    lastSpeed5DayTicks = 0;
-                    emaSpeed5DayMs = 0.0;
+                    accumulator = dayWorkMs = 0.0; lastSpeed5DayTicks = 0; _pacer.Reset();
+                    _pacer.SyncGcLatencyMode(wantLowLatency: false, mobilePacing);
                     lock (_wakeLock)
                     {
-                        if (!_stopRequested && !_pausedDesired) Monitor.Wait(_wakeLock, 20);
+                        if (!_stopRequested && !_pausedDesired &&
+                            Volatile.Read(ref _clockDesiredVersion) == _clockAppliedVersion)
+                            Monitor.Wait(_wakeLock, 20);
                     }
                     _sawPendingPlayerEvent = campaign.HasPendingPlayerEvent();
                     lastTickTime = Stopwatch.GetTimestamp();
@@ -1770,55 +1876,42 @@ public sealed class BackgroundSimRunner : IDisposable
                 }
 
                 var speed = Math.Max(1, _speedDesired);
-                if (speed != lastSpeed)
+                if (speed != lastSpeed || smoothMode != lastSmoothMode)
                 {
                     lastSpeed = speed;
+                    lastSmoothMode = smoothMode;
                     accumulator = 0.0;
+                    dayWorkMs = 0.0;
                     lastSpeed5DayTicks = 0;
-                    emaSpeed5DayMs = 0.0;
+                    _pacer.Reset();
                 }
 
-                var mobilePacing = MobilePacing;
-                var adaptiveSteps = AdaptiveStepPacing || mobilePacing;
+                var policy = SmoothTimePacer.WorkerPolicy(smoothMode, speed, mobilePacing);
+                if (policy.LowerWorkerPriority != priorityLowered)
+                {
+                    priorityLowered = policy.LowerWorkerPriority;
+                    try { Thread.CurrentThread.Priority = priorityLowered ? ThreadPriority.BelowNormal : ThreadPriority.Normal; }
+                    catch { /* Sandboxed OS/runtime priority restriction. */ }
+                }
+                _pacer.SyncGcLatencyMode(
+                    wantLowLatency: speed >= 6 && smoothMode is SmoothTimeMode.Adaptive or SmoothTimeMode.Cinema60Fps && _saveRequest is null,
+                    mobilePacing);
+
                 var continuingStep = campaign.MidStep;
                 if (!continuingStep)
                     campaign.RuntimeStepHoursOverride = adaptiveSteps ? AdaptiveStepHours(speed) : 0;
                 var now = Stopwatch.GetTimestamp();
                 var dt = Stopwatch.GetElapsedTime(lastTickTime).TotalSeconds;
                 lastTickTime = now;
-                // Cap OS wake jitter to 80 ms so a single scheduling hiccup never causes a multi-day burst.
                 if (dt > 0.08) dt = 0.08;
 
-                // Soft render-thread backpressure: active ONLY when a live visual frame consumer has
-                // reported NotifyVisualFramePresented recently (never triggers in headless/SimBench/tests).
-                // Prevents DoF-Sim from racing dozens of unseen days ahead during a brief GPU hitch.
-                if (!continuingStep && speed >= 4)
-                {
-                    var presentedTicks = Volatile.Read(ref _lastPresentedTicks);
-                    if (presentedTicks != 0 && Stopwatch.GetElapsedTime(presentedTicks).TotalMilliseconds < 250.0)
-                    {
-                        var lead = Volatile.Read(ref _snapshotVersion) - Volatile.Read(ref _presentedVisualVersion);
-                        if (lead >= 3)
-                        {
-                            var bpStart = Stopwatch.GetTimestamp();
-                            while (!_stopRequested && !_pausedDesired && _speedDesired >= 4 &&
-                                   Volatile.Read(ref _snapshotVersion) - Volatile.Read(ref _presentedVisualVersion) >= 3 &&
-                                   Stopwatch.GetElapsedTime(bpStart).TotalMilliseconds < 36.0)
-                            {
-                                lock (_wakeLock)
-                                {
-                                    if (!_stopRequested && !_pausedDesired &&
-                                        Volatile.Read(ref _snapshotVersion) - Volatile.Read(ref _presentedVisualVersion) >= 3)
-                                        Monitor.Wait(_wakeLock, 4);
-                                }
-                            }
-                            lastTickTime = Stopwatch.GetTimestamp();
-                        }
-                    }
-                }
+                // Soft render-thread backpressure when a live visual consumer reported recently;
+                // headless tests never call NotifyVisualFramePresented and incur zero wait.
+                if (!continuingStep && policy.MaxVisualLeadSnapshots > 0)
+                    WaitForVisualBackpressure(speed, policy, ref lastTickTime);
 
                 var stepInterval = 0.0;
-                if (speed >= 5)
+                if (speed >= 8)
                 {
                     accumulator = 0.0;
                 }
@@ -1831,8 +1924,7 @@ public sealed class BackgroundSimRunner : IDisposable
                         ? AdaptiveStepSecondsPerDay(campaign.Defines, speed, mobilePacing)
                         : campaign.Defines.SecondsForSpeed(speed);
                     stepInterval = Math.Max(0.002, secPerDay * (effectiveTickHours / 24.0));
-                    // Anti-burst accumulator cap: keep Speed 1-3 strictly rhythmic and cap Speed 4 bursts.
-                    accumulator = Math.Min(accumulator + dt, speed == 4 ? Math.Max(stepInterval * 1.6, 0.032) : stepInterval * 1.15);
+                    accumulator = SmoothTimePacer.AccumulateWorkerStepDebt(accumulator, dt, stepInterval, smoothMode, speed);
                     if (!continuingStep)
                     {
                         if (accumulator < stepInterval)
@@ -1840,7 +1932,8 @@ public sealed class BackgroundSimRunner : IDisposable
                             var waitMs = Math.Clamp((int)((stepInterval - accumulator) * 1000.0), 1, 12);
                             lock (_wakeLock)
                             {
-                                if (!_stopRequested && !_pausedDesired && _speedDesired == speed)
+                                if (!_stopRequested && !_pausedDesired && _speedDesired == speed &&
+                                    Volatile.Read(ref _clockDesiredVersion) == _clockAppliedVersion)
                                     Monitor.Wait(_wakeLock, waitMs);
                             }
                             continue;
@@ -1849,24 +1942,29 @@ public sealed class BackgroundSimRunner : IDisposable
                     }
                 }
 
-                if (campaign.AccessGate.HasWriteWaiter)
-                {
-                    Thread.Yield();
-                    continue;
-                }
+                if (campaign.AccessGate.HasWriteWaiter) { Thread.Yield(); continue; }
                 var stepDone = false;
                 var openedDay = false;
                 var awaitingPlayer = false;
                 Exception caught = null;
                 var measurePacing = MeasurePacing;
                 var stepWorkStarted = Stopwatch.GetTimestamp();
+                var workElapsedMs = 0.0;
 
                 campaign.AccessGate.EnterWrite(asBackgroundWorker: true);
-                var acquiredAt = measurePacing ? Stopwatch.GetTimestamp() : 0;
+                var acquiredAt = Stopwatch.GetTimestamp();
                 if (measurePacing) Interlocked.Add(ref _workerAcquireTicks, acquiredAt - stepWorkStarted);
                 try
                 {
                     if (!ReferenceEquals(_thread, Thread.CurrentThread)) break;
+                    var stepStartVer = Volatile.Read(ref _clockDesiredVersion);
+                    if (stepStartVer != _clockAppliedVersion)
+                    {
+                        _clockAppliedVersion = stepStartVer;
+                        var maxSpd = Math.Max(1, campaign.Defines?.MaxSpeed ?? 8);
+                        campaign.IsPaused = _pausedDesired;
+                        campaign.Speed = Math.Clamp(_speedDesired, 1, maxSpd);
+                    }
                     if (_stopRequested || _pausedDesired || campaign.IsPaused || campaign.SimulationFault.Length > 0)
                     {
                         if (campaign.MidStep) campaign.FinishStep();
@@ -1875,15 +1973,12 @@ public sealed class BackgroundSimRunner : IDisposable
                     }
                     else
                     {
+                        var wasPausedBeforeStep = campaign.IsPaused;
                         campaign.Speed = speed;
                         if (!campaign.MidStep)
                             campaign.RuntimeStepHoursOverride = adaptiveSteps ? AdaptiveStepHours(speed) : 0;
-                        // Batch consecutive steps at Speed 4/5 inside one write lock until a player
-                        // modal arrives, a slice runs out mid-step, a reader/writer waits, or the slice budget expires.
-                        // A priority reader or a command writer breaks both RunStages and this batch at the
-                        // next stage boundary, so the larger Speed-5 slice costs no input latency.
-                        var sliceMs = speed >= 5 ? (mobilePacing ? 56.0 : 24.0) : speed == 4 ? (mobilePacing ? 18.0 : 12.0) : 6.0;
-                        var minSnapMs = speed >= 5 ? (mobilePacing ? 24.0 : 14.0) : 12.0;
+                        var sliceMs = policy.WriteSliceMs;
+                        var minSnapMs = policy.SnapshotMinIntervalMs;
                         var batchStarted = Stopwatch.GetTimestamp();
                         var batchSteps = 0;
                         var anyStepDone = false;
@@ -1908,21 +2003,17 @@ public sealed class BackgroundSimRunner : IDisposable
                                 if (campaign.HasPendingPlayerEvent()) anyAwaitingPlayer = true;
                             }
 
-                            if (speed < 4 || anyAwaitingPlayer) break;
-                            if (speed == 4 && batchSteps >= 2) break;
+                            if (speed < 7 || anyAwaitingPlayer || batchSteps >= policy.MaxBatchSteps) break;
                             if (_stopRequested || _pausedDesired || campaign.IsPaused || campaign.SimulationFault.Length > 0) break;
-                            if (campaign.AccessGate.HasPriorityReaderRequested || campaign.AccessGate.HasWriteWaiter ||
-                                _saveRequest is not null) break;
+                            if (Volatile.Read(ref _clockDesiredVersion) != stepStartVer) break;
+                            if (campaign.AccessGate.HasPriorityReaderRequested || campaign.AccessGate.HasWriteWaiter || _saveRequest is not null) break;
                             var batchElapsedMs = Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds;
                             if (batchElapsedMs >= sliceMs) break;
-                            if (anyStepDone && Stopwatch.GetElapsedTime(_lastSnapshotPublishedTicks).TotalMilliseconds >= minSnapMs)
-                                break;
+                            if (anyStepDone && Stopwatch.GetElapsedTime(_lastSnapshotPublishedTicks).TotalMilliseconds >= minSnapMs) break;
                             if (campaign.AccessGate.HasReaderRequested &&
-                                (speed >= 5
-                                    ? batchElapsedMs >= (mobilePacing ? 32.0 : 8.0) || campaign.AccessGate.IsReaderStarving
-                                    : batchElapsedMs >= 8.0))
+                                (batchElapsedMs >= policy.ReaderYieldAfterMs || campaign.AccessGate.IsReaderStarving))
                                 break;
-                            if (speed == 4)
+                            if (speed == 7)
                             {
                                 if (stepInterval <= 0.0 || accumulator < stepInterval) break;
                                 accumulator -= stepInterval;
@@ -1930,13 +2021,21 @@ public sealed class BackgroundSimRunner : IDisposable
                         }
                         while (true);
 
+                        if (!wasPausedBeforeStep && campaign.IsPaused && Volatile.Read(ref _clockDesiredVersion) == stepStartVer)
+                        {
+                            _pausedDesired = true;
+                            _clockAppliedVersion = stepStartVer;
+                        }
+
                         stepDone = anyStepDone;
                         openedDay = anyOpenedDay;
                         awaitingPlayer = anyAwaitingPlayer;
                         if (!campaign.MidStep)
                             PublishSnapshotLocked(campaign,
-                                force: campaign.IsPaused || anyAwaitingPlayer || (speed < 5 && anyOpenedDay),
-                                minIntervalMs: minSnapMs);
+                                force: campaign.IsPaused || anyAwaitingPlayer || (speed < 8 && anyOpenedDay && policy.MapChangeCoalesceMs <= 0.0),
+                                minIntervalMs: minSnapMs,
+                                mapCoalesceMs: policy.MapChangeCoalesceMs,
+                                hudMinIntervalMs: policy.HudSnapshotMinIntervalMs);
                     }
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException && ex is not AccessViolationException)
@@ -1946,18 +2045,25 @@ public sealed class BackgroundSimRunner : IDisposable
                 }
                 finally
                 {
-                    var releasingAt = measurePacing ? Stopwatch.GetTimestamp() : 0;
+                    var releasingAt = Stopwatch.GetTimestamp();
+                    workElapsedMs = Stopwatch.GetElapsedTime(acquiredAt, releasingAt).TotalMilliseconds;
                     if (measurePacing) Interlocked.Add(ref _workerWorkTicks, releasingAt - acquiredAt);
                     campaign.AccessGate.ExitWrite(yieldToRequestedReader: true,
-                        readerWindowMs: speed >= 5 ? (mobilePacing ? 6 : 18) : (mobilePacing ? 10 : 20),
-                        readerWorkAheadMs: mobilePacing ? 20 : 0);
+                        readerWindowMs: policy.ReaderWindowMs,
+                        readerWorkAheadMs: policy.ReaderWorkAheadMs);
                     if (measurePacing) Interlocked.Add(ref _workerReleaseTicks, Stopwatch.GetTimestamp() - releasingAt);
                 }
 
-                // Softly damp excess accumulator after a heavy step instead of hard-zeroing,
-                // avoiding the visible pause-then-jump stutter after weekly/monthly ticks.
-                if (stepDone && speed < 5 && (continuingStep || (stepInterval > 0.0 && Stopwatch.GetElapsedTime(stepWorkStarted).TotalSeconds > stepInterval)))
-                    accumulator = Math.Min(accumulator * 0.25, stepInterval * 0.35);
+                dayWorkMs += workElapsedMs;
+                if (stepDone)
+                {
+                    _pacer.ObserveStepWork(dayWorkMs, openedDay);
+                    dayWorkMs = 0.0;
+                }
+
+                if (stepDone && speed < 8)
+                    accumulator = SmoothTimePacer.DampWorkerAccumulator(
+                        accumulator, stepInterval, Stopwatch.GetElapsedTime(stepWorkStarted).TotalSeconds, continuingStep, smoothMode, speed);
 
                 if (caught is not null || stepDone || awaitingPlayer)
                 {
@@ -1975,41 +2081,13 @@ public sealed class BackgroundSimRunner : IDisposable
                     }
                 }
 
-                var minDayMs = MinSpeed5DayIntervalMs;
-                if (minDayMs > 0.0 && speed >= 5 && stepDone && openedDay &&
-                    caught is null && !awaitingPlayer && !_stopRequested && !_pausedDesired)
-                {
-                    if (lastSpeed5DayTicks != 0)
-                    {
-                        var overshootMs = emaSpeed5DayMs > minDayMs
-                            ? Math.Min(minDayMs * 0.5, emaSpeed5DayMs - minDayMs)
-                            : 0.0;
-                        var targetDayMs = Math.Max(minDayMs * 0.5, minDayMs - overshootMs);
-                        while (!_stopRequested && !_pausedDesired && _speedDesired >= 5)
-                        {
-                            var elapsedDayMs = Stopwatch.GetElapsedTime(lastSpeed5DayTicks).TotalMilliseconds;
-                            var remMs = (int)Math.Ceiling(targetDayMs - elapsedDayMs);
-                            if (remMs <= 0) break;
-                            lock (_wakeLock)
-                            {
-                                if (!_stopRequested && !_pausedDesired && _speedDesired >= 5)
-                                    Monitor.Wait(_wakeLock, Math.Min(remMs, 16));
-                            }
-                        }
-                        var actualDayMs = Math.Min(
-                            Stopwatch.GetElapsedTime(lastSpeed5DayTicks).TotalMilliseconds,
-                            minDayMs * 4.0);
-                        emaSpeed5DayMs = emaSpeed5DayMs <= 0.0
-                            ? actualDayMs
-                            : emaSpeed5DayMs * 0.65 + actualDayMs * 0.35;
-                    }
-                    lastSpeed5DayTicks = Stopwatch.GetTimestamp();
-                    lastTickTime = lastSpeed5DayTicks;
-                }
+                if (speed >= 8 && stepDone && openedDay && caught is null && !awaitingPlayer && !_stopRequested && !_pausedDesired)
+                    PaceCompletedMaxSpeedDay(campaign, smoothMode, speed, mobilePacing, ref lastSpeed5DayTicks, ref lastTickTime);
             }
         }
         finally
         {
+            _pacer.SyncGcLatencyMode(wantLowLatency: false, MobilePacing);
             lock (_wakeLock)
             {
                 if (ReferenceEquals(_thread, Thread.CurrentThread))

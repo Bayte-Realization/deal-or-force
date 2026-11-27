@@ -147,18 +147,14 @@ public partial class DealOrForceGame
         Tip(_recruitmentOnMap, "Keep this template, batch size and posture, then click an owned training region on the map."); footer.AddChild(_recruitmentOnMap);
         _recruitmentSubmit = ActionButton("Begin training", () =>
         {
-            _campaign.Commands.Enqueue(new RaiseArmyCommand { IssuerId = _campaign.Player.Id,
-                StateMapIndex = _recruitmentRegion.GetSelectedId(), TemplateId = RecruitmentTemplateId(),
-                Divisions = (int)_recruitmentCount.Value, Mode = _recruitmentMode });
-            _campaign.Commands.ApplyAll(_campaign); RefreshRecruitment(); Refresh();
+            CommitImmediateCampaignCommand(new RaiseArmyCommand { IssuerId = _campaign.Player.Id, StateMapIndex = _recruitmentRegion.GetSelectedId(), TemplateId = RecruitmentTemplateId(), Divisions = (int)_recruitmentCount.Value, Mode = _recruitmentMode }, true, true);
+            RefreshRecruitment();
         }, 0, 36);
         _recruitmentSubmit.Name = "RecruitmentSubmit";
         void TriggerRecruitEverywhere()
         {
             if (_campaign?.Player is null) return;
-            var plan = Simulation.Controls.BatchActionUndo.ExecuteEverywhereRecruitment(
-                _campaign, _campaign.Player, null, RecruitmentTemplateId(), _recruitmentMode,
-                Math.Max(1, (int)_recruitmentCount.Value), isQuarter: false);
+            var plan = CommitImmediateCampaignWrite(c => Simulation.Controls.BatchActionUndo.ExecuteEverywhereRecruitment(c, c.Player, null, RecruitmentTemplateId(), _recruitmentMode, Math.Max(1, (int)_recruitmentCount.Value), isQuarter: false), true, true);
             if (_recruitmentOrderStatus is not null)
                 _recruitmentOrderStatus.Text = plan.Items.Count > 0
                     ? Simulation.Loc.Format("Done in {0} region(s) ({1}) — Undo (Ctrl+Z)",
@@ -167,7 +163,6 @@ public partial class DealOrForceGame
                     : plan.Refusal;
             PlayStrategicCue(plan.Items.Count > 0 ? "ui_select" : "ui_error");
             RefreshRecruitment();
-            Refresh();
         }
         EverywhereButtonHelper.Attach(_recruitmentSubmit, null, TriggerRecruitEverywhere, () =>
         {

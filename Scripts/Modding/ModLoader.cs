@@ -215,6 +215,7 @@ public sealed class ModLoader
         }
 
         _packages.AddRange(enabledIds.Select(id => candidates[id]));
+        MapCatalog.SetModRoots(_packages.Select(p => p.PhysicalRoot));
         _frontendActions.ResetDeclarations(_packages.Where(p => !p.IsContentPack)
             .Select(p => (p.Manifest.Id, (IEnumerable<ModFrontendActionDeclaration>)p.Manifest.FrontendActions)),
             (id, error) => _packages.FirstOrDefault(p => !p.IsContentPack && string.Equals(p.Manifest.Id, id, StringComparison.OrdinalIgnoreCase))?.Errors.Add(error));
@@ -1119,7 +1120,27 @@ public sealed class ModLoader
         switch (Normalize(key))
         {
             case "name" when value.ValueKind == JsonValueKind.String: nation.Name = value.GetString() ?? nation.Name; return true;
-            case "color" when value.ValueKind == JsonValueKind.String: nation.Color = value.GetString() ?? nation.Color; return true;
+            case "color" or "colour" when value.ValueKind == JsonValueKind.String: nation.Color = value.GetString() ?? nation.Color; return true;
+            case "description" when value.ValueKind == JsonValueKind.String: return true;
+            case "governmentform" or "government" when value.ValueKind == JsonValueKind.String:
+            {
+                var gf = (value.GetString() ?? "").Trim();
+                if (gf.Length == 0 || !GovernmentCatalog.Knows(gf)) return false;
+                nation.Government = gf;
+                return true;
+            }
+            case "course" when value.ValueKind == JsonValueKind.String:
+            {
+                var course = (value.GetString() ?? "").Trim();
+                if (course.Length == 0) return true;
+                if (NationalCourseCatalog.Find(course) is null) return false;
+                nation.NationalCourse.Dominant = course;
+                nation.NationalCourse.Initialized = true;
+                return true;
+            }
+            case "capitalregion" when value.ValueKind == JsonValueKind.String: return true;
+            case "startingtreasury" when value.TryGetSingle(out var startingTreasury) && float.IsFinite(startingTreasury):
+                nation.Treasury = startingTreasury; return true;
             case "capitalcity" when value.ValueKind == JsonValueKind.String: CapitalCore.Author(nation, value.GetString()); return true;
             case "capitalname" when value.ValueKind == JsonValueKind.String: nation.CapitalName = value.GetString() ?? nation.CapitalName; return true;
             // The base game's common/countries reads these two (CountryDefinitions); a mod's copy

@@ -54,7 +54,7 @@ public static class ShellMessages
         bool involvesPlayer,
         int currentSpeed = 1)
     {
-        var speed5 = currentSpeed >= 5;
+        var speed5 = currentSpeed >= 8;
         return preset switch
         {
             ShellMessagePreset.Focus => ResolveFocus(evt, involvesPlayer, speed5),

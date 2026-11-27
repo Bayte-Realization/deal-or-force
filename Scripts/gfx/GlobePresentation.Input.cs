@@ -251,12 +251,11 @@ public sealed partial class GlobePresentation
     {
         if (LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked) { AcceptEvent(); return; }
 
-        // Route raw screen touch/drag directly through TouchCameraAdapter and swallow
-        // Android/BlueStacks touch-emulated mouse events BEFORE any desktop mouse handler runs.
+        // Route plan-drawing touch first, then TouchCameraAdapter, swallowing touch-emulated mouse.
         if (inputEvent is InputEventScreenTouch or InputEventScreenDrag)
         {
             _lastTouchInputUsec = Time.GetTicksUsec();
-            if (HandleTouchInput(inputEvent))
+            if (HandleAnyTouchInput(inputEvent))
             {
                 AcceptEvent();
                 return;

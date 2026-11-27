@@ -298,7 +298,7 @@ internal sealed class ShellTouchModeBarView
             TouchTapMode.Select => L("mobile.mode.select.tip", "Tap to select a province, nation, or army. Drag to pan. Hold to issue an order."),
             TouchTapMode.Order => stickyOrder
                 ? L("mobile.mode.order.sticky.tip", L("mobile.mode.order.tip", "Order Lock: every tap keeps issuing orders continuously until you tap Order again or switch mode."))
-                : L("mobile.mode.order.oneshot.tip", L("mobile.mode.order.tip", "Order 1×: next tap issues an order (like right-click) and returns to Select. Tap Order again to lock.")),
+                : L("mobile.mode.order.oneshot.tip", L("mobile.mode.order.tip", "Order 1×: next tap issues one march or context order and returns to Select. Tap Order again to lock.")),
             TouchTapMode.BoxSelect => L("mobile.mode.box.tip", "Drag with one finger to draw a selection rectangle for divisions. Two fingers move the map."),
             TouchTapMode.Pan => L("mobile.mode.pan.tip", "Safe map navigation lock: taps and holds never select or issue orders while browsing the map."),
             _ => ""
@@ -312,7 +312,7 @@ internal sealed class ShellTouchModeBarView
             TouchTapMode.Select => L("mobile.mode.select.toast", "Select mode: tap picks province, country, or army. Hold issues an order."),
             TouchTapMode.Order => stickyOrder
                 ? L("mobile.mode.order.sticky.toast", "Order Lock: every tap issues orders until switched off. Tap again to return to 1×.")
-                : L("mobile.mode.order.oneshot.toast", "Order 1×: next tap issues an order (like right-click) and returns to Select. Tap again to lock."),
+                : L("mobile.mode.order.oneshot.toast", "Order 1×: next tap issues one order and returns to Select. Tap again to lock."),
             TouchTapMode.BoxSelect => L("mobile.mode.box.toast", "Box mode: drag one finger to box-select divisions. Two fingers move the map."),
             TouchTapMode.Pan => L("mobile.mode.pan.toast", "Map mode: safe camera navigation — taps never select or issue orders."),
             _ => ""

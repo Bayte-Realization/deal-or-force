@@ -118,6 +118,10 @@ public static partial class Warfare
         public int FullRebuilds;
         public readonly Dictionary<int, List<Army>> ProvinceScratch = new();
         public readonly HashSet<int> ProvinceScratchFilled = new();
+        public ProvinceTopology LastOccupationTopology;
+        public int LastOccupationCount = -1;
+        public int LastOccupationMapRevision = int.MinValue;
+        public ushort[] LastOccupationControllers = Array.Empty<ushort>();
     }
 
     private static readonly ConditionalWeakTable<Campaign, ArmyIndex> ArmyIndexes = new();
@@ -447,19 +451,41 @@ public static partial class Warfare
     {
         if (campaign is null) return;
         var index = UseArmyIndex(campaign);
-        index.HomeProvinces.Clear();
-        index.OccupiedPairs.Clear();
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        if (topology is null || controllers is null) return;
-        var homeToNation = topology.ProvinceToNation;
+        if (topology is null || controllers is null)
+        {
+            index.HomeProvinces.Clear();
+            index.OccupiedPairs.Clear();
+            return;
+        }
         var count = topology.ProvinceCount;
+        if (ReferenceEquals(index.LastOccupationTopology, topology) &&
+            index.LastOccupationCount == count &&
+            index.LastOccupationMapRevision == campaign.MapRevision &&
+            index.LastOccupationControllers.Length > count &&
+            controllers.Length > count &&
+            controllers.AsSpan(1, count).SequenceEqual(index.LastOccupationControllers.AsSpan(1, count)))
+        {
+            return;
+        }
+        index.HomeProvinces.Clear();
+        index.OccupiedPairs.Clear();
+        var homeToNation = topology.ProvinceToNation;
+        if (index.LastOccupationControllers.Length <= count)
+            index.LastOccupationControllers = new ushort[count + 1];
+        Array.Copy(controllers, 1, index.LastOccupationControllers, 1, count);
+        index.LastOccupationTopology = topology;
+        index.LastOccupationCount = count;
+        index.LastOccupationMapRevision = campaign.MapRevision;
         if (Kernels.NativeProvinceGraph.ForMap(topology)?.TryOccupationCensus(
                 homeToNation, controllers, count,
                 out var homeKeys, out var homeCounts, out var occPairs, out var occCounts) == true)
         {
+            index.HomeProvinces.EnsureCapacity(homeKeys.Length);
             for (var i = 0; i < homeKeys.Length; i++)
                 index.HomeProvinces[homeKeys[i]] = homeCounts[i];
+            index.OccupiedPairs.EnsureCapacity(occPairs.Length);
             for (var i = 0; i < occPairs.Length; i++)
             {
                 var pair = occPairs[i];
@@ -513,20 +539,24 @@ public static partial class Warfare
     {
         var index = UseArmyIndex(campaign);
         InvalidateCoverCache(campaign);
-        foreach (var province in index.ProvincesHeld) index.ByProvince[province].Clear();
+        for (var pi = 0; pi < index.ProvincesHeld.Count; pi++)
+            index.ByProvince[index.ProvincesHeld[pi]].Clear();
         index.ProvincesHeld.Clear();
         foreach (var list in index.ByWar.Values) list.Clear();
         index.IndexedArmies.Clear();
         index.ByIdStale = true;
         index.ActiveBattlesDirty = true;
-        foreach (var army in campaign.Armies)
+        var armies = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(campaign.Armies);
+        var defaultCap = (campaign.ProvinceMap?.ProvinceCount ?? 0) + 1;
+        for (var i = 0; i < armies.Length; i++)
         {
+            var army = armies[i];
             index.IndexedArmies.Add(army);
             var province = army.ProvinceId;
             if (province > 0)
             {
                 if (province >= index.ByProvince.Length)
-                    Array.Resize(ref index.ByProvince, Math.Max(province + 1, (campaign.ProvinceMap?.ProvinceCount ?? 0) + 1));
+                    Array.Resize(ref index.ByProvince, Math.Max(province + 1, defaultCap));
                 var here = index.ByProvince[province] ??= new List<Army>();
                 if (here.Count == 0) index.ProvincesHeld.Add(province);
                 here.Add(army);
@@ -1260,76 +1290,237 @@ public static partial class Warfare
             battle.LastAttackerCombinedArms = attackerCombinedArms;
             battle.LastDefenderCombinedArms = defenderCombinedArms;
 
-            _battleNationFactors?.Clear();
-            var atkCache = _atkLineUnits ??= new List<BattleLineUnit>(16);
-            atkCache.Clear();
+            ResetBattleNationFactors();
+            var useCombatSimd =
+                Kernels.NativeKernelsLoader.EnableEconCombatDefault &&
+                Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapEconCombat);
+
             double attackerOffenceSum = 0d;
             double atkPowerWeight = 0d, atkTrainSum = 0d, atkStanceSum = 0d, atkCmdSum = 0d, atkResSum = 0d, atkEncSum = 0d;
-            for (var ai = 0; ai < AttackerLine.Count; ai++)
+            double attackerProtectionSum = 0d;
+            var atkCount = AttackerLine.Count;
+            var atkDone = false;
+            if (atkCount >= 8 && useCombatSimd)
             {
-                var army = AttackerLine[ai];
-                var nf = GetBattleNationFactors(campaign, war, army.NationId);
-                var power = M.Max(0.01f, army.Power);
-                var train = DivisionRules.Attack(army);
-                var stance = MilitaryDoctrine.Attack(army.Stance);
-                var res = nf.AtkRes;
-                var mun = nf.Munitions;
-                var enc = CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff);
-                var spirit = nf.Spirit;
-                var cmd = Generals.Factors(campaign, army);
-                atkCache.Add(new BattleLineUnit
+                var scratch = _battleSoAScratch ??= new BattleSoAScratch();
+                scratch.EnsureCapacity(atkCount);
+                for (var ai = 0; ai < atkCount; ai++)
                 {
-                    Power = power,
-                    Enc = enc,
-                    DefRes = nf.DefRes,
-                    Spirit = spirit,
-                    CmdDef = cmd.Defence
-                });
-                attackerOffenceSum += power * Offence(army, defenderHardness) * train * stance * res * mun * enc * spirit * cmd.Attack;
-                double w = power;
-                atkPowerWeight += w;
-                atkTrainSum += w * train;
-                atkStanceSum += w * stance;
-                atkCmdSum += w * cmd.Attack;
-                atkResSum += w * res;
-                atkEncSum += w * enc;
+                    var army = AttackerLine[ai];
+                    var nf = GetBattleNationFactors(campaign, war, army.NationId);
+                    var enc = CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff);
+                    var cmd = Generals.Factors(campaign, army);
+                    scratch.RawPower[ai] = army.Power;
+                    scratch.Offence[ai] = Offence(army, defenderHardness);
+                    scratch.AtkTrain[ai] = DivisionRules.Attack(army);
+                    scratch.AtkStance[ai] = MilitaryDoctrine.Attack(army.Stance);
+                    scratch.AtkRes[ai] = nf.AtkRes;
+                    scratch.Munitions[ai] = nf.Munitions;
+                    scratch.Enc[ai] = enc;
+                    scratch.Spirit[ai] = nf.Spirit;
+                    scratch.CmdAtk[ai] = cmd.Attack;
+                    scratch.DefStat[ai] = UnitTypeCatalog.Get(army.TemplateId).Breakthrough;
+                    scratch.DefTrain[ai] = DivisionRules.Defense(army);
+                    scratch.DefStance[ai] = MilitaryDoctrine.Defense(army.Stance);
+                    scratch.DefRes[ai] = nf.DefRes;
+                    scratch.CmdDef[ai] = cmd.Defence;
+                    scratch.Entrenchment[ai] = army.Entrenchment;
+                }
+                if (Kernels.NativeCombatSupportKernels.TryNativeCombatSideTotals(
+                    scratch.RawPower.AsSpan(0, atkCount),
+                    scratch.Offence.AsSpan(0, atkCount),
+                    scratch.AtkTrain.AsSpan(0, atkCount),
+                    scratch.AtkStance.AsSpan(0, atkCount),
+                    scratch.AtkRes.AsSpan(0, atkCount),
+                    scratch.Munitions.AsSpan(0, atkCount),
+                    scratch.Enc.AsSpan(0, atkCount),
+                    scratch.Spirit.AsSpan(0, atkCount),
+                    scratch.CmdAtk.AsSpan(0, atkCount),
+                    scratch.DefStat.AsSpan(0, atkCount),
+                    scratch.DefTrain.AsSpan(0, atkCount),
+                    scratch.DefStance.AsSpan(0, atkCount),
+                    scratch.DefRes.AsSpan(0, atkCount),
+                    scratch.CmdDef.AsSpan(0, atkCount),
+                    scratch.Entrenchment.AsSpan(0, atkCount),
+                    weightOffenceTelemetry: true,
+                    scratch.Totals))
+                {
+                    attackerOffenceSum = scratch.Totals[0];
+                    attackerProtectionSum = scratch.Totals[1];
+                    atkPowerWeight = scratch.Totals[3];
+                    atkTrainSum = scratch.Totals[4];
+                    atkStanceSum = scratch.Totals[5];
+                    atkCmdSum = scratch.Totals[6];
+                    atkResSum = scratch.Totals[7];
+                    atkEncSum = scratch.Totals[8];
+                    atkDone = true;
+                }
+            }
+            if (!atkDone)
+            {
+                var atkCache = _atkLineUnits ??= new List<BattleLineUnit>(16);
+                atkCache.Clear();
+                for (var ai = 0; ai < atkCount; ai++)
+                {
+                    var army = AttackerLine[ai];
+                    var nf = GetBattleNationFactors(campaign, war, army.NationId);
+                    var power = M.Max(0.01f, army.Power);
+                    var train = DivisionRules.Attack(army);
+                    var stance = MilitaryDoctrine.Attack(army.Stance);
+                    var res = nf.AtkRes;
+                    var mun = nf.Munitions;
+                    var enc = CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff);
+                    var spirit = nf.Spirit;
+                    var cmd = Generals.Factors(campaign, army);
+                    atkCache.Add(new BattleLineUnit
+                    {
+                        Power = power,
+                        Enc = enc,
+                        DefRes = nf.DefRes,
+                        Spirit = spirit,
+                        CmdDef = cmd.Defence
+                    });
+                    attackerOffenceSum += power * Offence(army, defenderHardness) * train * stance * res * mun * enc * spirit * cmd.Attack;
+                    double w = power;
+                    atkPowerWeight += w;
+                    atkTrainSum += w * train;
+                    atkStanceSum += w * stance;
+                    atkCmdSum += w * cmd.Attack;
+                    atkResSum += w * res;
+                    atkEncSum += w * enc;
+                }
+                for (var ai = 0; ai < atkCount; ai++)
+                {
+                    var army = AttackerLine[ai];
+                    var unit = atkCache[ai];
+                    attackerProtectionSum += unit.Power *
+                        UnitTypeCatalog.Get(army.TemplateId).Breakthrough * DivisionRules.Defense(army) *
+                        MilitaryDoctrine.Defense(army.Stance) * unit.DefRes *
+                        unit.Enc *
+                        unit.Spirit *
+                        unit.CmdDef;
+                }
             }
             var attackerOffence = (float)attackerOffenceSum *
                 attackerEngagement * attackerPierces * riverAttackMultiplier * straitAttackMultiplier * terrain.Attack *
                 (1f + attackerPlanning * defines.MaxPlanningAttackBonus) * envelopmentBonus * attackerFire * attackerCombinedArms;
 
-            var defCache = _defLineUnits ??= new List<BattleLineUnit>(16);
-            defCache.Clear();
             double defenderOffenceSum = 0d;
-            for (var di = 0; di < DefenderLine.Count; di++)
+            double defenderProtectionSum = 0d;
+            double dugInSum = 0d;
+            double defPowerWeight = 0d, defTrainSum = 0d, defStanceSum = 0d, defCmdSum = 0d, defResSum = 0d, defEncSum = 0d;
+            var defCount = DefenderLine.Count;
+            var defDone = false;
+            if (defCount >= 8 && useCombatSimd)
             {
-                var army = DefenderLine[di];
-                var nf = GetBattleNationFactors(campaign, war, army.NationId);
-                var power = M.Max(0.01f, army.Power);
-                var enc = CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff);
-                var cmd = Generals.Factors(campaign, army);
-                defCache.Add(new BattleLineUnit
+                var scratch = _battleSoAScratch ??= new BattleSoAScratch();
+                scratch.EnsureCapacity(defCount);
+                for (var di = 0; di < defCount; di++)
                 {
-                    Power = power,
-                    Enc = enc,
-                    DefRes = nf.DefRes,
-                    Spirit = nf.Spirit,
-                    CmdDef = cmd.Defence
-                });
-                defenderOffenceSum += power *
-                    Offence(army, attackerHardness) * DivisionRules.Attack(army) *
-                    MilitaryDoctrine.Attack(army.Stance) * nf.AtkRes *
-                    nf.Munitions *
-                    enc *
-                    nf.Spirit *
-                    cmd.Attack;
+                    var army = DefenderLine[di];
+                    var nf = GetBattleNationFactors(campaign, war, army.NationId);
+                    var enc = CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff);
+                    var cmd = Generals.Factors(campaign, army);
+                    scratch.RawPower[di] = army.Power;
+                    scratch.Offence[di] = Offence(army, attackerHardness);
+                    scratch.AtkTrain[di] = DivisionRules.Attack(army);
+                    scratch.AtkStance[di] = MilitaryDoctrine.Attack(army.Stance);
+                    scratch.AtkRes[di] = nf.AtkRes;
+                    scratch.Munitions[di] = nf.Munitions;
+                    scratch.Enc[di] = enc;
+                    scratch.Spirit[di] = nf.Spirit;
+                    scratch.CmdAtk[di] = cmd.Attack;
+                    scratch.DefStat[di] = UnitTypeCatalog.Get(army.TemplateId).Defense;
+                    scratch.DefTrain[di] = DivisionRules.Defense(army);
+                    scratch.DefStance[di] = MilitaryDoctrine.Defense(army.Stance);
+                    scratch.DefRes[di] = nf.DefRes;
+                    scratch.CmdDef[di] = cmd.Defence;
+                    scratch.Entrenchment[di] = army.Entrenchment;
+                }
+                if (Kernels.NativeCombatSupportKernels.TryNativeCombatSideTotals(
+                    scratch.RawPower.AsSpan(0, defCount),
+                    scratch.Offence.AsSpan(0, defCount),
+                    scratch.AtkTrain.AsSpan(0, defCount),
+                    scratch.AtkStance.AsSpan(0, defCount),
+                    scratch.AtkRes.AsSpan(0, defCount),
+                    scratch.Munitions.AsSpan(0, defCount),
+                    scratch.Enc.AsSpan(0, defCount),
+                    scratch.Spirit.AsSpan(0, defCount),
+                    scratch.CmdAtk.AsSpan(0, defCount),
+                    scratch.DefStat.AsSpan(0, defCount),
+                    scratch.DefTrain.AsSpan(0, defCount),
+                    scratch.DefStance.AsSpan(0, defCount),
+                    scratch.DefRes.AsSpan(0, defCount),
+                    scratch.CmdDef.AsSpan(0, defCount),
+                    scratch.Entrenchment.AsSpan(0, defCount),
+                    weightOffenceTelemetry: false,
+                    scratch.Totals))
+                {
+                    defenderOffenceSum = scratch.Totals[0];
+                    defenderProtectionSum = scratch.Totals[1];
+                    dugInSum = scratch.Totals[2];
+                    defPowerWeight = scratch.Totals[3];
+                    defTrainSum = scratch.Totals[4];
+                    defStanceSum = scratch.Totals[5];
+                    defCmdSum = scratch.Totals[6];
+                    defResSum = scratch.Totals[7];
+                    defEncSum = scratch.Totals[8];
+                    defDone = true;
+                }
+            }
+            if (!defDone)
+            {
+                var defCache = _defLineUnits ??= new List<BattleLineUnit>(16);
+                defCache.Clear();
+                for (var di = 0; di < defCount; di++)
+                {
+                    var army = DefenderLine[di];
+                    var nf = GetBattleNationFactors(campaign, war, army.NationId);
+                    var power = M.Max(0.01f, army.Power);
+                    var enc = CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff);
+                    var cmd = Generals.Factors(campaign, army);
+                    defCache.Add(new BattleLineUnit
+                    {
+                        Power = power,
+                        Enc = enc,
+                        DefRes = nf.DefRes,
+                        Spirit = nf.Spirit,
+                        CmdDef = cmd.Defence
+                    });
+                    defenderOffenceSum += power *
+                        Offence(army, attackerHardness) * DivisionRules.Attack(army) *
+                        MilitaryDoctrine.Attack(army.Stance) * nf.AtkRes *
+                        nf.Munitions *
+                        enc *
+                        nf.Spirit *
+                        cmd.Attack;
+                }
+                for (var di = 0; di < defCount; di++) dugInSum += DefenderLine[di].Entrenchment;
+                for (var di = 0; di < defCount; di++)
+                {
+                    var army = DefenderLine[di];
+                    var unit = defCache[di];
+                    var power = unit.Power;
+                    var train = DivisionRules.Defense(army);
+                    var stance = MilitaryDoctrine.Defense(army.Stance);
+                    var res = unit.DefRes;
+                    var enc = unit.Enc;
+                    var spirit = unit.Spirit;
+                    var cmd = unit.CmdDef;
+                    defenderProtectionSum += power * UnitTypeCatalog.Get(army.TemplateId).Defense * train * stance * res * enc * spirit * cmd;
+                    double w = power;
+                    defPowerWeight += w;
+                    defTrainSum += w * train;
+                    defStanceSum += w * stance;
+                    defCmdSum += w * cmd;
+                    defResSum += w * res;
+                    defEncSum += w * enc;
+                }
             }
             var defenderOffence = (float)defenderOffenceSum *
                 defenderEngagement * defenderPierces * defines.DefenderCounterFire * defenderFire * defenderCombinedArms;
 
-            double dugInSum = 0d;
-            for (var di = 0; di < DefenderLine.Count; di++) dugInSum += DefenderLine[di].Entrenchment;
-            var dugIn = DefenderLine.Count > 0 ? (float)(dugInSum / DefenderLine.Count) : 0f;
+            var dugIn = defCount > 0 ? (float)(dugInSum / defCount) : 0f;
             var attackerOrgBefore = AverageOrganisation(AttackerLine);
             var defenderOrgBefore = AverageOrganisation(DefenderLine);
 
@@ -1353,28 +1544,6 @@ public static partial class Warfare
 
             var effectiveDefenderStripped = M.Lerp(defenderStripped, 1f, dugIn * defines.EntrenchmentShellingResistance);
 
-            double defenderProtectionSum = 0d;
-            double defPowerWeight = 0d, defTrainSum = 0d, defStanceSum = 0d, defCmdSum = 0d, defResSum = 0d, defEncSum = 0d;
-            for (var di = 0; di < DefenderLine.Count; di++)
-            {
-                var army = DefenderLine[di];
-                var unit = defCache[di];
-                var power = unit.Power;
-                var train = DivisionRules.Defense(army);
-                var stance = MilitaryDoctrine.Defense(army.Stance);
-                var res = unit.DefRes;
-                var enc = unit.Enc;
-                var spirit = unit.Spirit;
-                var cmd = unit.CmdDef;
-                defenderProtectionSum += power * UnitTypeCatalog.Get(army.TemplateId).Defense * train * stance * res * enc * spirit * cmd;
-                double w = power;
-                defPowerWeight += w;
-                defTrainSum += w * train;
-                defStanceSum += w * stance;
-                defCmdSum += w * cmd;
-                defResSum += w * res;
-                defEncSum += w * enc;
-            }
             var flankRetention = BattleTelemetry.FlankingEntrenchmentRetention(defines, directions);
             battle.LastFlankingBypass = 1f - flankRetention;
             var effectiveEntrenchmentBonus = 1f + dugIn * flankRetention * defines.EntrenchmentBonus;
@@ -1383,18 +1552,6 @@ public static partial class Warfare
                 effectiveEntrenchmentBonus * effectiveDefenderStripped *
                 homelandBonus * frontalBonus * defenderCombinedArms;
 
-            double attackerProtectionSum = 0d;
-            for (var ai = 0; ai < AttackerLine.Count; ai++)
-            {
-                var army = AttackerLine[ai];
-                var unit = atkCache[ai];
-                attackerProtectionSum += unit.Power *
-                    UnitTypeCatalog.Get(army.TemplateId).Breakthrough * DivisionRules.Defense(army) *
-                    MilitaryDoctrine.Defense(army.Stance) * unit.DefRes *
-                    unit.Enc *
-                    unit.Spirit *
-                    unit.CmdDef;
-            }
             var attackerProtection = (float)attackerProtectionSum *
                 attackerEngagement * attackerStripped * attackerCombinedArms;
 
@@ -1912,8 +2069,43 @@ public static partial class Warfare
     private static void ComputeLineProfile(List<Army> side, out float hardness, out float armour,
         out float piercing, out float supply, out float recon)
     {
+        var count = side.Count;
+        if (count == 0)
+        {
+            hardness = armour = piercing = supply = recon = 0f;
+            return;
+        }
+        if (count >= 8 &&
+            Kernels.NativeKernelsLoader.EnableEconCombatDefault &&
+            Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapEconCombat))
+        {
+            var scratch = _battleSoAScratch ??= new BattleSoAScratch();
+            scratch.EnsureCapacity(count);
+            for (var i = 0; i < count; i++)
+            {
+                var army = side[i];
+                var unit = UnitTypeCatalog.Get(army.TemplateId);
+                scratch.Divisions[i] = army.Divisions;
+                scratch.Hardness[i] = unit.Hardness;
+                scratch.Armour[i] = unit.Armour;
+                scratch.Piercing[i] = unit.Piercing;
+                scratch.Supply[i] = army.SupplyLevel;
+                scratch.Recon[i] = army.Recon;
+            }
+            if (Kernels.NativeCombatSupportKernels.TryNativeCombatLineProfile(
+                scratch.Divisions.AsSpan(0, count),
+                scratch.Hardness.AsSpan(0, count),
+                scratch.Armour.AsSpan(0, count),
+                scratch.Piercing.AsSpan(0, count),
+                scratch.Supply.AsSpan(0, count),
+                scratch.Recon.AsSpan(0, count),
+                out hardness, out armour, out piercing, out supply, out recon))
+            {
+                return;
+            }
+        }
         var divisions = 0f;
-        for (var i = 0; i < side.Count; i++) divisions += M.Max(0.01f, side[i].Divisions);
+        for (var i = 0; i < count; i++) divisions += M.Max(0.01f, side[i].Divisions);
         if (divisions <= 0f)
         {
             hardness = armour = piercing = supply = recon = 0f;
@@ -1924,7 +2116,7 @@ public static partial class Warfare
         var sumPiercing = 0f;
         var sumSupply = 0f;
         var sumRecon = 0f;
-        for (var i = 0; i < side.Count; i++)
+        for (var i = 0; i < count; i++)
         {
             var army = side[i];
             var w = M.Max(0.01f, army.Divisions);
@@ -1986,22 +2178,117 @@ public static partial class Warfare
         public float CmdDef;
     }
 
-    [ThreadStatic] private static Dictionary<int, BattleNationFactors> _battleNationFactors;
+    private sealed class BattleSoAScratch
+    {
+        public float[] Divisions = Array.Empty<float>();
+        public float[] Hardness = Array.Empty<float>();
+        public float[] Armour = Array.Empty<float>();
+        public float[] Piercing = Array.Empty<float>();
+        public float[] Supply = Array.Empty<float>();
+        public float[] Recon = Array.Empty<float>();
+
+        public float[] RawPower = Array.Empty<float>();
+        public float[] Offence = Array.Empty<float>();
+        public float[] AtkTrain = Array.Empty<float>();
+        public float[] AtkStance = Array.Empty<float>();
+        public float[] AtkRes = Array.Empty<float>();
+        public float[] Munitions = Array.Empty<float>();
+        public float[] Enc = Array.Empty<float>();
+        public float[] Spirit = Array.Empty<float>();
+        public float[] CmdAtk = Array.Empty<float>();
+        public float[] DefStat = Array.Empty<float>();
+        public float[] DefTrain = Array.Empty<float>();
+        public float[] DefStance = Array.Empty<float>();
+        public float[] DefRes = Array.Empty<float>();
+        public float[] CmdDef = Array.Empty<float>();
+        public float[] Entrenchment = Array.Empty<float>();
+        public readonly double[] Totals = new double[9];
+
+        public void EnsureCapacity(int count)
+        {
+            if (Divisions.Length >= count) return;
+            var cap = Math.Max(count, Math.Max(32, Divisions.Length * 2));
+            Divisions = new float[cap];
+            Hardness = new float[cap];
+            Armour = new float[cap];
+            Piercing = new float[cap];
+            Supply = new float[cap];
+            Recon = new float[cap];
+            RawPower = new float[cap];
+            Offence = new float[cap];
+            AtkTrain = new float[cap];
+            AtkStance = new float[cap];
+            AtkRes = new float[cap];
+            Munitions = new float[cap];
+            Enc = new float[cap];
+            Spirit = new float[cap];
+            CmdAtk = new float[cap];
+            DefStat = new float[cap];
+            DefTrain = new float[cap];
+            DefStance = new float[cap];
+            DefRes = new float[cap];
+            CmdDef = new float[cap];
+            Entrenchment = new float[cap];
+        }
+    }
+
+    [ThreadStatic] private static BattleSoAScratch _battleSoAScratch;
+    [ThreadStatic] private static BattleNationFactors[] _battleFactorDense;
+    [ThreadStatic] private static int[] _battleFactorGen;
+    [ThreadStatic] private static int _battleFactorStamp;
+    [ThreadStatic] private static Dictionary<int, BattleNationFactors> _battleFactorOverflow;
     [ThreadStatic] private static List<BattleLineUnit> _atkLineUnits;
     [ThreadStatic] private static List<BattleLineUnit> _defLineUnits;
 
+    private static void ResetBattleNationFactors()
+    {
+        if (++_battleFactorStamp == int.MaxValue)
+        {
+            if (_battleFactorGen is not null) Array.Clear(_battleFactorGen);
+            _battleFactorStamp = 1;
+        }
+        _battleFactorOverflow?.Clear();
+    }
+
     private static BattleNationFactors GetBattleNationFactors(Campaign campaign, StrategicWar war, int nationId)
     {
-        var map = _battleNationFactors ??= new Dictionary<int, BattleNationFactors>(4);
+        const int DenseCap = 4096;
+        if ((uint)nationId < DenseCap)
+        {
+            var genArr = _battleFactorGen;
+            if (genArr is null || nationId >= genArr.Length)
+            {
+                var next = Math.Max(nationId + 32, Math.Max(128, (genArr?.Length ?? 0) * 2));
+                Array.Resize(ref _battleFactorGen, next);
+                Array.Resize(ref _battleFactorDense, next);
+                genArr = _battleFactorGen;
+            }
+            var dense = _battleFactorDense!;
+            var stamp = _battleFactorStamp;
+            if (genArr[nationId] == stamp) return dense[nationId];
+            var nation = campaign.NationById(nationId);
+            var computed = new BattleNationFactors
+            {
+                Nation = nation,
+                Munitions = StrategicStockpiles.CombatMunitionsFactor(campaign, nation),
+                Spirit = GuerrillaWar.Spirit(campaign, war, nation),
+                AtkRes = NationalModifiers.Factor(nation, "army_attack"),
+                DefRes = NationalModifiers.Factor(nation, "army_defense")
+            };
+            genArr[nationId] = stamp;
+            dense[nationId] = computed;
+            return computed;
+        }
+        var map = _battleFactorOverflow ??= new Dictionary<int, BattleNationFactors>(4);
         if (map.TryGetValue(nationId, out var cached)) return cached;
-        var nation = campaign.NationById(nationId);
+        var n = campaign.NationById(nationId);
         cached = new BattleNationFactors
         {
-            Nation = nation,
-            Munitions = StrategicStockpiles.CombatMunitionsFactor(campaign, nation),
-            Spirit = GuerrillaWar.Spirit(campaign, war, nation),
-            AtkRes = NationalModifiers.Factor(nation, "army_attack"),
-            DefRes = NationalModifiers.Factor(nation, "army_defense")
+            Nation = n,
+            Munitions = StrategicStockpiles.CombatMunitionsFactor(campaign, n),
+            Spirit = GuerrillaWar.Spirit(campaign, war, n),
+            AtkRes = NationalModifiers.Factor(n, "army_attack"),
+            DefRes = NationalModifiers.Factor(n, "army_defense")
         };
         map[nationId] = cached;
         return cached;

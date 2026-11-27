@@ -1,0 +1,12 @@
+{
+  "id": "example_custom_map",
+  "name": "Example Regional Archipelago",
+  "description": "Demonstrates a custom playable map pack under maps/<id>/map.json with custom province sizing and inherited base hydrology.",
+  "author": "Deal or Force Mod Studio",
+  "cells_per_province": 32,
+  "disputed_cells_per_province": 28,
+  "siberia_multiplier": 1.25,
+  "polar_multiplier": 2.0,
+  "inherit_base_hydrology": true,
+  "inherits_base_hydrology": true
+}

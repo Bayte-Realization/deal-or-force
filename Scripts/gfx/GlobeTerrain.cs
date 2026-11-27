@@ -277,6 +277,7 @@ public sealed partial class GlobePresentation
     {
         if (tile is null || tile.IsEmpty())
         {
+            tile?.Dispose();
             GD.PushWarning($"[dof] terrain {definition.Id}: texture unavailable; using its map color (data root: {GameDataLoader.DataFolder()})");
             tile = Image.CreateEmpty(isTouchPrimary ? 128 : 256, isTouchPrimary ? 128 : 256, false, Image.Format.Rgba8);
             tile.Fill(new Color($"#{definition.Color:X6}"));
@@ -289,7 +290,12 @@ public sealed partial class GlobePresentation
         var interp = isTouchPrimary ? Image.Interpolation.Bilinear : Image.Interpolation.Lanczos;
         if (tile.GetWidth() != side || tile.GetHeight() != side)
             tile.Resize(side, side, interp);
-        if (TerrainCatalog.SeamlessTiles && !isTouchPrimary) tile = SeamlessTile(tile);
+        if (TerrainCatalog.SeamlessTiles && !isTouchPrimary)
+        {
+            var seamless = SeamlessTile(tile);
+            tile.Dispose();
+            tile = seamless;
+        }
         outSide = tile.GetWidth();
         rawRgba = isTouchPrimary && tile.GetFormat() == Image.Format.Rgba8 && !tile.HasMipmaps() ? tile.GetData() : null;
         tile.GenerateMipmaps();
@@ -406,8 +412,12 @@ public sealed partial class GlobePresentation
                 }
                 catch
                 {
+                    foreach (var t in result.Tiles) t?.Dispose();
                     Array.Clear(result.Tiles);
+                    result.Lake?.Dispose();
                     result.Lake = null;
+                    result.River?.Dispose();
+                    result.River = null;
                     result.River = null;
                     throw;
                 }
@@ -531,18 +541,18 @@ public sealed partial class GlobePresentation
         }
         else
         {
-            var fallbackSurface = Image.CreateEmpty(2, 2, false, Image.Format.R8);
+            using var fallbackSurface = Image.CreateEmpty(2, 2, false, Image.Format.R8);
             UpdateTerrainTexture(ref _terrainSurfaceTexture, "terrain_surface", fallbackSurface);
         }
         topology.TerrainSurfaceSlots = Array.Empty<byte>();
         var lookup = new byte[256 * 256];
         for (var province = 1; province <= topology.ProvinceCount; province++)
             lookup[province] = slots.TryGetValue(topology.TerrainAt(province).Id, out var slot) ? slot : (byte)0;
-        var lookupImg = Image.CreateFromData(256, 256, false, Image.Format.R8, lookup);
+        using var lookupImg = Image.CreateFromData(256, 256, false, Image.Format.R8, lookup);
         UploadMapImage("province_terrain", lookupImg);
         if (!isTouchPrimary && prepared.Height is not null && !prepared.Height.IsEmpty())
         {
-            var cpuHeight = (Image)prepared.Height.Duplicate();
+            using var cpuHeight = (Image)prepared.Height.Duplicate();
             cpuHeight.ClearMipmaps();
             if (cpuHeight.GetFormat() != Image.Format.L8 && cpuHeight.GetFormat() != Image.Format.R8)
                 cpuHeight.Convert(Image.Format.L8);
@@ -584,13 +594,18 @@ public sealed partial class GlobePresentation
         GD.Print($"[dof] terrain ready: {definitions.Count} types, {topology.ProvinceCount} provinces; {TerrainCatalog.TerrainPath}");
     }
 
-    private static ImageTexture LoadRelief(string path, Color fallback) => ImageTexture.CreateFromImage(ReliefImage(path, fallback));
+    private static ImageTexture LoadRelief(string path, Color fallback)
+    {
+        using var img = ReliefImage(path, fallback);
+        return ImageTexture.CreateFromImage(img);
+    }
 
     private static Image ReliefImage(string path, Color fallback)
     {
         var image = File.Exists(path) ? Image.LoadFromFile(path) : null;
         if (image is null || image.IsEmpty())
         {
+            image?.Dispose();
             image = Image.CreateEmpty(4, 2, false, Image.Format.Rgb8);
             image.Fill(fallback);
         }

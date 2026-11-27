@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using DealOrForce.Simulation;
 using Godot;
@@ -17,14 +18,6 @@ namespace DealOrForce;
 /// </summary>
 public partial class DealOrForceGame
 {
-    /// <summary>
-    /// Whether this is the sweep rather than one row changing.
-    ///
-    /// The sweep runs three times as the game comes up, and some options are expensive to
-    /// obey - renaming every country on the map rebuilds two hundred and sixty-one pieces of
-    /// 3D text. Doing that once at the end of the sweep is the same result for a sixth of
-    /// the work.
-    /// </summary>
     private bool _applyingEverySetting;
 
     /// <summary>Put every saved preference into effect. Called once, as the game comes up.</summary>
@@ -47,15 +40,7 @@ public partial class DealOrForceGame
 
     private static bool _followingLanguageCulture;
 
-    /// <summary>
-    /// Write numbers the way the language being read writes them (Loc.Culture), from now on
-    /// and whenever the language changes - from this screen, the console or a mod.
-    ///
-    /// The interface used the culture Windows runs in, so an English game on a Russian machine
-    /// read "136,0" and "12,5 %" beside "$1.43T". Applied to the interface's own thread and as
-    /// the default for any other, and to nothing the simulation parses: its data is read in the
-    /// invariant culture whatever this says.
-    /// </summary>
+    /// <summary>Keep UI thread formatting aligned with Loc.Culture without altering invariant sim parsing.</summary>
     private static void FollowLanguageCulture()
     {
         if (!_followingLanguageCulture)
@@ -94,7 +79,7 @@ public partial class DealOrForceGame
             RefreshLocalisedText();
             return;
         }
-
+        SyncSmoothTimeSetting(id);
         switch (id.ToLowerInvariant())
         {
             // ---- the game ------------------------------------------------------------
@@ -144,6 +129,10 @@ public partial class DealOrForceGame
                     _campaign.Defines.CivilWarStrikesPlayers = SettingsCatalog.Flag("civil_wars_players");
                 break;
 
+            case "sim_tempo_preset":
+                ApplyTempoPresetSetting(SettingsCatalog.Chosen("sim_tempo_preset"), applyAll: _applyingEverySetting);
+                break;
+
             case "hours_per_tick":
                 if (_campaign is not null)
                 {
@@ -151,6 +140,21 @@ public partial class DealOrForceGame
                     _frameClock.Reset();
                     if (!_applyingEverySetting && _startupComplete) Refresh();
                 }
+                break;
+
+            case "economy_tick_days":
+                if (_campaign is not null)
+                    _campaign.Defines.EconomyTickDays = Math.Clamp(Whole("economy_tick_days"), 1, 365);
+                break;
+
+            case "ai_calm_cadence":
+                if (_campaign is not null)
+                    _campaign.Defines.AiCalmCadenceDays = Math.Clamp(Whole("ai_calm_cadence"), 1, 365);
+                break;
+
+            case "map_pack":
+                SyncMapPackSettingChoices();
+                ApplyMapPackSetting(SettingsCatalog.Chosen("map_pack"));
                 break;
 
             // `pause_on_event` and `confirm_declaration` are read where they are used
@@ -167,7 +171,10 @@ public partial class DealOrForceGame
                     !string.Equals(language, Simulation.Loc.Language, StringComparison.OrdinalIgnoreCase))
                 {
                     Simulation.Loc.Language = language;
+                    SyncMapPackSettingChoices();
                     RefreshLocalisedText();
+                    SyncPickerMapSelection();
+                    SyncPickerTempoSelection();
                     if (_languageButton is not null && GodotObject.IsInstanceValid(_languageButton))
                     {
                         var caption = LanguageButtonLabel();
@@ -364,14 +371,100 @@ public partial class DealOrForceGame
         }
     }
 
-    private void ApplyBackgroundFrameRate()
+    private void SyncSmoothTimeSetting(string id)
     {
-        PaceBackgroundFrames();
+        var isMode = string.Equals(id, SmoothTimePacer.ModeSettingId, StringComparison.OrdinalIgnoreCase);
+        var isLegacy = string.Equals(id, SmoothTimePacer.LegacySettingId, StringComparison.OrdinalIgnoreCase);
+        if (!isMode && !isLegacy) return;
+        if (!_applyingEverySetting && isMode)
+        {
+            var wantEnabled = SmoothTimePacer.ParseMode(SettingsCatalog.Chosen(SmoothTimePacer.ModeSettingId)) != SmoothTimeMode.Off;
+            if (SettingsCatalog.Flag(SmoothTimePacer.LegacySettingId) != wantEnabled)
+                SettingsCatalog.Store(SmoothTimePacer.LegacySettingId, wantEnabled);
+        }
+        _simRunner.SmoothMode = ActiveSmoothTimeMode();
+        _simRunner.Pacer.Reset();
+        _frameClock.Reset();
+        if (!_applyingEverySetting && _startupComplete) UpdateSpeedButtons();
     }
 
-    private void RestoreForegroundFrameRate()
+    private void ApplyBackgroundFrameRate() => PaceBackgroundFrames();
+
+    private void RestoreForegroundFrameRate() => PaceBackgroundFrames();
+
+    private static string FormatMapPackLabel(MapPackEntry entry)
     {
-        PaceBackgroundFrames();
+        var name = entry.LocalizedName(Loc.Language);
+        if (entry.CompiledProvinceCount > 0)
+            return $"{name} ({entry.CompiledProvinceCount:N0})";
+        return name;
+    }
+
+    internal static void SyncMapPackSettingChoices()
+    {
+        var definition = SettingsCatalog.Of("map_pack");
+        if (definition is null) return;
+        var maps = MapCatalog.AvailableMaps;
+        var playable = new List<MapPackEntry>();
+        foreach (var entry in maps)
+            if (entry.IsPlayable) playable.Add(entry);
+        if (playable.Count == 0) return;
+
+        definition.Values.Clear();
+        definition.Labels.Clear();
+        definition.LabelsAreLiteral = true;
+        foreach (var entry in playable)
+        {
+            definition.Values.Add(entry.Id);
+            definition.Labels.Add(FormatMapPackLabel(entry));
+        }
+    }
+
+    private void ApplyTempoPresetSetting(string preset, bool applyAll)
+    {
+        var normalized = (preset ?? "").Trim().ToLowerInvariant();
+        if (applyAll && (normalized.Length == 0 || normalized == "detailed"))
+            return;
+
+        var (hours, ecoDays, calmDays) = normalized switch
+        {
+            "balanced" => (6, 7, 14),
+            "fast_mobile" => (12, 14, 30),
+            "grand_rts" => (24, 30, 60),
+            _ => (1, 7, 7)
+        };
+
+        if (!applyAll)
+        {
+            SettingsCatalog.Store("hours_per_tick", hours.ToString(CultureInfo.InvariantCulture));
+            SettingsCatalog.Store("economy_tick_days", ecoDays.ToString(CultureInfo.InvariantCulture));
+            SettingsCatalog.Store("ai_calm_cadence", calmDays.ToString(CultureInfo.InvariantCulture));
+            if (!_campaignInProgress) PersistTempoSelection(normalized.Length > 0 ? normalized : "detailed");
+        }
+        if (_campaign is not null)
+        {
+            _campaign.Defines.HoursPerTick = hours; _campaign.Defines.EconomyTickDays = ecoDays; _campaign.Defines.AiCalmCadenceDays = calmDays;
+            _frameClock.Reset(); if (!applyAll && _startupComplete) Refresh();
+        }
+        if (!applyAll && !_campaignInProgress) SyncPickerTempoSelection();
+
+        SyncPickerTempoSelection();
+    }
+
+    private void ApplyMapPackSetting(string chosen)
+    {
+        var targetId = string.IsNullOrWhiteSpace(chosen) ? MapCatalog.StandardId : chosen.Trim();
+        if (!MapCatalog.IsAvailable(targetId))
+        {
+            targetId = MapCatalog.StandardId;
+            if (!string.Equals(chosen, targetId, StringComparison.Ordinal))
+                SettingsCatalog.Store("map_pack", targetId);
+        }
+        var changed = !string.Equals(MapCatalog.ActiveMapId, targetId, StringComparison.Ordinal);
+        MapCatalog.SetActiveMap(targetId);
+        if (changed && !_applyingEverySetting && _startupComplete && _campaignInProgress)
+            _settingsNeedRestart = true;
+        SyncPickerMapSelection();
     }
 
     // The current base game has independent visual layers. A legacy mod may still declare
@@ -392,7 +485,7 @@ public partial class DealOrForceGame
     /// which has no campaign behind it, applies it through the same code rather than a
     /// second copy that drifts.
     /// </summary>
-    private static bool IsMobilePlatform =>
+    internal static bool IsMobilePlatform =>
         Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
         OS.HasFeature("mobile") || OS.HasFeature("android") || OS.HasFeature("ios") ||
         OS.GetName() is "Android" or "iOS";

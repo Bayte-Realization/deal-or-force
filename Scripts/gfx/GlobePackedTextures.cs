@@ -18,10 +18,10 @@ public sealed partial class GlobePresentation
     private void InitializePackedTextures()
     {
         if (!UsePackedMapShader) return;
-        var lookup = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
+        using var lookup = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
         _packedLookups = CreateArray(lookup, PackedMapShader.Lookups.Count);
         _globeMaterial.SetShaderParameter("packed_lookups", _packedLookups);
-        var ids = Image.CreateEmpty(2, 2, false, Image.Format.Rg8);
+        using var ids = Image.CreateEmpty(2, 2, false, Image.Format.Rg8);
         _packedIds = CreateArray(ids, PackedMapShader.Ids.Count);
         _globeMaterial.SetShaderParameter("packed_ids", _packedIds);
     }

@@ -172,6 +172,7 @@ public sealed class CityMiniatureRenderer
                 var mmi = new MultiMeshInstance3D
                 {
                     Name = CityMiniatureLayout.ModelNames[k],
+                    CustomAabb = new Aabb(new Vector3(-120f, -120f, -120f), new Vector3(240f, 240f, 240f)),
                     CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                     GIMode = GeometryInstance3D.GIModeEnum.Disabled,
                     MaterialOverride = _material,

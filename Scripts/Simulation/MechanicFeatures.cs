@@ -233,8 +233,8 @@ public static class MechanicFeatures
         Bind("government_promises", "MakePromiseCommand");
         Bind("strategic_goals", "AdoptGoalCommand", "AbandonGoalCommand");
         Bind("state_identity", "DeclareStateIdentityCommand");
-        Bind("tactical_doctrines", "StudyDoctrineCommand");
-        Bind("strategic_doctrines", "AdoptStrategicDoctrineCommand");
+        Bind("tactical_doctrines", "StudyDoctrineCommand", "AbandonDoctrineCommand", "CancelDoctrineStudyCommand");
+        Bind("strategic_doctrines", "AdoptStrategicDoctrineCommand", "AbandonStrategicDoctrineCommand");
         Bind("land_arrangements", "LandArrangementCommand");
         // Cancel/refund and pending-event response commands remain available by default.
         return result;

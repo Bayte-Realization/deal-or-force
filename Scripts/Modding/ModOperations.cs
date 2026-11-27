@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using DealOrForce.Simulation;
 
 namespace DealOrForce.Modding;
@@ -117,6 +118,46 @@ public static class ModOperations
             IssuerId = issuer.Id, TargetId = target.Id, Act = act, Step = DiplomaticActStep.Propose });
         return true;
     }
+
+    /// <summary>
+    /// Queue an existing national modifier from <c>common/modifiers</c> onto the country identified by <paramref name="tag"/>.
+    /// Returns true when the modifier id is valid and accepted into <c>Campaign.Commands</c>.
+    /// </summary>
+    public static bool QueueAddModifier(Campaign c, string tag, string modifierId, int durationDays = 365)
+    {
+        var nation = c?.NationByTag(tag);
+        var trimmedId = modifierId?.Trim() ?? "";
+        if (nation is null || trimmedId.Length == 0 || ModifierCatalog.Get(trimmedId) is null ||
+            durationDays < 0 || durationDays > 36500)
+            return false;
+        c.Commands.Enqueue(new ModAddModifierCommand
+        {
+            IssuerId = nation.Id,
+            ModifierId = trimmedId,
+            DurationDays = durationDays
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// Queue an existing campaign event from <c>events/</c> or <c>common/historical_events</c> for <paramref name="tag"/>.
+    /// Human-controlled countries receive a pending event choice so their consent is never bypassed;
+    /// AI and observer countries resolve deterministically on application.
+    /// </summary>
+    public static bool QueueTriggerEvent(Campaign c, string tag, string eventId)
+    {
+        var nation = c?.NationByTag(tag);
+        var trimmedId = eventId?.Trim() ?? "";
+        if (nation is null || trimmedId.Length == 0) return false;
+        var definition = EventCatalog.All.FirstOrDefault(e => string.Equals(e.Id, trimmedId, StringComparison.OrdinalIgnoreCase));
+        if (definition is null || !definition.Suits(nation)) return false;
+        c.Commands.Enqueue(new ModTriggerEventCommand
+        {
+            IssuerId = nation.Id,
+            EventId = definition.Id
+        });
+        return true;
+    }
 }
 
 /// <summary>
@@ -133,5 +174,70 @@ public sealed class ModCourseShockCommand : ICampaignCommand
         if (c.HumanSeats.Count <= 1 && c.FeatureEnabled("national_courses") && c.NationById(IssuerId) is { } n &&
             float.IsFinite(Strength) && Strength > 0 && Strength <= 1 && Reason.Length <= 256)
             NationalCourses.Shock(c, n, Strength, Reason);
+    }
+}
+
+/// <summary>Queued command applying an existing <see cref="ModifierCatalog"/> entry to a country.</summary>
+public sealed class ModAddModifierCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public string ModifierId { get; init; } = "";
+    public int DurationDays { get; init; } = 365;
+
+    public void Apply(Campaign c)
+    {
+        if (c is null || string.IsNullOrWhiteSpace(ModifierId) || DurationDays < 0 || DurationDays > 36500) return;
+        if (c.NationById(IssuerId) is not { } nation) return;
+        if (ModifierCatalog.Get(ModifierId) is null) return;
+        if (ModifierSystem.Grant(c, nation, ModifierId, DurationDays))
+            c.MarkStrategicChange();
+    }
+}
+
+/// <summary>
+/// Queued command firing an existing <see cref="EventCatalog"/> definition for a country,
+/// preserving interactive pending cards for human players and deterministic resolution for AI.
+/// </summary>
+public sealed class ModTriggerEventCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public string EventId { get; init; } = "";
+
+    public void Apply(Campaign c)
+    {
+        if (c is null || string.IsNullOrWhiteSpace(EventId)) return;
+        if (c.NationById(IssuerId) is not { } nation) return;
+        var definition = EventCatalog.All.FirstOrDefault(e => string.Equals(e.Id, EventId, StringComparison.OrdinalIgnoreCase));
+        if (definition is null || !definition.Suits(nation)) return;
+
+        nation.EventMemory[definition.Id] = c.ElapsedDays;
+        if (definition.Options.Length > 0)
+        {
+            var pending = new PendingCampaignEvent
+            {
+                Id = c.PendingEvents.Count == 0 ? 1 : c.PendingEvents.Max(item => item.Id) + 1,
+                NationId = nation.Id,
+                Title = definition.Title,
+                Description = definition.Description,
+                CreatedDay = c.ElapsedDays,
+                ExpiresDay = c.ElapsedDays + (definition.DecisionDays > 0
+                    ? definition.DecisionDays
+                    : Math.Max(1, c.Defines.EventExpiryDays)),
+                Options = definition.Options
+            };
+            c.PendingEvents.Add(pending);
+            if (!c.IsHumanControlled(nation))
+                EventSystem.Resolve(c, pending, Math.Clamp(definition.AiOption, 0, definition.Options.Length - 1));
+            else
+                c.MarkStrategicChange();
+        }
+        else
+        {
+            definition.Effects.Apply(c, nation);
+            c.MarkStrategicChange();
+        }
+
+        if (definition.Record)
+            c.Chronicle.Record(c, definition.ChronicleKind, nation.Id, -1, definition.Title, "", true);
     }
 }

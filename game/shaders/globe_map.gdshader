@@ -57,12 +57,12 @@ uniform sampler2D frontier_field : filter_linear_mipmap, repeat_enable;
 uniform float frontier_ready = 0.0;
 uniform float frontier_cap = 20.0;
 // The smoothed field never quite reaches nought: what it holds at the frontier itself.
-uniform float frontier_offset = 0.6;
+uniform float frontier_offset = 0.72;
 // How far from the frontier, in cells, the field still counts as standing on it. The rebuild it
 // stands in for sees a block of four by four cells and never anything further, so this is the
 // same reach: without it the inner cushion and glow, drawn by pixel widths meant for close in,
 // spread eight cells into every country from the middle zoom out and the frontiers went dark and fat.
-uniform float frontier_reach = 1.5;
+uniform float frontier_reach = 1.65;
 uniform float region_border_pixels = 3.78;
 uniform vec3 region_border_color = vec3(0.0, 0.0, 0.0);
 uniform float region_border_opacity = 0.0416;
@@ -285,8 +285,13 @@ float label_claim(vec4 m0, vec4 m1, vec4 m2, vec4 m3, vec2 f) {
     vec2 bottom = (r1 * 0.5 + r2 + r3 * 0.5) * 0.25;
     vec2 own_top = m1.yz;
     vec2 own_bottom = m2.yz;
-    top = mix(top, own_top, 0.8 * mix(step(0.48, top), 1.0 - step(0.52, top), own_top));
-    bottom = mix(bottom, own_bottom, 0.8 * mix(step(0.48, bottom), 1.0 - step(0.52, bottom), own_bottom));
+    // C1-continuous, two-label-symmetric preservation: keeps 1-texel islands and narrow strips
+    // visible without snapping shallow diagonal staircase bends or triple junctions back onto
+    // the square texel grid.
+    vec2 top_own = mix(vec2(1.0) - top, top, own_top);
+    vec2 bottom_own = mix(vec2(1.0) - bottom, bottom, own_bottom);
+    top = mix(top, own_top, 0.50 * (vec2(1.0) - smoothstep(vec2(0.22), vec2(0.58), top_own)));
+    bottom = mix(bottom, own_bottom, 0.50 * (vec2(1.0) - smoothstep(vec2(0.22), vec2(0.58), bottom_own)));
     return mix(mix(top.x, top.y, f.x), mix(bottom.x, bottom.y, f.x), f.y);
 }
 
@@ -977,7 +982,7 @@ void fragment() {
         if (need_map_wander || need_terrain_drift) {
             map_drift = vec2(grain(UV * id_size * 0.9), grain(UV * id_size * 0.9 + 71.3));
             if (need_map_wander) {
-                map_uv = UV + map_drift * id_wander_texels * clamp(3.2 - id_span * 0.4, 0.0, 1.0) / id_size;
+                map_uv = UV + map_drift * id_wander_texels * (1.0 - smoothstep(0.8, 2.6, id_span)) / id_size;
             }
         }
     }
@@ -1635,7 +1640,7 @@ void fragment() {
     // of a picked country) changes with it.
     // Only where the rebuild would alias: a cell under about two pixels. Closer in, where a cell
     // is two pixels or more, the rebuild is sharper than any filtered field.
-    float frontier_weight = frontier_ready * smoothstep(0.62, 0.85, id_span);
+    float frontier_weight = frontier_ready * smoothstep(0.68, 1.05, id_span);
     if (frontier_weight > 0.001) {
         float frontier_cells = frontier_cells_all;
         float frontier_pixels = max(frontier_cells - frontier_offset, 0.0) / id_aa;
@@ -1649,7 +1654,8 @@ void fragment() {
     // cell and a half, or it would.
     float far_line = mix(clamp(2.4 - pixel_texels, 0.0, 1.0),
                          clamp(1.15 - (pixel_texels - 1.5) * 0.09, 0.5, 1.0), frontier_weight);
-    country_edge *= has_nation_border * far_line;
+    float rebuild_reach_fade = mix(1.0 - smoothstep(1.15, 1.48, nation_reach), 1.0, frontier_weight);
+    country_edge *= has_nation_border * far_line * rebuild_reach_fade;
     // Where one side is the sea the line is a coast, not a frontier, and the atlas inks it lighter
     // and bluer, so the eye can tell where a state ends from where the land does. The two inks
     // split one stroke; nothing is drawn twice.
@@ -1687,14 +1693,25 @@ void fragment() {
     float province_shoulder = province_halo * (1.0 - on_country_border);
     // Paradox-style inner frontier cushion: deepens and enriches each country's colour along the
     // inside of its international border and coastline, giving territories physical volume.
-    float country_cushion = (1.0 - smoothstep(border_pixels * 1.0, border_pixels * 6.8, nation_edge_pixels)) *
-        has_nation_border * clamp(2.8 - pixel_texels * 0.85, 0.0, 1.0) * (1.0 - step(0.5, terrain_mode));
-    float country_inner_rim = smoothstep(border_pixels * 0.75, border_pixels * 1.35, nation_edge_pixels) *
-        (1.0 - smoothstep(border_pixels * 1.35, border_pixels * 2.35, nation_edge_pixels)) *
-        has_nation_border * clamp(2.2 - pixel_texels, 0.0, 1.0) * (1.0 - step(0.5, terrain_mode));
+    // Wide cushions extend past the 4x4 block's 1.5-texel reach at regional zoom; use the smooth
+    // filtered frontier field when available, or taper cleanly before the block edge on GLES3.
+    float cushion_pixels = nation_edge_pixels;
+    float cushion_gate = has_nation_border * (1.0 - smoothstep(1.00, 1.48, nation_reach));
+    if (frontier_ready > 0.5 && map_smoothing > 0.5) {
+        float f_px = max(frontier_cells_all - frontier_offset, 0.0) / id_aa;
+        float f_blend = smoothstep(0.55, 1.15, nation_reach);
+        cushion_pixels = has_nation_border > 0.5 ? mix(nation_edge_pixels, f_px, max(f_blend, frontier_weight)) : f_px;
+        cushion_gate = 1.0 - smoothstep(frontier_cap * 0.85, frontier_cap * 0.98, frontier_cells_all);
+    }
+    float country_cushion = (1.0 - smoothstep(border_pixels * 1.0, border_pixels * 6.8, cushion_pixels)) *
+        cushion_gate * clamp(2.8 - pixel_texels * 0.85, 0.0, 1.0) * (1.0 - step(0.5, terrain_mode));
+    float country_inner_rim = smoothstep(border_pixels * 0.75, border_pixels * 1.35, cushion_pixels) *
+        (1.0 - smoothstep(border_pixels * 1.35, border_pixels * 2.35, cushion_pixels)) *
+        cushion_gate * clamp(2.2 - pixel_texels, 0.0, 1.0) * (1.0 - step(0.5, terrain_mode));
     // The region line is a shade rather than a stroke, and it gives way to a country border.
     float region_cushion = (1.0 - smoothstep(region_border_pixels * 0.1786, region_border_pixels, region_reach / region_aa)) *
         step(0.5, abs(near_region - other_region_id)) * (1.0 - has_nation_border) * (1.0 - step(0.5, terrain_mode));
+    region_cushion *= 1.0 - smoothstep(1.00, 1.48, region_reach);
     // Use the same reconstructed boundary as the province contour, not a stripe
     // one/two source texels wide. Source texels become giant steps at close zoom.
     bool crosses_province = need_province_bounds && abs(near_province - other_province_id) >= 0.5;
@@ -1716,8 +1733,8 @@ void fragment() {
     // Two-stage Paradox/Victoria-grade frontier vignette: a wide velvet chroma band (0..8.5px) that
     // enriches each nation's true hue along its border without muddy brown darkening, plus a subtle
     // bright inner rim (0.9..2.6px) right inside the dark cartographic ink line.
-    float country_wide_glow = (1.0 - smoothstep(border_pixels * 1.2, border_pixels * 8.5, nation_edge_pixels)) *
-        has_nation_border * clamp(2.9 - pixel_texels * 0.80, 0.0, 1.0) * (1.0 - step(0.5, terrain_mode));
+    float country_wide_glow = (1.0 - smoothstep(border_pixels * 1.2, border_pixels * 8.5, cushion_pixels)) *
+        cushion_gate * clamp(2.9 - pixel_texels * 0.80, 0.0, 1.0) * (1.0 - step(0.5, terrain_mode));
     vec3 saturated_nation = clamp(mix(vec3(dot(political.rgb, vec3(0.2126, 0.7152, 0.0722))), political.rgb, 1.38) * 0.88, vec3(0.06), vec3(0.96));
     vec3 cushioned = mix(base * 0.84, base * 0.34 + saturated_nation * 0.56, 0.62);
     base = mix(base, cushioned, country_cushion * max(detail_mix, 0.48) * political.a * 0.58);

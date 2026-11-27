@@ -505,24 +505,108 @@ public static class SupportCore
     /// sky has been cleared for does not. It is what makes air superiority worth flying: the
     /// fighters overhead are what the attack aircraft are not losing.
     /// </summary>
+    [ThreadStatic] private static List<SupportFormation> _attritionFormationsScratch;
+    [ThreadStatic] private static float[] _attritionThreatScratch;
+    [ThreadStatic] private static float[] _attritionModScratch;
+    [ThreadStatic] private static float[] _attritionStrScratch;
+    [ThreadStatic] private static float[] _attritionExpScratch;
+    [ThreadStatic] private static float[] _attritionLossScratch;
+    [ThreadStatic] private static Dictionary<int, float> _attritionModByNationScratch;
+
     private static void Attrition(Campaign campaign)
     {
         campaign.SupportLossesToday.Clear();
         if (campaign.SupportExposure.Count == 0) return;
         var defines = campaign.Defines;
-        foreach (var formation in campaign.SupportFormations)
+        var memo = campaign.Caches.SupportEnabledMemo;
+        memo.Entries.Clear();
+        memo.Active = true;
+        try
         {
-            if (!Enabled(campaign, formation.TypeId) || !campaign.SupportExposure.TryGetValue(formation.Id, out var threat) || threat <= 0f) continue;
-            var loss = defines.SupportAttritionPerDay * threat / (threat + defines.SupportAttritionSaturation) *
-                       NationalModifiers.Factor(campaign.NationById(formation.NationId), "support_losses");
-            loss = MathF.Min(loss, MathF.Max(0f, formation.Strength - defines.SupportAttritionFloor));
-            if (loss <= 0f) continue;
-            formation.Strength -= loss;
-            campaign.SupportLossesToday[formation.Id] = loss;
-            // Crews that come back have learned something.
-            formation.Experience = M.Clamp01(formation.Experience + loss * 0.08f);
+            var exposed = _attritionFormationsScratch ??= new List<SupportFormation>(32);
+            exposed.Clear();
+            var modByNation = _attritionModByNationScratch ??= new Dictionary<int, float>(16);
+            modByNation.Clear();
+
+            var formations = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(campaign.SupportFormations);
+            var nCount = formations.Length;
+            for (var fi = 0; fi < nCount; fi++)
+            {
+                var formation = formations[fi];
+                if (!campaign.SupportExposure.TryGetValue(formation.Id, out var threat) || threat <= 0f) continue;
+                if (!Enabled(campaign, formation.TypeId)) continue;
+                exposed.Add(formation);
+            }
+
+            var expCount = exposed.Count;
+            if (expCount >= 8 &&
+                Kernels.NativeKernelsLoader.EnableEconCombatDefault &&
+                Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapEconCombat))
+            {
+                if (_attritionThreatScratch is null || _attritionThreatScratch.Length < expCount)
+                {
+                    var cap = Math.Max(expCount + 16, 32);
+                    _attritionThreatScratch = new float[cap];
+                    _attritionModScratch = new float[cap];
+                    _attritionStrScratch = new float[cap];
+                    _attritionExpScratch = new float[cap];
+                    _attritionLossScratch = new float[cap];
+                }
+                for (var i = 0; i < expCount; i++)
+                {
+                    var f = exposed[i];
+                    _attritionThreatScratch[i] = campaign.SupportExposure[f.Id];
+                    if (!modByNation.TryGetValue(f.NationId, out var mf))
+                        modByNation[f.NationId] = mf = NationalModifiers.Factor(campaign.NationById(f.NationId), "support_losses");
+                    _attritionModScratch![i] = mf;
+                    _attritionStrScratch![i] = f.Strength;
+                    _attritionExpScratch![i] = f.Experience;
+                }
+                Kernels.NativeCombatSupportKernels.SupportAttritionBatch(
+                    _attritionThreatScratch.AsSpan(0, expCount),
+                    _attritionModScratch.AsSpan(0, expCount),
+                    defines.SupportAttritionPerDay,
+                    defines.SupportAttritionSaturation,
+                    defines.SupportAttritionFloor,
+                    _attritionStrScratch.AsSpan(0, expCount),
+                    _attritionExpScratch.AsSpan(0, expCount),
+                    _attritionLossScratch.AsSpan(0, expCount));
+                for (var i = 0; i < expCount; i++)
+                {
+                    var loss = _attritionLossScratch![i];
+                    if (loss <= 0f) continue;
+                    var f = exposed[i];
+                    f.Strength = _attritionStrScratch![i];
+                    f.Experience = _attritionExpScratch![i];
+                    campaign.SupportLossesToday[f.Id] = loss;
+                }
+            }
+            else
+            {
+                var floor = defines.SupportAttritionFloor;
+                var apd = defines.SupportAttritionPerDay;
+                var sat = defines.SupportAttritionSaturation;
+                for (var i = 0; i < expCount; i++)
+                {
+                    var formation = exposed[i];
+                    var threat = campaign.SupportExposure[formation.Id];
+                    if (!modByNation.TryGetValue(formation.NationId, out var mf))
+                        modByNation[formation.NationId] = mf = NationalModifiers.Factor(campaign.NationById(formation.NationId), "support_losses");
+                    var loss = apd * threat / (threat + sat) * mf;
+                    loss = MathF.Min(loss, MathF.Max(0f, formation.Strength - floor));
+                    if (loss <= 0f) continue;
+                    formation.Strength -= loss;
+                    campaign.SupportLossesToday[formation.Id] = loss;
+                    formation.Experience = M.Clamp01(formation.Experience + loss * 0.08f);
+                }
+            }
+            campaign.SupportExposure.Clear();
         }
-        campaign.SupportExposure.Clear();
+        finally
+        {
+            memo.Active = false;
+            memo.Entries.Clear();
+        }
     }
 
     /// <summary>
@@ -1009,11 +1093,31 @@ public static class SupportCore
         return map is null ? float.MaxValue : DistanceKm(map, fromProvince, toProvince);
     }
 
+    internal static float DistanceKm((float Latitude, float Longitude) from, (float Latitude, float Longitude) to)
+    {
+        const float Radians = MathF.PI / 180f;
+        var dLat = (to.Latitude - from.Latitude) * Radians;
+        var dLon = (to.Longitude - from.Longitude) * Radians;
+        var sinLat = MathF.Sin(dLat * 0.5f);
+        var sinLon = MathF.Sin(dLon * 0.5f);
+        var haversine = sinLat * sinLat +
+                        MathF.Cos(from.Latitude * Radians) * MathF.Cos(to.Latitude * Radians) * sinLon * sinLon;
+        return 6371f * 2f * MathF.Asin(MathF.Min(1f, MathF.Sqrt(haversine)));
+    }
+
+    internal static bool InRangePrepared(ProvinceTopology map, SupportFormation formation, float reachKm, (float Latitude, float Longitude) targetCenter)
+    {
+        if (formation.BaseProvinceId <= 0 || formation.BaseProvinceId > map.ProvinceCount) return false;
+        var from = map.CenterOf(formation.BaseProvinceId);
+        if (MathF.Abs(from.Latitude - targetCenter.Latitude) * 111.0f > reachKm) return false;
+        return DistanceKm(from, targetCenter) <= reachKm;
+    }
+
     internal static float DistanceKm(ProvinceTopology map, int fromProvince, int toProvince)
     {
         var from = map.CenterOf(fromProvince);
         var to = map.CenterOf(toProvince);
-        var radians = MathF.PI / 180f;
+        const float radians = MathF.PI / 180f;
         var dLat = (to.Latitude - from.Latitude) * radians;
         var dLon = (to.Longitude - from.Longitude) * radians;
         var sinLat = MathF.Sin(dLat * 0.5f);
@@ -1130,13 +1234,22 @@ public static class SupportCore
         return reach;
     }
 
+    [ThreadStatic] private static List<(SupportFormation Formation, SupportTypeDefinition Type)> _reachCandidatesScratch;
+    [ThreadStatic] private static float[] _reachBaseLatScratch;
+    [ThreadStatic] private static float[] _reachBaseLonScratch;
+    [ThreadStatic] private static float[] _reachKmScratch;
+    [ThreadStatic] private static float[] _reachStrScratch;
+    [ThreadStatic] private static float[] _reachExpScratch;
+    [ThreadStatic] private static float[] _reachWeightOutScratch;
+
     internal static void FillReachOf(Campaign campaign, IEnumerable<int> nationIds, int province, SideReach reach)
     {
         reach.Fire = 0f;
         reach.Interdiction = 0f;
         reach.AirSuperiority = 0f;
         reach.AirDefence = 0f;
-        if (campaign.ProvinceMap is null) return;
+        var map = campaign.ProvinceMap;
+        if (map is null || province <= 0 || province > map.ProvinceCount) return;
         HashSet<int> nations;
         if (nationIds is HashSet<int> existing)
         {
@@ -1148,6 +1261,10 @@ public static class SupportCore
             nations.Clear();
             foreach (var id in nationIds) nations.Add(id);
         }
+        var provCenter = map.CenterOf(province);
+        var slack = MathF.Max(0f, campaign.Defines.LongRangeReachSlackKm);
+        var candidates = _reachCandidatesScratch ??= new List<(SupportFormation, SupportTypeDefinition)>(16);
+        candidates.Clear();
         foreach (var nationId in nations)
         {
             if (!campaign.SupportByNation.TryGetValue(nationId, out var formations)) continue;
@@ -1155,14 +1272,44 @@ public static class SupportCore
             {
                 var formation = formations[fi];
                 if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
-                if (Displaced(campaign, formation)) continue;
-                // A missile brigade covers its own ground whatever it was told; everything
-                // else works only the mission it was given.
                 var passive = type.Kind == SupportKind.AirDefence;
                 if (!passive && formation.Mission == MissionStandby) continue;
-                if (!InRange(campaign, formation, type, province)) continue;
-                var weight = formation.Strength * (1f + formation.Experience * 0.35f);
-                if (passive)
+                if (!Enabled(campaign, type) || Displaced(campaign, formation)) continue;
+                candidates.Add((formation, type));
+            }
+        }
+        var count = candidates.Count;
+        if (count == 0) return;
+        if (count >= 8 &&
+            Kernels.NativeKernelsLoader.EnableEconCombatDefault &&
+            Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapEconCombat))
+        {
+            EnsureReachScratch(count);
+            for (var i = 0; i < count; i++)
+            {
+                var (formation, type) = candidates[i];
+                var center = map.CenterOf(formation.BaseProvinceId);
+                _reachBaseLatScratch![i] = center.Latitude;
+                _reachBaseLonScratch![i] = center.Longitude;
+                _reachKmScratch![i] = type.RangeKm + slack;
+                _reachStrScratch![i] = formation.Strength;
+                _reachExpScratch![i] = formation.Experience;
+            }
+            Kernels.NativeCombatSupportKernels.SupportReachBatch(
+                provCenter.Latitude,
+                provCenter.Longitude,
+                _reachBaseLatScratch.AsSpan(0, count),
+                _reachBaseLonScratch.AsSpan(0, count),
+                _reachKmScratch.AsSpan(0, count),
+                _reachStrScratch.AsSpan(0, count),
+                _reachExpScratch.AsSpan(0, count),
+                _reachWeightOutScratch.AsSpan(0, count));
+            for (var i = 0; i < count; i++)
+            {
+                var weight = _reachWeightOutScratch![i];
+                if (weight < 0f) continue;
+                var (formation, type) = candidates[i];
+                if (type.Kind == SupportKind.AirDefence)
                     reach.AirDefence += type.AirDefence * weight;
                 else
                 {
@@ -1171,7 +1318,34 @@ public static class SupportCore
                     if (formation.Mission == MissionAirSuperiority) reach.AirSuperiority += type.AirSuperiority * weight;
                 }
             }
+            return;
         }
+        for (var i = 0; i < count; i++)
+        {
+            var (formation, type) = candidates[i];
+            if (!InRangePrepared(map, formation, type.RangeKm + slack, provCenter)) continue;
+            var weight = formation.Strength * (1f + formation.Experience * 0.35f);
+            if (type.Kind == SupportKind.AirDefence)
+                reach.AirDefence += type.AirDefence * weight;
+            else
+            {
+                if (formation.Mission == MissionCloseAirSupport) reach.Fire += type.SupportFire * weight;
+                if (formation.Mission == MissionInterdiction) reach.Interdiction += type.Interdiction * weight;
+                if (formation.Mission == MissionAirSuperiority) reach.AirSuperiority += type.AirSuperiority * weight;
+            }
+        }
+    }
+
+    private static void EnsureReachScratch(int count)
+    {
+        if (_reachBaseLatScratch is not null && _reachBaseLatScratch.Length >= count) return;
+        var cap = Math.Max(count + 16, 32);
+        _reachBaseLatScratch = new float[cap];
+        _reachBaseLonScratch = new float[cap];
+        _reachKmScratch = new float[cap];
+        _reachStrScratch = new float[cap];
+        _reachExpScratch = new float[cap];
+        _reachWeightOutScratch = new float[cap];
     }
 
     private static void AccumulateEngagement(
@@ -1179,20 +1353,71 @@ public static class SupportCore
         List<(SupportFormation Formation, SupportTypeDefinition Type, bool Attacker)> present)
     {
         if (!campaign.SupportByNation.TryGetValue(nationId, out var formations)) return;
+        var map = campaign.ProvinceMap;
+        if (map is null || province <= 0 || province > map.ProvinceCount) return;
+        var provCenter = map.CenterOf(province);
+        var slack = MathF.Max(0f, campaign.Defines.LongRangeReachSlackKm);
+        var candidates = _reachCandidatesScratch ??= new List<(SupportFormation, SupportTypeDefinition)>(16);
+        candidates.Clear();
         for (var fi = 0; fi < formations.Count; fi++)
         {
             var formation = formations[fi];
             if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
-            if (Displaced(campaign, formation)) continue;
             var passive = type.Kind == SupportKind.AirDefence;
-            if (!passive && formation.Mission == MissionStandby) continue;
-            // A formation on deep strike is aiming at something else this week: it neither
-            // helps the battle nor is charged for its sky (LongRangeStrikes charges its own).
-            if (!passive && formation.Mission == MissionStrike) continue;
-            if (!InRange(campaign, formation, type, province)) continue;
+            if (!passive && (formation.Mission == MissionStandby || formation.Mission == MissionStrike)) continue;
+            if (!Enabled(campaign, type) || Displaced(campaign, formation)) continue;
+            candidates.Add((formation, type));
+        }
+        var count = candidates.Count;
+        if (count == 0) return;
+        if (count >= 8 &&
+            Kernels.NativeKernelsLoader.EnableEconCombatDefault &&
+            Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapEconCombat))
+        {
+            EnsureReachScratch(count);
+            for (var i = 0; i < count; i++)
+            {
+                var (formation, type) = candidates[i];
+                var center = map.CenterOf(formation.BaseProvinceId);
+                _reachBaseLatScratch![i] = center.Latitude;
+                _reachBaseLonScratch![i] = center.Longitude;
+                _reachKmScratch![i] = type.RangeKm + slack;
+                _reachStrScratch![i] = formation.Strength;
+                _reachExpScratch![i] = formation.Experience;
+            }
+            Kernels.NativeCombatSupportKernels.SupportReachBatch(
+                provCenter.Latitude,
+                provCenter.Longitude,
+                _reachBaseLatScratch.AsSpan(0, count),
+                _reachBaseLonScratch.AsSpan(0, count),
+                _reachKmScratch.AsSpan(0, count),
+                _reachStrScratch.AsSpan(0, count),
+                _reachExpScratch.AsSpan(0, count),
+                _reachWeightOutScratch.AsSpan(0, count));
+            for (var i = 0; i < count; i++)
+            {
+                var weight = _reachWeightOutScratch![i];
+                if (weight < 0f) continue;
+                var (formation, type) = candidates[i];
+                present.Add((formation, type, forAttacker));
+                if (type.Kind == SupportKind.AirDefence)
+                    side.AirDefence += type.AirDefence * weight;
+                else
+                {
+                    if (formation.Mission == MissionCloseAirSupport) side.Fire += type.SupportFire * weight;
+                    if (formation.Mission == MissionInterdiction) side.Interdiction += type.Interdiction * weight;
+                    if (formation.Mission == MissionAirSuperiority) side.AirSuperiority += type.AirSuperiority * weight;
+                }
+            }
+            return;
+        }
+        for (var i = 0; i < count; i++)
+        {
+            var (formation, type) = candidates[i];
+            if (!InRangePrepared(map, formation, type.RangeKm + slack, provCenter)) continue;
             var weight = formation.Strength * (1f + formation.Experience * 0.35f);
             present.Add((formation, type, forAttacker));
-            if (passive)
+            if (type.Kind == SupportKind.AirDefence)
                 side.AirDefence += type.AirDefence * weight;
             else
             {

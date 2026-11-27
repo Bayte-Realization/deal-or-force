@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod combat_support;
 mod diplomacy;
 mod distance;
 mod economy_demo;
@@ -63,9 +64,10 @@ pub extern "C" fn dof_kernels_simd_level() -> u32 {
 ///   bit 7 (128): economy & demography batched kernels
 ///   bit 8 (256): incremental dirty-rect raster plate/frontier & mipmaps
 ///   bit 9 (512): wartime CSR border/occupation/vision & political cohorts kernels
+///   bit 10 (1024): combat, support & economy batched SIMD kernels
 #[no_mangle]
 pub extern "C" fn dof_kernels_capabilities() -> u32 {
-    let mut caps = 1u32 | 2u32 | 4u32 | 8u32 | 64u32 | 128u32 | 256u32 | 512u32;
+    let mut caps = 1u32 | 2u32 | 4u32 | 8u32 | 64u32 | 128u32 | 256u32 | 512u32 | 1024u32;
     let simd = dof_kernels_simd_level();
     if simd == 2 {
         caps |= 16;
@@ -1529,6 +1531,253 @@ pub unsafe extern "C" fn dof_econ_vital_rates_batch_v1(
     }
 }
 
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn dof_combat_line_profile_v1(
+    count: u32,
+    divisions: *const f32,
+    hardness: *const f32,
+    armour: *const f32,
+    piercing: *const f32,
+    supply: *const f32,
+    recon: *const f32,
+    out_hardness: *mut f32,
+    out_armour: *mut f32,
+    out_piercing: *mut f32,
+    out_supply: *mut f32,
+    out_recon: *mut f32,
+) -> i32 {
+    let n = count as usize;
+    if n == 0 {
+        if !out_hardness.is_null() { *out_hardness = 0.0f32; }
+        if !out_armour.is_null() { *out_armour = 0.0f32; }
+        if !out_piercing.is_null() { *out_piercing = 0.0f32; }
+        if !out_supply.is_null() { *out_supply = 0.0f32; }
+        if !out_recon.is_null() { *out_recon = 0.0f32; }
+        return 0;
+    }
+    if divisions.is_null()
+        || hardness.is_null()
+        || armour.is_null()
+        || piercing.is_null()
+        || supply.is_null()
+        || recon.is_null()
+        || out_hardness.is_null()
+        || out_armour.is_null()
+        || out_piercing.is_null()
+        || out_supply.is_null()
+        || out_recon.is_null()
+    {
+        return -1;
+    }
+    match combat_support::combat_line_profile(
+        std::slice::from_raw_parts(divisions, n),
+        std::slice::from_raw_parts(hardness, n),
+        std::slice::from_raw_parts(armour, n),
+        std::slice::from_raw_parts(piercing, n),
+        std::slice::from_raw_parts(supply, n),
+        std::slice::from_raw_parts(recon, n),
+    ) {
+        Ok((h, a, p, s, r)) => {
+            *out_hardness = h;
+            *out_armour = a;
+            *out_piercing = p;
+            *out_supply = s;
+            *out_recon = r;
+            0
+        }
+        Err(c) => c,
+    }
+}
+
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn dof_combat_side_totals_v1(
+    count: u32,
+    raw_power: *const f32,
+    offence: *const f32,
+    atk_train: *const f32,
+    atk_stance: *const f32,
+    atk_res: *const f32,
+    munitions: *const f32,
+    enc: *const f32,
+    spirit: *const f32,
+    cmd_atk: *const f32,
+    def_stat: *const f32,
+    def_train: *const f32,
+    def_stance: *const f32,
+    def_res: *const f32,
+    cmd_def: *const f32,
+    entrenchment: *const f32,
+    weight_offence_telemetry: u8,
+    out_totals: *mut f64,
+) -> i32 {
+    if out_totals.is_null() {
+        return -1;
+    }
+    let n = count as usize;
+    let out_slice = std::slice::from_raw_parts_mut(out_totals, 9);
+    if n == 0 {
+        out_slice.fill(0.0f64);
+        return 0;
+    }
+    if raw_power.is_null()
+        || offence.is_null()
+        || atk_train.is_null()
+        || atk_stance.is_null()
+        || atk_res.is_null()
+        || munitions.is_null()
+        || enc.is_null()
+        || spirit.is_null()
+        || cmd_atk.is_null()
+        || def_stat.is_null()
+        || def_train.is_null()
+        || def_stance.is_null()
+        || def_res.is_null()
+        || cmd_def.is_null()
+        || entrenchment.is_null()
+    {
+        return -1;
+    }
+    match combat_support::combat_side_totals(
+        std::slice::from_raw_parts(raw_power, n),
+        std::slice::from_raw_parts(offence, n),
+        std::slice::from_raw_parts(atk_train, n),
+        std::slice::from_raw_parts(atk_stance, n),
+        std::slice::from_raw_parts(atk_res, n),
+        std::slice::from_raw_parts(munitions, n),
+        std::slice::from_raw_parts(enc, n),
+        std::slice::from_raw_parts(spirit, n),
+        std::slice::from_raw_parts(cmd_atk, n),
+        std::slice::from_raw_parts(def_stat, n),
+        std::slice::from_raw_parts(def_train, n),
+        std::slice::from_raw_parts(def_stance, n),
+        std::slice::from_raw_parts(def_res, n),
+        std::slice::from_raw_parts(cmd_def, n),
+        std::slice::from_raw_parts(entrenchment, n),
+        weight_offence_telemetry != 0,
+        out_slice,
+    ) {
+        Ok(()) => 0,
+        Err(c) => c,
+    }
+}
+
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn dof_support_attrition_batch_v1(
+    count: u32,
+    threat: *const f32,
+    mod_factor: *const f32,
+    attrition_per_day: f32,
+    saturation: f32,
+    floor: f32,
+    strength: *mut f32,
+    experience: *mut f32,
+    out_loss: *mut f32,
+) -> i32 {
+    let n = count as usize;
+    if n == 0 {
+        return 0;
+    }
+    if threat.is_null()
+        || mod_factor.is_null()
+        || strength.is_null()
+        || experience.is_null()
+        || out_loss.is_null()
+    {
+        return -1;
+    }
+    match combat_support::support_attrition_batch(
+        std::slice::from_raw_parts(threat, n),
+        std::slice::from_raw_parts(mod_factor, n),
+        attrition_per_day,
+        saturation,
+        floor,
+        std::slice::from_raw_parts_mut(strength, n),
+        std::slice::from_raw_parts_mut(experience, n),
+        std::slice::from_raw_parts_mut(out_loss, n),
+    ) {
+        Ok(()) => 0,
+        Err(c) => c,
+    }
+}
+
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn dof_support_reach_batch_v1(
+    count: u32,
+    target_lat: f32,
+    target_lon: f32,
+    base_lat: *const f32,
+    base_lon: *const f32,
+    reach_km: *const f32,
+    strength: *const f32,
+    experience: *const f32,
+    out_weight: *mut f32,
+) -> i32 {
+    let n = count as usize;
+    if n == 0 {
+        return 0;
+    }
+    if base_lat.is_null()
+        || base_lon.is_null()
+        || reach_km.is_null()
+        || strength.is_null()
+        || experience.is_null()
+        || out_weight.is_null()
+    {
+        return -1;
+    }
+    match combat_support::support_reach_batch(
+        target_lat,
+        target_lon,
+        std::slice::from_raw_parts(base_lat, n),
+        std::slice::from_raw_parts(base_lon, n),
+        std::slice::from_raw_parts(reach_km, n),
+        std::slice::from_raw_parts(strength, n),
+        std::slice::from_raw_parts(experience, n),
+        std::slice::from_raw_parts_mut(out_weight, n),
+    ) {
+        Ok(()) => 0,
+        Err(c) => c,
+    }
+}
+
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn dof_econ_state_week_post_v1(
+    count: u32,
+    nation_sol: *const f32,
+    weekly_rad_delta: *const f32,
+    cycle_rad: *const f32,
+    state_sol: *mut f32,
+    state_rad: *mut f32,
+) -> i32 {
+    let n = count as usize;
+    if n == 0 {
+        return 0;
+    }
+    if nation_sol.is_null()
+        || weekly_rad_delta.is_null()
+        || cycle_rad.is_null()
+        || state_sol.is_null()
+        || state_rad.is_null()
+    {
+        return -1;
+    }
+    match combat_support::econ_state_week_post(
+        std::slice::from_raw_parts(nation_sol, n),
+        std::slice::from_raw_parts(weekly_rad_delta, n),
+        std::slice::from_raw_parts(cycle_rad, n),
+        std::slice::from_raw_parts_mut(state_sol, n),
+        std::slice::from_raw_parts_mut(state_rad, n),
+    ) {
+        Ok(()) => 0,
+        Err(c) => c,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1536,7 +1785,10 @@ mod tests {
     #[test]
     fn abi_and_null_guards() {
         assert_eq!(dof_kernels_abi_version(), 1);
-        assert!(dof_kernels_capabilities() & (1 | 2 | 4 | 8 | 64 | 128) == (1 | 2 | 4 | 8 | 64 | 128));
+        assert!(
+            dof_kernels_capabilities() & (1 | 2 | 4 | 8 | 64 | 128 | 256 | 512 | 1024)
+                == (1 | 2 | 4 | 8 | 64 | 128 | 256 | 512 | 1024)
+        );
         unsafe {
             assert!(dof_graph_create_v1(
                 0,

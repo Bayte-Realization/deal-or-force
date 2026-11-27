@@ -16,10 +16,10 @@ namespace DealOrForce;
 /// </summary>
 public sealed partial class GlobePresentation
 {
-    // Long-range cards sit just behind land counters, never in front of them. The flat map
-    // and the globe use the same one-pixel-scale depth bias in their own coordinate systems.
-    private const float SupportMarkerDepthBias = .002f;
-    private const float SupportSurfaceDepthFactor = .9994f;
+    // Long-range cards sit just behind land counters, never in front of them, and well clear
+    // of the map surface / borders on 16/24-bit mobile depth buffers.
+    private const float SupportMarkerDepthBias = .0012f;
+    private const float SupportSurfaceDepthFactor = .99975f;
 
     private sealed class SupportMapMarker
     {
@@ -31,7 +31,7 @@ public sealed partial class GlobePresentation
         public float Longitude;
         public Vector3 Normal;
         public Vector2 DisplayOffset;
-        public bool DisplayFaded;
+        public bool DisplayFaded; public Vector3 LayoutPosition; public bool HasLayoutPosition;
     }
 
     private Node3D _supportMarkerRoot = null!;
@@ -195,9 +195,9 @@ public sealed partial class GlobePresentation
             foreach (var marker in _supportMapMarkers.Values)
                 if (!_flatMap && IsInstanceValid(marker.Node))
                 {
-                    var visible = GlobeLineSanity.TrySafeNormalize(ToNum(marker.Node.Position), out var markerNorm) &&
+                    var visible = GlobeLineSanity.TrySafeNormalize(ToNum(marker.Node.GlobalPosition), out var markerNorm) &&
                         ToGd(markerNorm).Dot(viewNormal) > horizon;
-                    marker.Node.Visible = visible;
+                    if (marker.Node.Visible != visible) marker.Node.Visible = visible;
                 }
         if (_flatMap) UpdateMarkerVisibility(_supportMarkerRoot, _supportVisibility, true);
         // Screen-width ribbons only need rebuilding when projection/viewport/zoom changes or camera moves past a wrap/horizon angle.
@@ -272,6 +272,7 @@ public sealed partial class GlobePresentation
                 _supportVisibility.Clear();
                 foreach (var marker in _supportMapMarkers.Values) _supportVisibility.Add((marker.Node, marker.Normal));
                 InvalidateFlatCounterDensity();
+                LayoutSupportCounters();
             }
             if (reachChanged) BuildSupportRange();
             return;
@@ -290,17 +291,12 @@ public sealed partial class GlobePresentation
         {
             if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
             var center = LongRangeMovement.Position(_campaign, formation);
-            // Geography is not a collision-avoidance slot. Keep the actual anchor - the province
-            // it stands in, or the point it has reached on the road; the bounded screen layout may
-            // only use room inside that same province.
+            // Geography is not a collision-avoidance slot: keep the true formation anchor.
             var latitude = center.Latitude;
             var longitude = center.Longitude;
             var node = new Node3D { Name = $"LongRange_{formation.Id}" };
             _supportMarkerRoot.AddChild(node);
-            // The symbol is part of the card now: cut out and fitted into its slot on the
-            // left when the card is built. It used to be a sprite parked over the card at a
-            // hard-coded size, so a catalogue tile with a wide drawing on it - a plane, say
-            // - simply overran the frame it was supposed to sit in.
+            // The symbol is cut into its frame slot directly so wide sprites cannot overrun the card.
             var iconPath = SpriteCatalog.TextureOf($"icon_{type.Icon}", $"res://game/gfx/interface/icons/icon_{type.Icon}.png");
             var plate = new Sprite3D
             {
@@ -309,17 +305,17 @@ public sealed partial class GlobePresentation
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
                 TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                NoDepthTest = false
+                RenderPriority = 6, NoDepthTest = false
             };
             node.AddChild(plate);
             var readiness = new Label3D
             {
                 Font = PresentationFonts.For("ui.default"),
-                FontSize = 20, OutlineSize = 3, Offset = new Vector2(16, 0),
+                FontSize = 40, OutlineSize = 6, LineSpacing = -6f, Offset = new Vector2(48f, -17f),
                 RenderPriority = 8, OutlineRenderPriority = 7,
                 TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
                 Name = "SupportReadiness", Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
-                NoDepthTest = false,
+                NoDepthTest = true,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 Modulate = new Color(.91f, .95f, .96f)
             };
@@ -338,6 +334,7 @@ public sealed partial class GlobePresentation
         if (!_supportMapMarkers.ContainsKey(_selectedSupportId)) _selectedSupportId = -1;
         _selectedSupportIds.RemoveWhere(id => !_supportMapMarkers.ContainsKey(id));
         RefreshSupportMarkerSelection();
+        LayoutSupportCounters();
         BuildSupportRange();
     }
 
@@ -349,7 +346,7 @@ public sealed partial class GlobePresentation
         marker.Latitude = latitude;
         marker.Longitude = longitude;
         marker.Normal = SurfacePoint(latitude, longitude, 1f).Normalized();
-        marker.DisplayOffset = Vector2.Zero;
+        marker.DisplayOffset = Vector2.Zero; marker.HasLayoutPosition = false;
         PlaceSupportMarker(marker);
         return true;
     }
@@ -367,27 +364,22 @@ public sealed partial class GlobePresentation
 
     private void PlaceSupportMarker(SupportMapMarker marker)
     {
+        marker.HasLayoutPosition = false;
         marker.Node.Position = _flatMap
             ? LocalFlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - SupportMarkerDepthBias)
             : LocalSurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor);
         var flatScale = MathF.Max(.00001f, _counterWorldPixel);
         marker.Node.Scale = Vector3.One * (_flatMap ? flatScale * _counterFlatFar : SurfaceCounterWidth(marker.Node, "support"));
         OrientSurfaceCounter(marker.Node, marker.Node.Position.Normalized());
-        marker.Readiness.FontSize = _flatMap && _flatStrategicCounters ? 30 : 20;
+        marker.Readiness.FontSize = _flatMap && _flatStrategicCounters ? 56 : 40;
         marker.Plate.FixedSize = marker.Readiness.FixedSize = false;
-        // Everything below is laid out in the card's own pixels (96x56), so the flat map
-        // and the globe draw the same marker and one tuning moves both. The readiness
-        // number sits in the middle of the card - where the marker is anchored - and the
-        // symbol is drawn inside the card to the left of it. A label parked beside its
-        // card by an offset drifts away from it as the camera moves; at the origin there
-        // is no offset left to drift.
-        // Orthographic cards have a fixed screen footprint; only Node.Scale tracks zoom.
+        // Laid out in card pixels (96x56) so both projections share exact glyph proportions.
         var platePixel = _flatMap
             ? Math.Clamp(Ui.Metric("support.flat_counter_width", 64f), 40f, 96f) / 96f
             : 1f / 96f;
         marker.Plate.PixelSize = platePixel;
-        marker.Readiness.PixelSize = platePixel * .85f;
-        marker.Readiness.Visible = !_flatMap || (!_flatStrategicCounters && _selectedSupportIds.Contains(marker.Formation.Id));
+        marker.Readiness.PixelSize = platePixel * .34f;
+        marker.Readiness.Visible = SupportReadinessVisible(marker);
         marker.Readiness.Position = new Vector3(0f, 0f, .02f);
         marker.Readiness.Width = 0f;
         marker.Readiness.RenderPriority = 8;
@@ -398,24 +390,23 @@ public sealed partial class GlobePresentation
     private void PaintSupportMarker(SupportMapMarker marker, SupportFormation formation)
     {
         marker.Formation = formation;
-        // Red for a formation that cannot work where it stands and is not on its way anywhere:
-        // cut off, or stopped on ground it may not use. A column on the road keeps its arm's colour.
         var moving = formation.Route.Count > 0 || formation.DeployDaysLeft > 0;
         var displaced = !moving && SupportCore.Displaced(_campaign, formation);
         if (SupportTypeCatalog.TryGet(formation.TypeId, out var type))
         {
             var icon = SpriteCatalog.TextureOf($"icon_{type.Icon}", $"res://game/gfx/interface/icons/icon_{type.Icon}.png");
-            marker.Plate.Texture = SupportPlate(icon, _selectedSupportIds.Contains(formation.Id),
+            var baseTex = SupportPlate(icon, _selectedSupportIds.Contains(formation.Id),
                 displaced ? Ui.Colour("support.displaced") : SupportArmColour(type.Kind),
                 _campaign.NationById(formation.NationId));
             var compact = _flatMap && (_flatStrategicCounters || !_selectedSupportIds.Contains(formation.Id));
-            if (compact)
-                marker.Plate.Texture = CompactCounterTexture(marker.Plate.Texture, new Rect2I(7, 13, 28, 30));
+            var targetTex = compact ? CompactCounterTexture(baseTex, new Rect2I(7, 13, 28, 30)) : baseTex;
+            if (!ReferenceEquals(marker.Plate.Texture, targetTex)) marker.Plate.Texture = targetTex;
             marker.Plate.PixelSize = _flatMap
-                ? Math.Clamp(Ui.Metric(compact ? "support.flat_idle_width" : "support.flat_counter_width", compact ? 34f : 64f), 24f, 96f) / marker.Plate.Texture.GetWidth()
-                : 1f / marker.Plate.Texture.GetWidth();
+                ? Math.Clamp(Ui.Metric(compact ? "support.flat_idle_width" : "support.flat_counter_width", compact ? 34f : 64f), 24f, 96f) / targetTex.GetWidth()
+                : 1f / targetTex.GetWidth();
         }
-        marker.Plate.Modulate = Colors.White;
+        var targetMod = marker.DisplayFaded ? new Color(.72f, .75f, .78f, 1f) : Colors.White;
+        if (marker.Plate.Modulate != targetMod) marker.Plate.Modulate = targetMod;
         var mission = formation.CutOff ? Loc.Get("ISOLATED")
             : formation.Route.Count > 0 ? Loc.Format("→ {0} d", SupportEta(formation))
             : formation.DeployDaysLeft > 0 ? Loc.Get("DEPLOY")
@@ -432,13 +423,16 @@ public sealed partial class GlobePresentation
         if (marker.Readiness.Text != readiness) marker.Readiness.Text = readiness;
         marker.Readiness.Modulate = formation.Strength >= .7f ? Ui.Colour("support.ready") :
             formation.Strength >= .35f ? Ui.Colour("support.depleted") : Ui.Colour("support.critical");
-        marker.Readiness.Visible = !_flatMap || (!_flatStrategicCounters && _selectedSupportIds.Contains(formation.Id));
-        marker.Readiness.PixelSize = marker.Plate.PixelSize * .85f;
+        marker.Readiness.Visible = SupportReadinessVisible(marker);
+        marker.Readiness.PixelSize = marker.Plate.PixelSize * .34f;
         if (_flatMap)
         {
             marker.Node.SetMeta("flat_counter_width", marker.Plate.Texture.GetWidth() * marker.Plate.PixelSize);
         }
     }
+
+    private bool SupportReadinessVisible(SupportMapMarker marker) =>
+        !marker.DisplayFaded && (!_flatMap || (!_flatStrategicCounters && _selectedSupportIds.Contains(marker.Formation.Id)));
 
     private void RefreshSupportMarkerSelection()
     {
@@ -460,9 +454,10 @@ public sealed partial class GlobePresentation
                 if (forceLayout) PlaceSupportMarker(marker);
                 else
                 {
-                    var position = _flatMap
+                    var keepLayout = !_flatMap && marker.HasLayoutPosition;
+                    var position = keepLayout ? marker.LayoutPosition : (_flatMap
                         ? LocalFlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - SupportMarkerDepthBias)
-                        : LocalSurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor);
+                        : LocalSurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor));
                     if (_flatMap)
                     {
                         position += new Vector3(marker.DisplayOffset.X, -marker.DisplayOffset.Y, 0f) * (_camera.Size / Math.Max(1f, Size.Y));
@@ -472,7 +467,7 @@ public sealed partial class GlobePresentation
                     if (marker.Node.Position != position) marker.Node.Position = position;
                     var card = SurfaceCounterWidth(marker.Node, "support");
                     OrientSurfaceCounter(marker.Node, position.Normalized());
-                    marker.Node.Scale = Vector3.One * card;
+                    if (MathF.Abs(marker.Node.Scale.X - card) > 0.00001f) marker.Node.Scale = Vector3.One * card;
                 }
             }
         if (forceLayout) RefreshSupportMarkerSelection();

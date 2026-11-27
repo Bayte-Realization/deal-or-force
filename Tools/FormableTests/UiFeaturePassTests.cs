@@ -290,14 +290,15 @@ static class UiFeaturePassTests
         var minimapCs = Read(root, "Scripts/ui/Shell/ShellMinimapView.cs");
         Check(minimapCs.Contains("if (!world.TryEnterRead(0, false)) return;") &&
               minimapCs.Contains("world.ExitRead();") &&
-              !minimapCs.Contains("using var img = Image.CreateFromData") &&
-              minimapCs.Contains("var img = Image.CreateFromData"),
-            "ShellMinimapView fences fallback world reads with TryEnterRead(0, false) and drops manual Image disposal");
+              minimapCs.Contains("_minimapImage.SetData(MinimapW, MinimapH, false, Image.Format.Rgba8, _bytes);") &&
+              minimapCs.Contains("_minimapImage?.Dispose();") &&
+              minimapCs.Contains("_panel.TreeExiting += DisposeResources;"),
+            "ShellMinimapView fences fallback world reads with TryEnterRead(0, false), reuses _minimapImage via SetData, and disposes it on TreeExiting");
 
         var rankingsCs = Read(root, "Scripts/ui/CountryRankingsUI.cs");
-        Check(Regex.Matches(rankingsCs, @"campaign\.TryEnterRead\(50, true\)").Count >= 4 &&
+        Check(Regex.Matches(rankingsCs, @"campaign\.AccessGate\.TryEnterPriorityRead\(\d+\)").Count >= 4 &&
               Regex.Matches(rankingsCs, @"campaign\.ExitRead\(\);").Count >= 4,
-            "CountryRankingsUI fences FocusAndHighlightRankingNation, footer callbacks, and highlight restore");
+            "CountryRankingsUI fences FocusAndHighlightRankingNation, footer callbacks, and highlight restore with priority reads");
 
         var gameCs = Read(root, "Scripts/DealOrForceGame.cs");
         Check(Regex.IsMatch(gameCs, @"Simulation\.SpriteCatalog\.Changed\s*-=\s*ForgetFlags;\s+Simulation\.SpriteCatalog\.Changed\s*\+=\s*ForgetFlags;") &&

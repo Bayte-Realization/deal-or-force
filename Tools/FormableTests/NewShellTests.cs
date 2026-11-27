@@ -374,8 +374,10 @@ static class NewShellTests
 
         var peaceDispatch = ShellMessages.Resolve(ShellMessagePreset.Dispatch, ShellMessageEvent.PeaceOffer, true, 2);
         var encirclementSpeed5 = ShellMessages.Resolve(ShellMessagePreset.Calm, ShellMessageEvent.ArmyEncircled, true, 5);
+        var encirclementSpeedMax = ShellMessages.Resolve(ShellMessagePreset.Calm, ShellMessageEvent.ArmyEncircled, true, 8);
         Check(!peaceDispatch.PauseClock && peaceDispatch.ShowNewspaperCard, "Dispatch keeps flow on peace offer card");
-        Check(encirclementSpeed5.PauseClock && encirclementSpeed5.Speed5SafetyPause, "Speed 5 triggers safety pause on player encirclement");
+        Check(!encirclementSpeed5.Speed5SafetyPause && encirclementSpeedMax.PauseClock && encirclementSpeedMax.Speed5SafetyPause,
+            "Max speed (8) triggers safety pause on player encirclement while Speed 5 stays fluid");
 
         Check(ShellMessages.ParsePreset("focus") == ShellMessagePreset.Focus &&
               ShellMessages.ParsePreset("paradox") == ShellMessagePreset.Focus,

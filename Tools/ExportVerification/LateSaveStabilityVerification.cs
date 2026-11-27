@@ -51,7 +51,7 @@ public partial class ExportVerification
                 "late save advances through actual high-speed frames without a campaign fault");
             using var process = Process.GetCurrentProcess(); process.Refresh();
             GD.Print($"LATE_SAVE_REALTIME_RESULT start={start} end={world.ElapsedDays} seconds={realtime.Elapsed.TotalSeconds:0.###} " +
-                $"speed=5 private_bytes={process.PrivateMemorySize64} managed_bytes={GC.GetTotalMemory(false)} " +
+                $"speed={world.Speed} private_bytes={process.PrivateMemorySize64} managed_bytes={GC.GetTotalMemory(false)} " +
                 $"logs={DiagnosticLogs.DirectoryPath} failures={_failures}");
             await Capture("late-save-realtime");
             return;
@@ -132,7 +132,7 @@ public partial class DealOrForceGame
     {
         _frameReportAccumulator = 0; _frameReportFrames = 0; _frameDurations.Clear();
         _frameReportDay = _campaign.ElapsedDays; _lastProfiles.Clear();
-        SetSpeed(5);
+        SetSpeed(Math.Max(1, _campaign?.Defines?.MaxSpeed ?? 8));
     }
 
     internal async Task VerificationRestoreCopiedSave(string path)

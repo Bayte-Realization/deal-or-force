@@ -8,7 +8,7 @@
     "hud.navigation": { "anchors": [0,0,0,1], "offsets": [8,90,98,-60] },
     "hud.side_panel": { "anchors": [0,0,0,1], "offsets": [106,128,548,-168] },
     "hud.army_panel": { "anchors": [0,0,0,1], "offsets": [106,128,612,-168] },
-    "hud.support_panel": { "anchors": [0,0,0,1], "offsets": [106,128,712,-168] },
+    "hud.support_panel": { "anchors": [0,0,0,1], "offsets": [106,104,712,-84] },
     "hud.fleet_panel": { "anchors": [0,0,0,0], "offsets": [106,90,548,610] },
     "hud.country_card": { "anchors": [0,0,0,1], "offsets": [106,128,548,-168] },
     "hud.region_card": { "anchors": [0,1,1,1], "offsets": [552,-262,-8,-8] },

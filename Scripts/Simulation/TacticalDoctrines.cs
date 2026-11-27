@@ -457,7 +457,7 @@ public static class TacticalDoctrineCatalog
 /// which the old habits are gone and the new ones are not learned (the doctrine_retraining
 /// spirit). The nodes of the abandoned book are not kept. That is what makes the choice real.
 /// </summary>
-public static class TacticalDoctrines
+public static partial class TacticalDoctrines
 {
     /// <summary>The spirit granted while an army relearns: see common/modifiers/46_retraining.json.</summary>
     public const string RetrainingModifier = "doctrine_retraining";

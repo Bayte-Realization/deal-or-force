@@ -108,6 +108,7 @@ public static partial class AiStatecraft
     /// </summary>
     [ThreadStatic] private static HashSet<int> _aimEnemiesScratch;
     [ThreadStatic] private static HashSet<int> _aimUnresolvedScratch;
+    [ThreadStatic] private static HashSet<int> _truceDemandSetScratch;
     [ThreadStatic] private static List<int> _decisiveTerritoryScratch;
     [ThreadStatic] private static HashSet<int> _partitionClaimedScratch;
 
@@ -121,26 +122,30 @@ public static partial class AiStatecraft
             nation.WarSupport < campaign.Defines.AiWarSupportFloor) return true;
         var enemies = _aimEnemiesScratch ??= new HashSet<int>();
         enemies.Clear();
-        foreach (var id in war.EnemiesOf(nation.Id))
-        {
-            var n = campaign.NationById(id);
-            if (n is not null) enemies.Add(n.MapIndex);
-        }
         var subject = demand.Subjugate.Length > 0 ? campaign.NationById(war.EnemyLeaderOf(nation.Id))?.MapIndex ?? 0 : 0;
         var unresolved = _aimUnresolvedScratch ??= new HashSet<int>();
         unresolved.Clear();
-        var states = campaign.States;
-        for (var i = 0; i < states.Count; i++)
+        foreach (var id in war.EnemiesOf(nation.Id))
         {
-            var s = states[i];
-            if (enemies.Contains(s.NationMapIndex) && s.NationMapIndex != subject &&
-                StrategicWarAim(campaign, nation, war, s))
-                unresolved.Add(s.MapIndex);
+            var n = campaign.NationById(id);
+            if (n is null) continue;
+            enemies.Add(n.MapIndex);
+            if (n.MapIndex == subject) continue;
+            var enemyStates = campaign.StatesOf(n);
+            for (var si = 0; si < enemyStates.Length; si++)
+            {
+                var s = enemyStates[si];
+                if (StrategicWarAim(campaign, nation, war, s))
+                    unresolved.Add(s.MapIndex);
+            }
         }
         if (unresolved.Count == 0) return true;
+        var demandSet = _truceDemandSetScratch ??= new HashSet<int>();
+        demandSet.Clear();
+        foreach (var dp in demand.Provinces) demandSet.Add(dp);
         for (var p = 1; p <= map.ProvinceCount; p++)
             if (!map.IsWater(p) && enemies.Contains(map.ProvinceToNation[p]) && map.ProvinceToNation[p] != subject &&
-                unresolved.Contains(map.ProvinceToState[p]) && !demand.Provinces.Contains(p)) return false;
+                unresolved.Contains(map.ProvinceToState[p]) && !demandSet.Contains(p)) return false;
         return true;
     }
     /// <summary>

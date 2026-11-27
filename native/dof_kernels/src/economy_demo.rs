@@ -484,7 +484,74 @@ pub fn aggregate_nations(
         let mut deaths = 0i64;
         let mut migration = 0i64;
 
-        for s in start..end {
+        let mut s = start;
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx2") {
+                s = unsafe {
+                    aggregate_nations_chunk_avx2(
+                        s,
+                        end,
+                        state_pop,
+                        state_young,
+                        state_old,
+                        state_births,
+                        state_deaths,
+                        state_migration,
+                        &mut people,
+                        &mut young,
+                        &mut old,
+                        &mut births,
+                        &mut deaths,
+                        &mut migration,
+                    )
+                };
+            } else {
+                s = unsafe {
+                    aggregate_nations_chunk_sse2(
+                        s,
+                        end,
+                        state_pop,
+                        state_young,
+                        state_old,
+                        state_births,
+                        state_deaths,
+                        state_migration,
+                        &mut people,
+                        &mut young,
+                        &mut old,
+                        &mut births,
+                        &mut deaths,
+                        &mut migration,
+                    )
+                };
+            }
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            if std::arch::is_aarch64_feature_detected!("neon") {
+                s = unsafe {
+                    aggregate_nations_chunk_neon(
+                        s,
+                        end,
+                        state_pop,
+                        state_young,
+                        state_old,
+                        state_births,
+                        state_deaths,
+                        state_migration,
+                        &mut people,
+                        &mut young,
+                        &mut old,
+                        &mut births,
+                        &mut deaths,
+                        &mut migration,
+                    )
+                };
+            }
+        }
+
+        while s < end {
             let size = state_pop[s].max(0);
             let size_f32 = size as f32;
             people += size as f64;
@@ -494,6 +561,7 @@ pub fn aggregate_nations(
             births = births.wrapping_add(state_births[s]);
             deaths = deaths.wrapping_add(state_deaths[s]);
             migration = migration.wrapping_add(state_migration[s]);
+            s += 1;
         }
 
         let total = if people > 1.0f64 { people } else { 1.0f64 };
@@ -509,6 +577,178 @@ pub fn aggregate_nations(
     }
 
     Ok(())
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn aggregate_nations_chunk_avx2(
+    mut s: usize,
+    end: usize,
+    state_pop: &[i64],
+    state_young: &[f32],
+    state_old: &[f32],
+    state_births: &[i64],
+    state_deaths: &[i64],
+    state_migration: &[i64],
+    people: &mut f64,
+    young: &mut f64,
+    old: &mut f64,
+    births: &mut i64,
+    deaths: &mut i64,
+    migration: &mut i64,
+) -> usize {
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+
+    let mut p_f = [0.0f32; 8];
+    let mut y_d = [0.0f64; 4];
+    let mut o_d = [0.0f64; 4];
+    let mut p_d = [0.0f64; 8];
+
+    while s + 8 <= end {
+        for k in 0..8 {
+            let sz = state_pop[s + k].max(0);
+            p_d[k] = sz as f64;
+            p_f[k] = sz as f32;
+            *births = births.wrapping_add(state_births[s + k]);
+            *deaths = deaths.wrapping_add(state_deaths[s + k]);
+            *migration = migration.wrapping_add(state_migration[s + k]);
+        }
+        let pv = _mm256_loadu_ps(p_f.as_ptr());
+        let yv = _mm256_mul_ps(pv, _mm256_loadu_ps(state_young.as_ptr().add(s)));
+        let ov = _mm256_mul_ps(pv, _mm256_loadu_ps(state_old.as_ptr().add(s)));
+
+        _mm256_storeu_pd(y_d.as_mut_ptr(), _mm256_cvtps_pd(_mm256_castps256_ps128(yv)));
+        _mm256_storeu_pd(o_d.as_mut_ptr(), _mm256_cvtps_pd(_mm256_castps256_ps128(ov)));
+        for k in 0..4 {
+            *people += p_d[k];
+            *young += y_d[k];
+            *old += o_d[k];
+        }
+        _mm256_storeu_pd(y_d.as_mut_ptr(), _mm256_cvtps_pd(_mm256_extractf128_ps(yv, 1)));
+        _mm256_storeu_pd(o_d.as_mut_ptr(), _mm256_cvtps_pd(_mm256_extractf128_ps(ov, 1)));
+        for k in 0..4 {
+            *people += p_d[4 + k];
+            *young += y_d[k];
+            *old += o_d[k];
+        }
+        s += 8;
+    }
+    s
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "sse2")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn aggregate_nations_chunk_sse2(
+    mut s: usize,
+    end: usize,
+    state_pop: &[i64],
+    state_young: &[f32],
+    state_old: &[f32],
+    state_births: &[i64],
+    state_deaths: &[i64],
+    state_migration: &[i64],
+    people: &mut f64,
+    young: &mut f64,
+    old: &mut f64,
+    births: &mut i64,
+    deaths: &mut i64,
+    migration: &mut i64,
+) -> usize {
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+
+    let mut p_f = [0.0f32; 4];
+    let mut y_f = [0.0f32; 4];
+    let mut o_f = [0.0f32; 4];
+    let mut p_d = [0.0f64; 4];
+
+    while s + 4 <= end {
+        for k in 0..4 {
+            let sz = state_pop[s + k].max(0);
+            p_d[k] = sz as f64;
+            p_f[k] = sz as f32;
+            *births = births.wrapping_add(state_births[s + k]);
+            *deaths = deaths.wrapping_add(state_deaths[s + k]);
+            *migration = migration.wrapping_add(state_migration[s + k]);
+        }
+        let pv = _mm_loadu_ps(p_f.as_ptr());
+        let yv = _mm_mul_ps(pv, _mm_loadu_ps(state_young.as_ptr().add(s)));
+        let ov = _mm_mul_ps(pv, _mm_loadu_ps(state_old.as_ptr().add(s)));
+        _mm_storeu_ps(y_f.as_mut_ptr(), yv);
+        _mm_storeu_ps(o_f.as_mut_ptr(), ov);
+        for k in 0..4 {
+            *people += p_d[k];
+            *young += y_f[k] as f64;
+            *old += o_f[k] as f64;
+        }
+        s += 4;
+    }
+    s
+}
+
+#[cfg(target_arch = "aarch64")]
+#[target_feature(enable = "neon")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn aggregate_nations_chunk_neon(
+    mut s: usize,
+    end: usize,
+    state_pop: &[i64],
+    state_young: &[f32],
+    state_old: &[f32],
+    state_births: &[i64],
+    state_deaths: &[i64],
+    state_migration: &[i64],
+    people: &mut f64,
+    young: &mut f64,
+    old: &mut f64,
+    births: &mut i64,
+    deaths: &mut i64,
+    migration: &mut i64,
+) -> usize {
+    use std::arch::aarch64::*;
+
+    let mut p_f = [0.0f32; 4];
+    let mut y_d = [0.0f64; 2];
+    let mut o_d = [0.0f64; 2];
+    let mut p_d = [0.0f64; 4];
+
+    while s + 4 <= end {
+        for k in 0..4 {
+            let sz = state_pop[s + k].max(0);
+            p_d[k] = sz as f64;
+            p_f[k] = sz as f32;
+            *births = births.wrapping_add(state_births[s + k]);
+            *deaths = deaths.wrapping_add(state_deaths[s + k]);
+            *migration = migration.wrapping_add(state_migration[s + k]);
+        }
+        let pv = vld1q_f32(p_f.as_ptr());
+        let yv = vmulq_f32(pv, vld1q_f32(state_young.as_ptr().add(s)));
+        let ov = vmulq_f32(pv, vld1q_f32(state_old.as_ptr().add(s)));
+
+        vst1q_f64(y_d.as_mut_ptr(), vcvt_f64_f32(vget_low_f32(yv)));
+        vst1q_f64(o_d.as_mut_ptr(), vcvt_f64_f32(vget_low_f32(ov)));
+        for k in 0..2 {
+            *people += p_d[k];
+            *young += y_d[k];
+            *old += o_d[k];
+        }
+        vst1q_f64(y_d.as_mut_ptr(), vcvt_f64_f32(vget_high_f32(yv)));
+        vst1q_f64(o_d.as_mut_ptr(), vcvt_f64_f32(vget_high_f32(ov)));
+        for k in 0..2 {
+            *people += p_d[2 + k];
+            *young += y_d[k];
+            *old += o_d[k];
+        }
+        s += 4;
+    }
+    s
 }
 
 /// Bit-exact `HouseholdEconomy.ReviewCore` group labour aggregation + household group dynamics.

@@ -46,7 +46,11 @@ public sealed partial class GlobePresentation
         GD.Print($"[dof] inland water materials ready: inset {water.RiverInset:0.##} texels, {(isTouchPrimary ? Math.Clamp(water.TileResolution, 64, 128) : water.TileResolution)}px tiles");
     }
 
-    private static ImageTexture LoadWaterTile(string path, int resolution) => ImageTexture.CreateFromImage(WaterTileImage(path, resolution));
+    private static ImageTexture LoadWaterTile(string path, int resolution)
+    {
+        using var img = WaterTileImage(path, resolution);
+        return ImageTexture.CreateFromImage(img);
+    }
 
     private static Image WaterTileImageOrResource(string path, string relative, int resolution, bool isTouchPrimary)
     {
@@ -64,6 +68,7 @@ public sealed partial class GlobePresentation
     {
         if (image is null || image.IsEmpty())
         {
+            image?.Dispose();
             GD.PushWarning($"[dof] water tile unavailable: {path}; using a quiet neutral material");
             image = Image.CreateEmpty(4, 4, false, Image.Format.Rgba8);
             image.Fill(new Color(.08f, .24f, .29f));

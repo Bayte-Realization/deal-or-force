@@ -71,6 +71,9 @@ pub struct DofGraphScratch {
     land_counts: Vec<i32>,
     held_stamp: Vec<u32>,
     held_counts: Vec<i32>,
+    open_basins_stamp: Vec<u32>,
+    open_basins_gen: u32,
+    hub_states: Vec<u16>,
     pair_scratch: Vec<u32>,
 }
 
@@ -246,6 +249,9 @@ impl DofGraphScratch {
             land_counts: vec![0; MAX_U16_STATES],
             held_stamp: vec![0; MAX_U16_STATES],
             held_counts: vec![0; MAX_U16_STATES],
+            open_basins_stamp: Vec::with_capacity(64),
+            open_basins_gen: 0,
+            hub_states: Vec::with_capacity(128),
             pair_scratch: Vec::with_capacity(4096),
         })
     }
@@ -450,23 +456,37 @@ pub fn solve_supply(
 
     // Coastal sea-basin propagation matching SeaLanes.CoastalProvinceArray order.
     if !graph.coastal_provinces.is_empty() {
-        let mut open_basins: Vec<i32> = Vec::new();
+        scratch.open_basins_gen = scratch.open_basins_gen.wrapping_add(1);
+        if scratch.open_basins_gen == 0 {
+            scratch.open_basins_stamp.fill(0);
+            scratch.open_basins_gen = 1;
+        }
+        let basin_gen = scratch.open_basins_gen;
+        let mut any_basin = false;
         for &c in &graph.coastal_provinces {
             let ci = c as usize;
             if scratch.reach_gen[ci] == gen_id && controllers[ci] == own_map_index {
                 let basin = graph.harbour_basin[ci];
-                if basin >= 0 && !open_basins.contains(&basin) {
-                    open_basins.push(basin);
+                if basin >= 0 {
+                    let bi = basin as usize;
+                    if bi >= scratch.open_basins_stamp.len() {
+                        scratch.open_basins_stamp.resize(bi + 16, 0);
+                    }
+                    scratch.open_basins_stamp[bi] = basin_gen;
+                    any_basin = true;
                 }
             }
         }
-        if !open_basins.is_empty() {
+        if any_basin {
             scratch.bfs_queue.clear();
             for &c in &graph.coastal_provinces {
                 let ci = c as usize;
                 if scratch.reach_gen[ci] != gen_id && controllers[ci] == own_map_index {
                     let basin = graph.harbour_basin[ci];
-                    if open_basins.contains(&basin) {
+                    if basin >= 0
+                        && (basin as usize) < scratch.open_basins_stamp.len()
+                        && scratch.open_basins_stamp[basin as usize] == basin_gen
+                    {
                         scratch.reach_gen[ci] = gen_id;
                         scratch.bfs_queue.push(c);
                     }
@@ -491,7 +511,7 @@ pub fn solve_supply(
     }
 
     // 2. Build HubByState in territory order (preserving exact priority rules!)
-    let mut hub_states: Vec<u16> = Vec::with_capacity(64);
+    scratch.hub_states.clear();
     for &prov in territory {
         if prov <= 0 || (prov as usize) >= n {
             continue;
@@ -530,14 +550,14 @@ pub fn solve_supply(
             scratch.state_stamp[s_idx] = gen_id;
             scratch.hub_prov[s_idx] = prov;
             scratch.hub_flags[s_idx] = 2; // forward
-            hub_states.push(state);
+            scratch.hub_states.push(state);
             continue;
         }
 
         if is_connected {
             if scratch.state_stamp[s_idx] != gen_id {
                 scratch.state_stamp[s_idx] = gen_id;
-                hub_states.push(state);
+                scratch.hub_states.push(state);
                 scratch.hub_prov[s_idx] = prov;
                 scratch.hub_flags[s_idx] = 0;
             } else if (scratch.hub_flags[s_idx] & 3) != 0 {
@@ -556,12 +576,12 @@ pub fn solve_supply(
         scratch.state_stamp[s_idx] = gen_id;
         scratch.hub_prov[s_idx] = prov;
         scratch.hub_flags[s_idx] = 1; // isolated
-        hub_states.push(state);
+        scratch.hub_states.push(state);
     }
 
     // 3. TraceDepots multi-source BFS
     scratch.bfs_queue.clear();
-    for &st in &hub_states {
+    for &st in &scratch.hub_states {
         let p = scratch.hub_prov[st as usize] as usize;
         scratch.stamp_gen[p] = gen_id;
         scratch.hop_dist[p] = 0;

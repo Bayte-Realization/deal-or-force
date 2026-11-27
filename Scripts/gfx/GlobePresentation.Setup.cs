@@ -80,6 +80,23 @@ public sealed partial class GlobePresentation
         Simulation.NuclearDetonations.Clear();
         // A country picked in the last campaign is an id in somebody else's world.
         _mapModeSubjectId = -1;
+        if (!string.IsNullOrEmpty(_builtMapId) &&
+            !string.Equals(_builtMapId, Simulation.MapCatalog.ActiveMapId, StringComparison.Ordinal))
+        {
+            _mapTask = null;
+            _pendingMapResult = null;
+            _mapApplied = false;
+            _mapApplyStage = 0;
+            _provinceTopology = null;
+            _battleAnchorMap = null;
+            _labelRevision = int.MinValue;
+            _controlRevision = -1;
+            _frontRevision = -1;
+            _frontWarRevision = -1;
+            _lastCombatSyncHours = -1;
+            DisposeGpuMapCompute();
+            SourceEarthData.ReleaseDecodedGrids();
+        }
         var topologyAlreadyApplied = false;
         if (campaign.ScenarioId == "2024" && _mapTask is null &&
             campaign.States.Count >= Simulation.WorldMapTables.StateRows.Length + Simulation.TerritorialTopology.RegionRuleCount)
@@ -212,10 +229,13 @@ public sealed partial class GlobePresentation
         }
     }
 
+    private string _builtMapId;
+
     private void StartMapWorkerIfNeeded()
     {
         StartTerrainImages();
         if (_mapTask is not null) return;
+        _builtMapId = Simulation.MapCatalog.ActiveMapId;
         var colors = new Dictionary<int, uint>(_colorByMapIndex);
         // Read here, not on the worker: the skin is a table the main thread may reload.
         var shades = Simulation.MapBorderStyles.PlateShades();
@@ -268,6 +288,7 @@ public sealed partial class GlobePresentation
         _viewport = new SubViewport
         {
             TransparentBg = false,
+            UseHdr2D = false,
             PhysicsObjectPicking = false,
             HandleInputLocally = false,
             RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
@@ -277,7 +298,7 @@ public sealed partial class GlobePresentation
             AnisotropicFilteringLevel = isTouchPrimary
                 ? Viewport.AnisotropicFiltering.Anisotropy4X
                 : Viewport.AnisotropicFiltering.Anisotropy8X,
-            TextureMipmapBias = isTouchPrimary ? -0.35f : -0.20f,
+            TextureMipmapBias = isTouchPrimary ? -0.50f : -0.20f,
             // The planet's silhouette, the counter quads and the order ribbons are the only true
             // geometric edges on this screen, and a staircase along the limb is the first thing
             // a strategy player notices about a map's quality. MobileHigh uses Msaa2X when the
@@ -324,6 +345,12 @@ public sealed partial class GlobePresentation
         environment.Environment.AmbientLightSource = Godot.Environment.AmbientSource.Color;
         environment.Environment.AmbientLightColor = Ui.Colour("globe.ambient");
         environment.Environment.AmbientLightEnergy = 0.72f;
+        environment.Environment.TonemapMode = Godot.Environment.ToneMapper.Linear;
+        environment.Environment.GlowEnabled = false;
+        environment.Environment.SdfgiEnabled = false;
+        environment.Environment.SsaoEnabled = false;
+        environment.Environment.SsilEnabled = false;
+        environment.Environment.VolumetricFogEnabled = false;
         world.AddChild(environment);
         _skyEnvironment = environment;
 
@@ -550,7 +577,7 @@ public sealed partial class GlobePresentation
             : Viewport.AnisotropicFiltering.Anisotropy8X;
         if (_viewport.AnisotropicFilteringLevel != targetAniso)
             _viewport.AnisotropicFilteringLevel = targetAniso;
-        var targetBias = isTouchPrimary ? -0.35f : -0.20f;
+        var targetBias = isTouchPrimary ? -0.50f : -0.20f;
         if (!Mathf.IsEqualApprox(_viewport.TextureMipmapBias, targetBias))
             _viewport.TextureMipmapBias = targetBias;
         if (_viewport.ScreenSpaceAA != Viewport.ScreenSpaceAAEnum.Disabled)
@@ -578,11 +605,11 @@ public sealed partial class GlobePresentation
     }
 
     internal const float MobileRenderScaleFloor = 0.50f;
-    internal const float MobileMediumRenderScaleCeiling = 0.95f;
-    internal const float MobileMediumDefaultHighDpiScale = 0.85f;
+    internal const float MobileMediumRenderScaleCeiling = 1.0f;
+    internal const float MobileMediumDefaultHighDpiScale = 1.0f;
     internal const float MobileLowRenderScaleCeiling = 0.82f;
     internal const int HighDpiPhoneWidthThresholdPx = 2000;
-    internal const double TurboSimRedrawIntervalSeconds = 1.0 / 18.0;
+    internal const double TurboSimRedrawIntervalSeconds = 1.0 / 30.0;
 
     internal enum TurboViewportDirective
     {
@@ -891,15 +918,15 @@ public sealed partial class GlobePresentation
             Math.Max(1, (int)MathF.Round(logical.Y * MathF.Abs(toScreen.Y))));
         if (Platform.PlatformProfile.Current?.IsTouchPrimary == true)
         {
-            // Cap long edge at 1600 on MobileLow (emulators/budget GPUs) and 2048 on MobileMedium/High.
+            // Cap long edge at 1600 on MobileLow (emulators/budget GPUs) and 2400 on MobileMedium/High (native 2340x1080 S22 clarity).
             var longEdge = Math.Max(pixels.X, pixels.Y);
             if (CurrentShaderQualityTier() >= 1.5f)
             {
                 if (longEdge > 1600) pixels = ScaleViewportToLongEdge(pixels, longEdge, 1600);
             }
-            else if (longEdge > 2048)
+            else if (longEdge > 2400)
             {
-                pixels = ScaleViewportToLongEdge(pixels, longEdge, 2048);
+                pixels = ScaleViewportToLongEdge(pixels, longEdge, 2400);
             }
         }
         var units = new Vector2I(Math.Max(1, (int)MathF.Round(logical.X)), Math.Max(1, (int)MathF.Round(logical.Y)));

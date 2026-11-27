@@ -102,10 +102,37 @@ public static class MovementDealings
         return campaign.Relations.TryGetValue(key, out var relation) ? relation.Opinion : 0f;
     }
 
-    /// <summary>The regions of this country where the movement has a following worth the name.</summary>
-    private static IEnumerable<ScenarioState> FollowingIn(Campaign campaign, Nation country, MovementState state) =>
-        campaign.StatesOf(country).Where(region => state.Support.GetValueOrDefault(region.MapIndex) >= 0.05f ||
-                                                    state.Infiltrated.ContainsKey(region.MapIndex));
+    /// <summary>Whether this country holds any region where the movement has a following worth the name.</summary>
+    private static bool HasFollowingIn(Campaign campaign, Nation country, MovementState state)
+    {
+        if (state.Support.Count == 0 && state.Infiltrated.Count == 0) return false;
+        var states = campaign.StatesOf(country);
+        for (var i = 0; i < states.Length; i++)
+        {
+            var mapIndex = states[i].MapIndex;
+            if (state.Support.GetValueOrDefault(mapIndex) >= 0.05f || state.Infiltrated.ContainsKey(mapIndex))
+                return true;
+        }
+        return false;
+    }
+
+    private static List<ScenarioState> FollowingIn(Campaign campaign, Nation country, MovementState state)
+    {
+        var list = _followingInScratch ??= new List<ScenarioState>();
+        list.Clear();
+        if (state.Support.Count == 0 && state.Infiltrated.Count == 0) return list;
+        var states = campaign.StatesOf(country);
+        for (var i = 0; i < states.Length; i++)
+        {
+            var region = states[i];
+            var mapIndex = region.MapIndex;
+            if (state.Support.GetValueOrDefault(mapIndex) >= 0.05f || state.Infiltrated.ContainsKey(mapIndex))
+                list.Add(region);
+        }
+        return list;
+    }
+
+    [ThreadStatic] private static List<ScenarioState> _followingInScratch;
 
     /// <summary>Whether this country holds ground the movement claims, or is allied to one that does.</summary>
     public static bool HoldsItsClaim(Campaign campaign, Nation country, Nation movement)
@@ -249,7 +276,7 @@ public static class MovementDealings
                 if (at < ready) return Loc.Format("Not again for {0} days.", ready - at);
                 if (country.Treasury < Cost(campaign, action)) return Loc.Get("The treasury cannot afford it.");
                 var hostsIt = state.Landless && Movements.HostOf(campaign, movement) == country;
-                if (!hostsIt && !FollowingIn(campaign, country, state).Any()) return Loc.Get("It has no following here to crack down on.");
+                if (!hostsIt && !HasFollowingIn(campaign, country, state)) return Loc.Get("It has no following here to crack down on.");
                 return "";
             }
             case "expel":
@@ -405,6 +432,7 @@ public static class MovementDealings
 
     private static float SumFollowingSupport(Campaign campaign, Nation country, MovementState state)
     {
+        if (state.Support.Count == 0 && state.Infiltrated.Count == 0) return 0f;
         var states = campaign.StatesOf(country);
         var total = 0f;
         for (var i = 0; i < states.Length; i++)
@@ -436,15 +464,59 @@ public static class MovementDealings
     }
 
     [ThreadStatic] private static Dictionary<int, sbyte> _holderStatusScratch;
+    [ThreadStatic] private static List<Nation> _dealMovementsScratch;
+    [ThreadStatic] private static int[] _fundedCountsScratch;
+    [ThreadStatic] private static HashSet<long> _warPairSetScratch;
 
-    private static sbyte GetHolderStatus(Campaign campaign, Nation country, int holderId, Dictionary<int, sbyte> cache)
+    private static void RebuildWarPairs(Campaign campaign, HashSet<long> set)
+    {
+        set.Clear();
+        var wars = Warfare.LiveWars(campaign);
+        for (var wi = 0; wi < wars.Count; wi++)
+        {
+            var war = wars[wi];
+            if (war.Ended) continue;
+            AddSidePairs(set, war.AttackerId, war.AttackerAllies, war.DefenderId, war.DefenderAllies);
+        }
+    }
+
+    private static void AddSidePairs(HashSet<long> set, int aLeader, HashSet<int> aAllies, int dLeader, HashSet<int> dAllies)
+    {
+        AddOpposePair(set, aLeader, dLeader);
+        foreach (var da in dAllies) AddOpposePair(set, aLeader, da);
+        foreach (var aa in aAllies)
+        {
+            AddOpposePair(set, aa, dLeader);
+            foreach (var da in dAllies) AddOpposePair(set, aa, da);
+        }
+    }
+
+    private static void AddOpposePair(HashSet<long> set, int a, int b)
+    {
+        if (a == b || a < 0 || b < 0) return;
+        var low = a < b ? a : b;
+        var high = a < b ? b : a;
+        set.Add(((long)low << 32) | (uint)high);
+    }
+
+    private static bool IsAtWarCached(Campaign campaign, int a, int b, HashSet<long> warPairs)
+    {
+        if (warPairs is null) return CampaignDiplomacy.AtWar(campaign, a, b);
+        if (warPairs.Count == 0 || a == b || a < 0 || b < 0) return false;
+        var low = a < b ? a : b;
+        var high = a < b ? b : a;
+        return warPairs.Contains(((long)low << 32) | (uint)high);
+    }
+
+    private static sbyte GetHolderStatus(Campaign campaign, Nation country, int holderId, Dictionary<int, sbyte> cache,
+        HashSet<long> warPairs)
     {
         if (cache.TryGetValue(holderId, out var cached)) return cached;
         sbyte status;
         if (holderId == country.Id || CampaignDiplomacy.Peek(campaign, country.Id, holderId)?.Stance == DiplomaticStance.Allied)
             status = 1;
         else if (Opinion(campaign, country.Id, holderId) <= campaign.Defines.AiIncitementRivalOpinion ||
-                 CampaignDiplomacy.AtWar(campaign, country.Id, holderId))
+                 IsAtWarCached(campaign, country.Id, holderId, warPairs))
             status = 2;
         else
             status = 0;
@@ -453,7 +525,7 @@ public static class MovementDealings
     }
 
     private static bool CheckHoldsClaimFast(Campaign campaign, Nation country, Nation movement,
-        Dictionary<int, sbyte> holderCache, ref bool known, ref bool cached, out Nation firstRival)
+        Dictionary<int, sbyte> holderCache, HashSet<long> warPairs, ref bool known, ref bool cached, out Nation firstRival)
     {
         firstRival = null;
         if (!known)
@@ -463,7 +535,7 @@ public static class MovementDealings
             var rivalId = -1;
             for (var i = 0; i < holders.Length; i++)
             {
-                var status = GetHolderStatus(campaign, country, holders[i], holderCache);
+                var status = GetHolderStatus(campaign, country, holders[i], holderCache, warPairs);
                 if (status == 1) { cached = true; rivalId = -1; break; }
                 if (status == 2 && rivalId < 0) rivalId = holders[i];
             }
@@ -475,13 +547,31 @@ public static class MovementDealings
 
     internal static IEnumerable<int> AiStages(Campaign campaign)
     {
-        var movements = new List<Nation>();
+        var movements = _dealMovementsScratch ??= new List<Nation>(64);
+        movements.Clear();
+        var maxCountryId = campaign.Nations.Count;
         for (var i = 0; i < campaign.Nations.Count; i++)
         {
             var candidate = campaign.Nations[i];
+            if (candidate.Id >= maxCountryId) maxCountryId = candidate.Id + 1;
             if (candidate.Movement is { Dissolved: false }) movements.Add(candidate);
         }
         if (movements.Count == 0) yield break;
+        if (_fundedCountsScratch is null || _fundedCountsScratch.Length < maxCountryId)
+            _fundedCountsScratch = new int[Math.Max(maxCountryId, 256)];
+        else
+            Array.Clear(_fundedCountsScratch, 0, maxCountryId);
+        var fundedCounts = _fundedCountsScratch;
+        for (var mi = 0; mi < movements.Count; mi++)
+        {
+            var sponsoredBy = movements[mi].Movement.SponsoredBy;
+            if (sponsoredBy.Count == 0) continue;
+            foreach (var sponsorId in sponsoredBy.Keys)
+                if ((uint)sponsorId < (uint)maxCountryId) fundedCounts[sponsorId]++;
+        }
+        var warPairs = _warPairSetScratch ??= new HashSet<long>(64, PairKeyComparer.Instance);
+        var warPairRev = campaign.WarRevision;
+        RebuildWarPairs(campaign, warPairs);
         // Each country once every four weeks - no country's policy towards a movement is a
         // weekly matter - and on a day of its own, so a twenty-eighth of the world each day
         // rather than a quarter of it on one day in seven.
@@ -492,6 +582,11 @@ public static class MovementDealings
             var country = campaign.Nations[ci];
             if (!MovementRules.OnItsDay(campaign, country.Id, cycle)) continue;
             if (country.IsHuman || country.Movement is not null || campaign.StatesOf(country).Length == 0) continue;
+            if (warPairRev != campaign.WarRevision)
+            {
+                warPairRev = campaign.WarRevision;
+                RebuildWarPairs(campaign, warPairs);
+            }
             holderCache.Clear();
             var fundedCount = -1;
             var acted = false;
@@ -508,7 +603,7 @@ public static class MovementDealings
                 var holdsClaim = false;
                 var holdsClaimKnown = false;
                 Nation cachedRival = null;
-                var claimant = opinion <= -30f || CheckHoldsClaimFast(campaign, country, movement, holderCache, ref holdsClaimKnown, ref holdsClaim, out cachedRival);
+                var claimant = opinion <= -30f || CheckHoldsClaimFast(campaign, country, movement, holderCache, warPairs, ref holdsClaimKnown, ref holdsClaim, out cachedRival);
                 var hosting = state.Landless && state.HeadquartersStateMapIndex >= 0 && MovementRules.OwnerOf(campaign,
                     campaign.StateByMapIndex(state.HeadquartersStateMapIndex)) == country;
                 // The enemy of my enemy: backed for whose ground it claims, not for what it is -
@@ -517,7 +612,7 @@ public static class MovementDealings
                 if (!claimant && opinion > -20f && !state.DesignatedBy.Contains(country.Id))
                 {
                     if (!holdsClaimKnown)
-                        CheckHoldsClaimFast(campaign, country, movement, holderCache, ref holdsClaimKnown, ref holdsClaim, out cachedRival);
+                        CheckHoldsClaimFast(campaign, country, movement, holderCache, warPairs, ref holdsClaimKnown, ref holdsClaim, out cachedRival);
                     rival = holdsClaim ? null : cachedRival;
                 }
                 // Nothing to decide: neither side of the argument, not its host, no stranger in
@@ -532,7 +627,8 @@ public static class MovementDealings
                     if (!state.SponsoredBy.ContainsKey(country.Id) && roll < defines.AiIncitementFundChance &&
                         country.Treasury >= defines.MovementSponsorPerYear * defines.AiIncitementTreasuryYears)
                     {
-                        if (fundedCount < 0) fundedCount = Funded(campaign, country);
+                        if (fundedCount < 0)
+                            fundedCount = (uint)country.Id < (uint)maxCountryId ? fundedCounts[country.Id] : Funded(campaign, country);
                         if (fundedCount < defines.AiIncitementMaxFunded && TryDealingAction(campaign, country, movement, "sponsor", ref acted))
                         {
                             DiagnosticLogs.Write("simulation",
@@ -544,7 +640,7 @@ public static class MovementDealings
                         roll >= 1f - defines.AiIncitementRecogniseChance && TryDealingAction(campaign, country, movement, "recognise", ref acted)) continue;
                 }
 
-                var threatened = opinion <= -40f || CheckHoldsClaimFast(campaign, country, movement, holderCache, ref holdsClaimKnown, ref holdsClaim, out _);
+                var threatened = opinion <= -40f || CheckHoldsClaimFast(campaign, country, movement, holderCache, warPairs, ref holdsClaimKnown, ref holdsClaim, out _);
                 if (threatened)
                 {
                     if (opinion <= -30f && roll < 0.08f && TryDealingAction(campaign, country, movement, "designate", ref acted)) continue;
@@ -565,5 +661,6 @@ public static class MovementDealings
             // EEABD8D70B342988 both ways.
             yield return 0;
         }
+        movements.Clear();
     }
 }

@@ -16,25 +16,15 @@ public partial class DealOrForceGame
         string Strategy, float Army, float Air, float Navy, float Political, float RewriteCost,
         int TacticalRevision, int StrategicRevision, bool TacticalEnabled, bool StrategicEnabled);
 
-    private DoctrinePresentationState DoctrinePresentation(Nation n)
-    {
-        TacticalDoctrines.EnsureShelves(n);
-        var books = string.Join(';', DoctrineSlots.All.Select(slot =>
-        {
-            var track = n.TacticalDoctrine.Tracks.GetValueOrDefault(slot);
-            return track is null
-                ? slot + "="
-                : slot + "=" + track.Branch + "/" + string.Join(',', track.Known) + "/" +
-                  track.LearningNode + "/" + track.LearningDoneDay;
-        }));
-        return new DoctrinePresentationState(
-            n, Loc.Language, _doctrineBook, _doctrineView,
-            books, "", "", "", -1,
-            n.StrategicDoctrine.Id, n.ArmyExperience, n.AirExperience, n.NavalExperience, n.PoliticalPoints,
-            _campaign.Defines.DoctrineRewritePoliticalCost, TacticalDoctrineCatalog.Revision,
-            StrategicDoctrineCatalog.Revision, _campaign.FeatureEnabled("tactical_doctrines"),
-            _campaign.FeatureEnabled("strategic_doctrines"));
-    }
+    private DoctrinePresentationState DoctrinePresentation(Nation n) => new(
+        n, Loc.Language, _doctrineBook, _doctrineView,
+        DoctrineBooksPresentationKey(n), _doctrineAbandonConfirmKey,
+        n.StrategicDoctrine.LastChangeDay.ToString(),
+        ObserverUiRules.IsObserving(_campaign, _observerMode) ? "obs" : "", -1,
+        n.StrategicDoctrine.Id, n.ArmyExperience, n.AirExperience, n.NavalExperience, n.PoliticalPoints,
+        _campaign.Defines.DoctrineRewritePoliticalCost, TacticalDoctrineCatalog.Revision,
+        StrategicDoctrineCatalog.Revision, _campaign.FeatureEnabled("tactical_doctrines"),
+        _campaign.FeatureEnabled("strategic_doctrines"));
 
     /// <summary>
     /// Executive Doctrine Summary for the narrow Army/Laws Doctrines tab:
@@ -120,6 +110,7 @@ public partial class DealOrForceGame
         learnLbl.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         learnLbl.AddThemeFontOverride("font", PresentationFonts.Tabular());
         col.AddChild(learnLbl);
+        AddGrandStrategyAbandonRow(n, col, "summary_strategy", "AbandonStrategySummary");
     }
 
     private void BuildServiceShelvesSummary(Nation n, VBoxContainer rows)
@@ -217,9 +208,8 @@ public partial class DealOrForceGame
             }
 
             var inspect = ActionButton(Loc.Get("doctrine.ui.inspect_shelf_btn"), () => OpenDoctrineScreenOnService(capturedSlot), 0, 26);
-            inspect.Name = "InspectShelf_" + slot;
-            inspect.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            col.AddChild(inspect);
+            inspect.Name = "InspectShelf_" + slot; inspect.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            inspect.TooltipText = Ui.Tip(Loc.Get("doctrine.ui.inspect_shelf_manage_tip")); col.AddChild(inspect);
         }
     }
 
@@ -411,12 +401,11 @@ public partial class DealOrForceGame
             title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             topRow.AddChild(title);
 
+            var freeChoice = StrategicDoctrines.IsFirstChoiceFree(n);
             var badgeText = inForce
                 ? Loc.Get("doctrine.ui.pill_in_force")
-                : n.StrategicDoctrine.Id.Length == 0
-                    ? Loc.Get("doctrine.ui.free_first_choice")
-                    : Fmt.Number(course.PoliticalCost);
-            var badgeTok = inForce ? "text.accent" : n.StrategicDoctrine.Id.Length == 0 ? "state.positive" : "text.caption";
+                : freeChoice ? Loc.Get("doctrine.ui.free_first_choice") : Fmt.Number(course.PoliticalCost);
+            var badgeTok = inForce ? "text.accent" : freeChoice ? "state.positive" : "text.caption";
             var badge = new PanelContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
             badge.AddThemeStyleboxOverride("panel", Ui.ChromeBox(badgeTok, 0.16f, badgeTok, 0.72f, cornerRadius: 3, borderWidth: 1, padX: 6, padY: 1));
             var badgeLbl = Title(badgeText, 11, Ui.Colour(badgeTok));
@@ -448,18 +437,14 @@ public partial class DealOrForceGame
             body.AddChild(new Control { SizeFlagsVertical = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore });
 
             var refusal = StrategicDoctrines.Refusal(_campaign, n, course.Id);
-            var button = CreateAdoptStrategyButton(n, course, inForce, refusal, compact: false);
-            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            body.AddChild(button);
+            AddStrategyCardActionRow(n, course, inForce, refusal, body);
         }
     }
 
     private Button CreateAdoptStrategyButton(Nation n, StrategicDoctrine course, bool inForce, string refusal, bool compact)
     {
         var observing = ObserverUiRules.IsObserving(_campaign, _observerMode);
-        var label = inForce ? Loc.Get("in force")
-            : n.StrategicDoctrine.Id.Length == 0 ? Loc.Get("take this course")
-            : Loc.Format("change course ({0})", Fmt.Number(course.PoliticalCost));
+        var label = StrategyAdoptButtonLabel(n, course, inForce);
         var button = ActionButton(
             label,
             () =>
@@ -497,6 +482,7 @@ public partial class DealOrForceGame
         if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is null || command is null) return;
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
+        ResetDoctrineAbandonConfirm();
         _doctrineScreenDay = -1;
         _armyDoctrineDay = -1;
         PlayStrategicCue("ui_select");
@@ -527,8 +513,7 @@ public partial class DealOrForceGame
                 rows.AddChild(empty);
                 continue;
             }
-            PolicyText(rows, Loc.Format("{0} · {1}/{2}", Tr(book.Name), track.Known.Count, book.Nodes.Count),
-                "text.accent");
+            AddPreviewBookHeader(rows, n, book, track);
             var written = 0;
             foreach (var node in book.Nodes)
             {
@@ -541,8 +526,7 @@ public partial class DealOrForceGame
             var companion = track.Companion;
             var second = companion is { Branch.Length: > 0 } ? TacticalDoctrineCatalog.Find(companion.Branch) : null;
             if (second is null) continue;
-            PolicyText(rows, Loc.Format("{0} · {1}/{2}", Tr(second.Name), companion.Known.Count, second.Nodes.Count),
-                "text.accent");
+            AddPreviewBookHeader(rows, n, second, companion);
             var drilled = 0;
             foreach (var node in second.Nodes)
             {
@@ -557,17 +541,9 @@ public partial class DealOrForceGame
         {
             var track = n.TacticalDoctrine.Track(slot);
             if (track.Companion is { LearningNode.Length: > 0 } extra)
-            {
-                var other = TacticalDoctrineCatalog.Find(extra.LearningBranch)?.Find(extra.LearningNode);
-                PolicyText(rows, Loc.Format("{0}: {1} days left.",
-                    other is null ? extra.LearningNode : Tr(other.Name),
-                    Math.Max(0, extra.LearningDoneDay - _campaign.ElapsedDays)));
-            }
+                AddPreviewStudyRow(rows, n, extra.LearningBranch, extra.LearningNode, extra.LearningDoneDay, accent: false);
             if (track.LearningNode.Length == 0) continue;
-            var studying = TacticalDoctrineCatalog.Find(track.LearningBranch)?.Find(track.LearningNode);
-            PolicyText(rows, Loc.Format("{0}: {1} days left.",
-                Tr(studying?.Name ?? track.LearningNode),
-                Math.Max(0, track.LearningDoneDay - _campaign.ElapsedDays)), "text.accent");
+            AddPreviewStudyRow(rows, n, track.LearningBranch, track.LearningNode, track.LearningDoneDay, accent: true);
         }
 
         PolicyHeading(rows, "WHAT THE STATE INTENDS");
@@ -575,7 +551,11 @@ public partial class DealOrForceGame
         PolicyText(rows, course is null
             ? Loc.Get("No course chosen: the country fights every war the way it always has.")
             : Tr(course.Name));
-        if (course is not null) PolicyText(rows, Tr(course.Description));
+        if (course is not null)
+        {
+            PolicyText(rows, Tr(course.Description));
+            AddGrandStrategyAbandonRow(n, rows, "preview_strategy", "PreviewAbandonStrategy");
+        }
 
         PolicyHeading(rows, "WHAT BUYS IT");
         PolicyText(rows, Loc.Format("{0} divisions in the line, {1} on the drill square.",

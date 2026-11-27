@@ -27,8 +27,8 @@ internal static class FlagClothPresentation
     }
 
     private static ShaderMaterial _syncedMaterial;
-    private static bool _lastAnimateFlags;
-    private static bool _lastFabricEnabled;
+    internal static void ReleaseStaticResources() { _material = null; _syncedMaterial = null; }
+    private static bool _lastAnimateFlags, _lastFabricEnabled;
     private static float _lastWaveSpeed = float.NaN;
     private static float _lastWaveAmplitude = float.NaN;
     private static float _lastFoldStrength = float.NaN;

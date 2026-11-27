@@ -157,10 +157,12 @@ foreach ($folder in @('Scripts', 'Scenes', 'game')) {
 # sidecar: it packs the .import and the multimegabyte .ctex into the .pck anyway. Dropping
 # the .import sidecars and placing a .gdignore in the staged map_data folder keeps the
 # exported .pck completely free of map_data while dotnet publish still ships the real files.
-$stagedMapData = Join-Path $stage 'game\map_data'
-if (Test-Path -LiteralPath $stagedMapData) {
-    Get-ChildItem -LiteralPath $stagedMapData -Recurse -File -Filter '*.import' | Remove-Item -Force
-    New-Item -ItemType File -Path (Join-Path $stagedMapData '.gdignore') -Force | Out-Null
+foreach ($mapSubdir in @('game\map_data', 'game\maps')) {
+    $stagedMapDir = Join-Path $stage $mapSubdir
+    if (Test-Path -LiteralPath $stagedMapDir) {
+        Get-ChildItem -LiteralPath $stagedMapDir -Recurse -File -Filter '*.import' | Remove-Item -Force
+        New-Item -ItemType File -Path (Join-Path $stagedMapDir '.gdignore') -Force | Out-Null
+    }
 }
 # The export-verification probe is game code that lives under Tools/ (see DealOrForce.csproj).
 # It is compiled into the assembly, so the staged copy the export builds from has to carry it,
@@ -459,13 +461,15 @@ if (Test-Path -LiteralPath $pck) {
     if ((Get-PackSize -Path $pck -Filter 'docs/*').Count -gt 0) {
         throw "Development documentation must not be packed in the player archive."
     }
-    $packedMap = Get-PackSize -Path $pck -Filter 'game/map_data/*'
-    if ($packedMap.Count -gt 0) {
-        Write-Host ""
-        Write-Host "The archive still packs $($packedMap.Count) game/map_data entr(y/ies) ($([math]::Round($packedMap.Bytes/1MB,2)) MB)," -ForegroundColor Red
-        Write-Host "and the same rasters are also sitting beside it as real files - the game reads them by path and" -ForegroundColor Red
-        Write-Host "never opens the copies in the archive." -ForegroundColor Red
-        throw "Map rasters are packaged twice."
+    foreach ($mapPackFilter in @('game/map_data/*', 'game/maps/*')) {
+        $packedMap = Get-PackSize -Path $pck -Filter $mapPackFilter
+        if ($packedMap.Count -gt 0) {
+            Write-Host ""
+            Write-Host "The archive still packs $($packedMap.Count) $mapPackFilter entr(y/ies) ($([math]::Round($packedMap.Bytes/1MB,2)) MB)," -ForegroundColor Red
+            Write-Host "and the same rasters are also sitting beside it as real files - the game reads them by path and" -ForegroundColor Red
+            Write-Host "never opens the copies in the archive." -ForegroundColor Red
+            throw "Map rasters are packaged twice ($mapPackFilter)."
+        }
     }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $out 'game\map_data\provinces.png'))) {

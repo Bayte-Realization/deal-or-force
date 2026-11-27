@@ -223,8 +223,8 @@ public partial class DealOrForceGame
             var id = order.Id;
             row.AddChild(ActionButton("Cancel training", () =>
             {
-                _campaign.Commands.Enqueue(new CancelRecruitmentCommand { IssuerId = player.Id, OrderId = id });
-                _campaign.Commands.ApplyAll(_campaign);
+                CommitImmediateCampaignCommand(new CancelRecruitmentCommand { IssuerId = player.Id, OrderId = id },
+                    refreshHud: true, wakeGlobe: true);
                 _recruitmentQueueState = "";
                 RefreshRecruitment();
             }, 140, 28));
@@ -267,16 +267,14 @@ public partial class DealOrForceGame
             var cost = _campaign.Defines.HullCost * h * (_recruitmentMode == MobilisationMode.TotalMobilisation ? 1.5f : 1.15f);
             var btn = ActionButton($"{Tr(label)} ({Fmt.Money(cost)})", () =>
             {
-                _campaign.Commands.Enqueue(new CommissionNewFleetCommand
+                CommitImmediateCampaignCommand(new CommissionNewFleetCommand
                 {
                     IssuerId = player.Id,
                     ProvinceId = -1,
                     Hulls = h,
                     Mode = _recruitmentMode
-                });
-                _campaign.Commands.ApplyAll(_campaign);
+                }, refreshHud: true, wakeGlobe: true);
                 RefreshRecruitment();
-                Refresh();
             }, 0, 32, h == 15);
             btn.Disabled = player.Treasury < cost;
             btn.TooltipText = Ui.Tip(Tr("Immediately commissions a new naval squadron in your primary coastal port and lays down the remaining hulls under the selected mobilisation posture."));
@@ -312,16 +310,14 @@ public partial class DealOrForceGame
                 var c = addCount;
                 var addBtn = ActionButton(Loc.Format("Order {0} hulls", c), () =>
                 {
-                    _campaign.Commands.Enqueue(new OrderHullsCommand
+                    CommitImmediateCampaignCommand(new OrderHullsCommand
                     {
                         IssuerId = player.Id,
                         FleetId = captured.Id,
                         Count = c,
                         Mode = _recruitmentMode
-                    });
-                    _campaign.Commands.ApplyAll(_campaign);
+                    }, refreshHud: true, wakeGlobe: true);
                     RefreshRecruitment();
-                    Refresh();
                 }, 86, 30);
                 fleetActions.AddChild(addBtn);
             }
@@ -329,15 +325,13 @@ public partial class DealOrForceGame
             {
                 var cancelBtn = ActionButton("Cancel", () =>
                 {
-                    _campaign.Commands.Enqueue(new OrderHullsCommand
+                    CommitImmediateCampaignCommand(new OrderHullsCommand
                     {
                         IssuerId = player.Id,
                         FleetId = captured.Id,
                         Count = -captured.HullsOrdered
-                    });
-                    _campaign.Commands.ApplyAll(_campaign);
+                    }, refreshHud: true, wakeGlobe: true);
                     RefreshRecruitment();
-                    Refresh();
                 }, 76, 30);
                 fleetActions.AddChild(cancelBtn);
             }

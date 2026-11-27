@@ -30,6 +30,7 @@ public static class AiFiscalPolicy
     public static bool AtWar(Campaign c, Nation n)
     {
         if (c is null || n is null) return false;
+        if (AiStatecraft.TryGetAtWarFast(c, n.Id, out var fastAtWar)) return fastAtWar;
         foreach (var war in Warfare.LiveWars(c))
             if (!war.Ended && war.Involves(n.Id)) return true;
         return false;
@@ -48,11 +49,29 @@ public static class AiFiscalPolicy
         var arrears = c.FeatureEnabled("public_debt")
             ? Math.Max(0d, n.PaymentArrears) + Math.Max(0d, n.DebtArrears) : 0;
         var capital = 0d;
-        if (MechanicFeatures.SystemEnabled(c, nameof(ConstructionSystem))) foreach (var project in c.Construction)
+        if (MechanicFeatures.SystemEnabled(c, nameof(ConstructionSystem)))
         {
-            if (project.NationId != n.Id) continue;
-            if (!float.IsFinite(project.Cost) || !float.IsFinite(project.Paid)) return Invalid();
-            capital += PaymentsWithin(c, n, project.Cost, project.Paid, project.DurationDays, weeks);
+            if (AiStatecraft.TryGetConstructionForNation(c, n.Id, out var nationProjects))
+            {
+                if (nationProjects is not null)
+                {
+                    for (var pi = 0; pi < nationProjects.Count; pi++)
+                    {
+                        var project = nationProjects[pi];
+                        if (!float.IsFinite(project.Cost) || !float.IsFinite(project.Paid)) return Invalid();
+                        capital += PaymentsWithin(c, n, project.Cost, project.Paid, project.DurationDays, weeks);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var project in c.Construction)
+                {
+                    if (project.NationId != n.Id) continue;
+                    if (!float.IsFinite(project.Cost) || !float.IsFinite(project.Paid)) return Invalid();
+                    capital += PaymentsWithin(c, n, project.Cost, project.Paid, project.DurationDays, weeks);
+                }
+            }
         }
         var promised = 0d;
         if (c.FeatureEnabled("deals")) foreach (var paper in c.DealOffers)

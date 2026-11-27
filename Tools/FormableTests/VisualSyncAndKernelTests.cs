@@ -39,6 +39,7 @@ public static class VisualSyncAndKernelTests
         TerritorialDisputeIndexZeroFalseNegatives();
         AirReconVisionInvalidationRegression();
         ChokepointZeroAllocParityAndVerboseGate();
+        CampaignEntryFrame0SyncRegression();
         LockFreeSyncSourceContracts();
         Console.WriteLine($"visual sync & kernel: {_passed} PASS");
     }
@@ -745,6 +746,177 @@ public static class VisualSyncAndKernelTests
               badgeSrc.Contains("linear_renderer", StringComparison.Ordinal) &&
               badgeSrc.Contains("fwidth(sdf)", StringComparison.Ordinal),
             "BattleBadgeGpu uses sRGB-correct source_color uniforms and fwidth SDF numerals across Forward+ and GLES3");
+    }
+
+    private static void CampaignEntryFrame0SyncRegression()
+    {
+        // Build a synthetic 2-nation + neutral-buffer topology so Fog of War separates Player A and Player B.
+        const int w = 64, h = 32;
+        var states = new ushort[w * h];
+        var control = new ushort[w * h];
+        for (var y = 6; y < h - 6; y++)
+        {
+            for (var x = 4; x < w - 4; x++)
+            {
+                var idx = y * w + x;
+                ushort nat = x < 20 ? (ushort)1 : x < 44 ? (ushort)3 : (ushort)2;
+                states[idx] = nat;
+                control[idx] = nat;
+            }
+        }
+        var map = ProvinceTopology.Build(states, control, w, h, _ => false);
+        var c = new Campaign(98809);
+        var n1 = c.AddNation(new Nation { Tag = "AAA", Name = "Alpha", MapIndex = 1, Color = "#3366CC", CapitalLatitude = 20, CapitalLongitude = -100 }, player: true);
+        var n2 = c.AddNation(new Nation { Tag = "BBB", Name = "Beta", MapIndex = 2, Color = "#CC4433", CapitalLatitude = 20, CapitalLongitude = 100 });
+        c.AddNation(new Nation { Tag = "CCC", Name = "Buffer", MapIndex = 3, Color = "#888888", CapitalLatitude = 20, CapitalLongitude = 0 });
+        c.States.Add(new ScenarioState { Id = "s1", MapIndex = 1, NationMapIndex = 1, Name = "Alpha State" });
+        c.States.Add(new ScenarioState { Id = "s2", MapIndex = 2, NationMapIndex = 2, Name = "Beta State" });
+        c.States.Add(new ScenarioState { Id = "s3", MapIndex = 3, NationMapIndex = 3, Name = "Buffer State" });
+        c.AttachProvinceTopology(map);
+        c.Defines.BorderVisionDepth = 0;
+        c.Defines.ArmyVisionDepth = 0;
+        c.IsPaused = true;
+
+        int prov1 = 0, prov2 = 0;
+        for (var p = 1; p <= map.ProvinceCount; p++)
+        {
+            if (map.ProvinceToNation[p] == 1 && prov1 == 0) prov1 = p;
+            if (map.ProvinceToNation[p] == 2 && prov2 == 0) prov2 = p;
+        }
+        var army1 = new Army { Id = 101, NationId = n1.Id, ProvinceId = prov1, StateMapIndex = 1, Divisions = 3f, Personnel = 30000, Strength = 1f, Organisation = 1f, SupplyLevel = 1f };
+        var army2 = new Army { Id = 202, NationId = n2.Id, ProvinceId = prov2, StateMapIndex = 2, Divisions = 5f, Personnel = 50000, Strength = 1f, Organisation = 1f, SupplyLevel = 1f };
+        c.Armies.Add(army1);
+        c.Armies.Add(army2);
+
+        using var runner = new BackgroundSimRunner();
+        runner.Start(c);
+        try
+        {
+            // 1. Picker open on bootstrap player n1: v1 sees n1, hides fogged n2.
+            var gotV1 = runner.TryAcquireLatestVisualSnapshot(out var v1);
+            Check(gotV1 && v1 is not null && v1.Version >= 1 && v1.PlayerId == n1.Id,
+                $"BackgroundSimRunner.Start publishes immediate Frame-0 WorldVisualState for initial player (ver={v1?.Version ?? 0}, player={v1?.PlayerId ?? -1})");
+            var sawBetaInV1 = false;
+            for (var i = 0; i < v1!.ArmyStackCount; i++)
+                if (v1.ArmyStacks[i].NationId == n2.Id) sawBetaInV1 = v1.ArmyStacks[i].VisibleToPlayer;
+            Check(!sawBetaInV1, "Under n1 Fog of War on picker snapshot, distant n2 army stack is hidden");
+
+            // 2. Player picks n2 and enters campaign while paused (0 ticks elapsed): RefreshSnapshotNow must immediately publish n2 visibility + stance without altering CampaignFingerprint.
+            c.ConfigureSinglePlayer(n2.Id);
+            var fpBefore = CampaignFingerprint.Of(c);
+            runner.RefreshSnapshotNow();
+            var fpAfter = CampaignFingerprint.Of(c);
+            Check(fpBefore == fpAfter,
+                "BackgroundSimRunner.RefreshSnapshotNow preserves bit-identical CampaignFingerprint");
+
+            var gotV2 = runner.TryAcquireLatestVisualSnapshot(out var v2);
+            Check(gotV2 && v2 is not null && v2.Version > v1.Version && v2.PlayerId == n2.Id && v2.IsPaused,
+                $"Frame-0 RefreshSnapshotNow immediately updates WorldVisualState for newly picked player without waiting for a tick (ver={v1.Version}->{v2?.Version ?? 0}, player={v2?.PlayerId ?? -1})");
+            Check(c.RenderSnapshot.PlayerId == n2.Id && runner.ReadHudSnapshot(c).PlayerId == n2.Id,
+                "CampaignRenderSnapshot and CampaignHudSnapshot immediately reflect newly picked player on Frame 0");
+
+            var betaVisible = false;
+            var betaPlayerStance = false;
+            var betaSelectable = false;
+            for (var i = 0; i < v2!.ArmyStackCount; i++)
+            {
+                ref readonly var st = ref v2.ArmyStacks[i];
+                if (st.NationId != n2.Id) continue;
+                betaVisible = st.VisibleToPlayer;
+                betaPlayerStance = st.CounterStance == 1;
+                betaSelectable = st.AnySelectable;
+            }
+            Check(betaVisible && betaPlayerStance && betaSelectable && CampaignIntel.Vision(c, n2.Id).Sees(prov2),
+                $"Newly picked country army stack is immediately visible, player-stanced, and selectable on Frame 0 (vis={betaVisible}, stance={betaPlayerStance}, sel={betaSelectable})");
+
+            // 3. Pure world observer & country-watching observer immediately publish Frame-0 ObserverMode snapshots.
+            foreach (var n in c.Nations) n.IsHuman = false;
+            c.HumanSeats.Clear();
+            c.SetPlayer(-1);
+            c.ObserverMode = true;
+            runner.RefreshSnapshotNow();
+            var gotObs = runner.TryAcquireLatestVisualSnapshot(out var vObs);
+            Check(gotObs && vObs is not null && vObs.ObserverMode && vObs.PlayerId == -1 && vObs.ArmyStackCount == 2 &&
+                  c.RenderSnapshot.ObserverMode && runner.ReadHudSnapshot(c).ObserverMode,
+                $"Pure world observer entry publishes Frame-0 ObserverMode snapshot with all stacks (obs={vObs?.ObserverMode}, player={vObs?.PlayerId}, stacks={vObs?.ArmyStackCount ?? 0})");
+
+            c.ViewAs(n1.Id);
+            runner.RefreshSnapshotNow();
+            var gotWatch = runner.TryAcquireLatestVisualSnapshot(out var vWatch);
+            var allVisibleWatch = vWatch is not null && vWatch.ArmyStackCount >= 2;
+            for (var i = 0; allVisibleWatch && i < vWatch!.ArmyStackCount; i++)
+                if (!vWatch.ArmyStacks[i].VisibleToPlayer) allVisibleWatch = false;
+            Check(gotWatch && vWatch!.ObserverMode && vWatch.PlayerId == n1.Id && allVisibleWatch,
+                "Observer WatchCountry entry publishes omniscient Frame-0 WorldVisualState immediately");
+
+            // 4. Reload / Continue into a new campaign instance immediately publishes Frame-0 snapshot via Start().
+            var loaded = new Campaign(98810);
+            var ln1 = loaded.AddNation(new Nation { Tag = "AAA", Name = "Alpha", MapIndex = 1, Color = "#3366CC", CapitalLatitude = 20, CapitalLongitude = -100 });
+            var ln2 = loaded.AddNation(new Nation { Tag = "BBB", Name = "Beta", MapIndex = 2, Color = "#CC4433", CapitalLatitude = 20, CapitalLongitude = 100 }, player: true);
+            loaded.AddNation(new Nation { Tag = "CCC", Name = "Buffer", MapIndex = 3, Color = "#888888", CapitalLatitude = 20, CapitalLongitude = 0 });
+            loaded.States.Add(new ScenarioState { Id = "s1", MapIndex = 1, NationMapIndex = 1, Name = "Alpha State" });
+            loaded.States.Add(new ScenarioState { Id = "s2", MapIndex = 2, NationMapIndex = 2, Name = "Beta State" });
+            loaded.States.Add(new ScenarioState { Id = "s3", MapIndex = 3, NationMapIndex = 3, Name = "Buffer State" });
+            loaded.AttachProvinceTopology(map);
+            loaded.Armies.Add(new Army { Id = 301, NationId = ln2.Id, ProvinceId = prov2, StateMapIndex = 2, Divisions = 4f, Personnel = 40000, Strength = 1f, Organisation = 1f, SupplyLevel = 1f });
+            loaded.IsPaused = true;
+
+            runner.Start(loaded);
+            var gotLoaded = runner.TryAcquireLatestVisualSnapshot(out var vLoaded);
+            Check(gotLoaded && vLoaded is not null && vLoaded.PlayerId == ln2.Id && vLoaded.ArmyStackCount == 1 && vLoaded.ArmyStacks[0].VisibleToPlayer && vLoaded.ArmyStacks[0].CounterStance == 1,
+                "Loaded save Start() immediately exposes player armies & vision on Frame 0 before first tick");
+        }
+        finally
+        {
+            runner.Stop();
+        }
+
+        // 5. Source-wiring & throttling-preservation contracts for Frame-0 campaign entry flush.
+        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        if (!File.Exists(Path.Combine(root, "DealOrForce.csproj")))
+            root = Directory.GetCurrentDirectory();
+        var flushPath = Path.Combine(root, "Scripts", "gfx", "GlobeCampaignEntryFlush.cs");
+        var entryPath = Path.Combine(root, "Scripts", "DealOrForceGame.CampaignEntry.cs");
+        Check(File.Exists(flushPath) && File.Exists(flushPath + ".uid") &&
+              File.Exists(entryPath) && File.Exists(entryPath + ".uid"),
+            "Frame-0 campaign-entry flush partial files and .cs.uid sidecars exist");
+
+        var flushSrc = File.ReadAllText(flushPath);
+        var entrySrc = File.ReadAllText(entryPath);
+        var gameSrc = File.ReadAllText(Path.Combine(root, "Scripts", "DealOrForceGame.cs"));
+        var saveSrc = File.ReadAllText(Path.Combine(root, "Scripts", "ui", "SaveLoadUI.cs"));
+        var lfSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeLockFreeSync.cs"));
+        var unitsSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobePresentation.UnitsAndMarkers.cs"));
+        var movSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeMovements.cs"));
+
+        var visIdx = gameSrc.IndexOf("SyncGlobeVisibilityFlags();", StringComparison.Ordinal);
+        var lfIdx = gameSrc.IndexOf("_globe?.SyncLockFreeWorldVisuals(_simRunner)", StringComparison.Ordinal);
+        Check(visIdx > 0 && lfIdx > visIdx &&
+              gameSrc.Contains("PrepareCampaignEntryVisuals(", StringComparison.Ordinal) &&
+              saveSrc.Contains("PrepareCampaignEntryVisuals(focusPlayerCapital: true);", StringComparison.Ordinal),
+            "DealOrForceGame syncs visibility flags BEFORE Frame-0 SyncLockFreeWorldVisuals and flushes on BeginSession & RestoreCampaignFromSlot");
+
+        Check(entrySrc.Contains("_simRunner.RefreshSnapshotNow();", StringComparison.Ordinal) &&
+              entrySrc.Contains("_globe.FlushCampaignEntryVisuals(_simRunner", StringComparison.Ordinal) &&
+              flushSrc.Contains("UpdateFogVisibility();", StringComparison.Ordinal) &&
+              flushSrc.Contains("SyncLockFreeWorldVisuals(simRunner);", StringComparison.Ordinal) &&
+              flushSrc.Contains("UpdateFleetMarkers();", StringComparison.Ordinal) &&
+              flushSrc.Contains("UpdateSupportPresentation(0.35);", StringComparison.Ordinal) &&
+              flushSrc.Contains("LayoutSupportCounters();", StringComparison.Ordinal) &&
+              flushSrc.Contains("UpdateCounterScale(force: true);", StringComparison.Ordinal) &&
+              flushSrc.Contains("while (_deferredLabelAnchors is { } deferred", StringComparison.Ordinal) &&
+              flushSrc.Contains("StepCityPinFades(5.0f);", StringComparison.Ordinal) &&
+              flushSrc.Contains("_movementLayer?.FlushImmediate(campaign, _camera);", StringComparison.Ordinal) &&
+              flushSrc.Contains("WakeGlobeRendering();", StringComparison.Ordinal),
+            "GlobeCampaignEntryFlush flushes fog, armies, battles, fronts, fleets, support, labels, cities, movements, and wakes rendering on Frame 0");
+
+        Check(lfSrc.Contains("mode, visual.PlayerId, visual.ObserverMode", StringComparison.Ordinal) &&
+              lfSrc.Contains("_lastLockFreeBattleViewer != visual.PlayerId", StringComparison.Ordinal) &&
+              lfSrc.Contains("ActiveLabel3dFrameBudgetMs()", StringComparison.Ordinal) &&
+              unitsSrc.Contains("ActiveLabel3dFrameBudgetMs()", StringComparison.Ordinal) &&
+              unitsSrc.Contains("hash.Add(FogOfWarActive); hash.Add(campaign.Player?.Id ?? -1); hash.Add(campaign.ObserverMode);", StringComparison.Ordinal) &&
+              movSrc.Contains("!_globe._campaignEntryFlushActive && (builtRoundels >= MaxRoundelsPerFrame", StringComparison.Ordinal),
+            "Lock-free & sync army/battle fingerprints track player/fog/observer and frame budgets stay active outside campaign-entry flush");
     }
 
     private static int FirstByteDiff(byte[] a, byte[] b)

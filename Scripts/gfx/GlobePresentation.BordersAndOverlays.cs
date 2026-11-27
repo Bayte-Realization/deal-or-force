@@ -247,6 +247,7 @@ public sealed partial class GlobePresentation
     private Image _borderControllerImage;
 
     private bool _frontPreviewDeferred;
+    private bool _frontGeometryDirty;
     private int _frontPreviewZoomBucket = int.MinValue;
     private bool _frontPreviewFlatMap;
     private int _frontPreviewFlatBucket = int.MinValue;
@@ -265,13 +266,10 @@ public sealed partial class GlobePresentation
 
     private void BuildFrontPreview()
     {
+        WakeGlobeRendering();
         if (_campaign is { } campaign)
         {
-            if (!campaign.TryEnterRead(0, true))
-            {
-                _frontPreviewDeferred = true;
-                return;
-            }
+            if (!campaign.TryEnterRead(0, true)) { _frontPreviewDeferred = true; _frontGeometryDirty = true; return; }
             try { BuildFrontPreviewCore(); }
             finally { campaign.ExitRead(); }
             return;
@@ -282,6 +280,7 @@ public sealed partial class GlobePresentation
     private void BuildFrontPreviewCore()
     {
         _frontPreviewDeferred = false;
+        _frontGeometryDirty = false;
         _frontPreviewZoomBucket = CurrentBattleArrowZoomBucket();
         _frontPreviewFlatMap = _flatMap;
         _frontPreviewFlatBucket = _flatMap ? Mathf.FloorToInt(_flatX * 0.25f) : 0;
@@ -376,7 +375,7 @@ public sealed partial class GlobePresentation
 
         if (_frontImage is null) _frontImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _frontImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-        UpdateMapImage("front_membership", _frontImage, ref _frontTexture);
+        UpdateMapImage("front_membership", _frontImage, ref _frontTexture); WakeGlobeRendering();
     }
 
     /// <summary>Rebuilds front_membership from live province controllers in a single O(P) province sweep.</summary>

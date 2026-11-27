@@ -28,7 +28,7 @@ public sealed partial class GlobePresentation
         var nowMsec = Time.GetTicksMsec();
         if (_hasUploadedVisionBytes && ReferenceEquals(_uploadedFogCampaign, _campaign) &&
             _uploadedVisionViewer == viewer && _lastFogMapRevision == _campaign.MapRevision &&
-            !_campaign.IsPaused && _campaign.Speed >= 4 && nowMsec - _lastFogCheckMsec < 120)
+            !_campaign.IsPaused && _campaign.Speed >= 7 && nowMsec - _lastFogCheckMsec < 120)
             return;
         var vision = CampaignIntel.Vision(_campaign, viewer);
         if (ReferenceEquals(_uploadedVision, vision) && _uploadedVisionRevision == vision.Revision &&

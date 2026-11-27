@@ -24,9 +24,9 @@ public static partial class AiStatecraft
     }
 
     /// <summary>Uses controlled land and actual shipping capacity, not just GDP or capital distance.</summary>
-    private static int[] _reachStamp = Array.Empty<int>();
-    private static int _reachGeneration;
-    private static readonly Queue<int> ReachQueue = new();
+    [ThreadStatic] private static int[] _reachStamp;
+    [ThreadStatic] private static int _reachGeneration;
+    [ThreadStatic] private static Queue<int> _reachQueue;
 
     /// <summary>
     /// Marks the land from which a division can march to the harbour - the harbour's own stretch
@@ -38,18 +38,21 @@ public static partial class AiStatecraft
         if (harbour <= 0 || harbour >= map.Neighbors.Length || controllers is null ||
             controllers.Length < map.Neighbors.Length || controllers[harbour] != mapIndex || map.IsWater(harbour))
             return -1;
-        if (_reachStamp.Length < map.Neighbors.Length) _reachStamp = new int[map.Neighbors.Length];
-        if (_reachGeneration == int.MaxValue) { Array.Clear(_reachStamp); _reachGeneration = 0; }
+        var reachStamp = _reachStamp;
+        if (reachStamp is null || reachStamp.Length < map.Neighbors.Length)
+            _reachStamp = reachStamp = new int[map.Neighbors.Length];
+        if (_reachGeneration == int.MaxValue) { Array.Clear(reachStamp); _reachGeneration = 0; }
         var mark = ++_reachGeneration;
-        _reachStamp[harbour] = mark;
-        ReachQueue.Clear();
-        ReachQueue.Enqueue(harbour);
-        while (ReachQueue.Count > 0)
-            foreach (var next in map.Neighbors[ReachQueue.Dequeue()])
+        reachStamp[harbour] = mark;
+        var queue = _reachQueue ??= new Queue<int>(128);
+        queue.Clear();
+        queue.Enqueue(harbour);
+        while (queue.Count > 0)
+            foreach (var next in map.Neighbors[queue.Dequeue()])
             {
-                if (_reachStamp[next] == mark || controllers[next] != mapIndex || map.IsWater(next)) continue;
-                _reachStamp[next] = mark;
-                ReachQueue.Enqueue(next);
+                if (reachStamp[next] == mark || controllers[next] != mapIndex || map.IsWater(next)) continue;
+                reachStamp[next] = mark;
+                queue.Enqueue(next);
             }
         return mark;
     }

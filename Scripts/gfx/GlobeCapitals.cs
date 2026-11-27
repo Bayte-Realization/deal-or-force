@@ -6,11 +6,8 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// Capital marks (one thin ink ring around the capital's star) + 1-draw-call city lights on the
-/// night side of the globe, scaled by real state population and GDP.
-/// Strictly presentation-only: zero simulation mutation, zero texture units added to globe shader.
-/// Ink, not light (23 November 2026): the brass halo with its soft glow and shimmer is now a plain
-/// stroke, and the city lights no longer glow on the day side or on the flat map.
+/// Capital marks (thin ink ring around the capital star) + 1-draw-call night city lights scaled by population and GDP.
+/// Presentation-only: zero simulation mutation, zero texture units added to globe shader.
 /// </summary>
 public sealed partial class GlobePresentation
 {
@@ -18,6 +15,7 @@ public sealed partial class GlobePresentation
 
     private static QuadMesh _capitalHaloQuad;
     private static ShaderMaterial _capitalHaloMaterial;
+    internal static void ReleaseStaticCapitalHaloResources() { _capitalHaloMaterial = null; _capitalHaloQuad = null; }
 
     private MultiMeshInstance3D _urbanGlowNode;
     private ShaderMaterial _urbanGlowMaterial;
@@ -233,6 +231,7 @@ void fragment() {
             _urbanGlowNode = new MultiMeshInstance3D
             {
                 Name = "UrbanDuskGlow",
+                CustomAabb = new Aabb(new Vector3(-120f, -120f, -120f), new Vector3(240f, 240f, 240f)),
                 Multimesh = mm,
                 MaterialOverride = _urbanGlowMaterial,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,

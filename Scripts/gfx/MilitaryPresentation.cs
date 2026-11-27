@@ -63,7 +63,7 @@ public sealed partial class GlobePresentation
             Name = "BattleBadgesGpu",
             Multimesh = _battleBadgeMultiMesh,
             MaterialOverride = _battleBadgeMaterial,
-            CustomAabb = new Aabb(new Vector3(-50f, -50f, -50f), new Vector3(100f, 100f, 100f)),
+            CustomAabb = new Aabb(new Vector3(-120f, -120f, -120f), new Vector3(240f, 240f, 240f)),
             IgnoreOcclusionCulling = true,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             GIMode = GeometryInstance3D.GIModeEnum.Disabled
@@ -88,11 +88,31 @@ public sealed partial class GlobePresentation
     /// </summary>
     private Texture2D ArmyCounterTexture(Nation nation, string templateId)
     {
+        if (nation is null) return ArmyCounterTextureForSnapshot(0, "", "", templateId);
+        var flagSprite = FlagSpriteFor(nation);
+        return ArmyCounterTextureCore(nation.MapIndex, nation.Tag ?? "", nation.Color ?? "", flagSprite,
+            NationalFlagVisualId(nation), templateId, nation);
+    }
+
+    private Texture2D ArmyCounterTextureForSnapshot(int nationMapIndex, string nationTag, string colorHex, string templateId)
+    {
+        _nationByMapIndex.TryGetValue(nationMapIndex, out var nation);
+        if (nation is not null)
+            return ArmyCounterTexture(nation, templateId);
+        var tag = nationTag ?? "";
+        var flagSprite = "flag_" + tag.ToLowerInvariant();
+        var flagTex = tag.Length > 0 ? DealOrForceGame.FlagTextureFor(tag) : null;
+        var visualId = flagTex?.GetInstanceId() ?? 0;
+        return ArmyCounterTextureCore(nationMapIndex, tag, colorHex ?? "", flagSprite, visualId, templateId, null);
+    }
+
+    private Texture2D ArmyCounterTextureCore(int mapIndex, string nationTag, string nationColorHex,
+        string flagSprite, ulong flagVisualId, string templateId, Nation nation)
+    {
         // The flag is part of the key. A country that changes its government changes its flag,
         // and a cached card must not go on flying the old one.
-        var flagSprite = FlagSpriteFor(nation);
         var resolvedTemplate = string.IsNullOrWhiteSpace(templateId) ? "line_infantry" : templateId;
-        var key = (nation.MapIndex, resolvedTemplate + "#" + flagSprite + "#" + NationalFlagVisualId(nation));
+        var key = (mapIndex, resolvedTemplate + "#" + flagSprite + "#" + flagVisualId);
         if (_armyCounterTextures.TryGetValue(key, out var cached)) return cached;
         const int width = 176;
         const int height = 104;
@@ -106,7 +126,9 @@ public sealed partial class GlobePresentation
             pixels = _counterTextureScratch = new byte[needed];
         else
             Array.Clear(pixels);
-        var national = new Color(nation.Color);
+        var national = nation is not null
+            ? new Color(nation.Color)
+            : Color.FromString(string.IsNullOrEmpty(nationColorHex) ? "#596270" : nationColorHex, new Color(0.35f, 0.39f, 0.44f));
         var brass = Ui.Colour("map.counter_rim");
         var rimLight = national.Lightened(0.36f).Lerp(brass, 0.22f);
         var rimBase = national.Lightened(0.18f);
@@ -964,15 +986,20 @@ public sealed partial class GlobePresentation
         foreach (var id in _selectedArmyIds) selHash ^= HashCode.Combine(id);
         var isMobileOrTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
                               Platform.PlatformProfile.Current?.IsMobile == true;
-        var fastSim = _campaign is { IsPaused: false, Speed: >= 4 };
+        var fastSim = _campaign is { IsPaused: false, Speed: >= 7 };
         var timeSinceLast = System.Diagnostics.Stopwatch.GetElapsedTime(_lastBattleRebuildStamp).TotalSeconds;
         var dueByTime = !fastSim || timeSinceLast >= (isMobileOrTouch ? 0.14 : 0.033);
         var flatBucket = _flatMap ? Mathf.FloorToInt(_flatX * 0.25f) : 0;
         var structureChanged = _battleViewer != viewer || _battleMarkerCount != active ||
             _battleMarkerFlatMap != _flatMap || _battleMarkerFlatBucket != flatBucket ||
             selHash != _lastBattleSelectedHash;
+        var lockFreeMatched = !forceNow &&
+            _lastLockFreeBattleHours == _campaign.ElapsedHours &&
+            _lastLockFreeBattleCount == active &&
+            _lastLockFreeBattleFog == FogOfWarActive &&
+            selHash == _lastBattleSelectedHash;
 
-        if (forceNow || structureChanged || (_battleMarkerDay != _campaign.ElapsedHours && dueByTime))
+        if (!lockFreeMatched && (forceNow || structureChanged || (_battleMarkerDay != _campaign.ElapsedHours && dueByTime)))
         {
             _lastBattleRebuildStamp = System.Diagnostics.Stopwatch.GetTimestamp();
             _battleViewer = viewer;
@@ -985,6 +1012,15 @@ public sealed partial class GlobePresentation
         }
         else
         {
+            if (lockFreeMatched)
+            {
+                _battleViewer = viewer;
+                _battleMarkerFlatMap = _flatMap;
+                _battleMarkerFlatBucket = flatBucket;
+                _battleMarkerDay = _campaign.ElapsedHours;
+                _battleMarkerCount = active;
+                _lastBattleSelectedHash = selHash;
+            }
             RefreshBattleVfxZoomIfNeeded();
             RefreshFrontPreviewZoomIfNeeded();
         }

@@ -21,13 +21,12 @@ public partial class DealOrForceGame
         if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player) return;
         if (_selectedState is null || _selectedState.NationMapIndex != player.MapIndex) return;
         if (_selectedState.Buildings.GetValueOrDefault(kind) <= 0) return;
-        _campaign.Commands.Enqueue(new DemolishBuildingCommand
+        CommitImmediateCampaignCommand(new DemolishBuildingCommand
         {
             IssuerId = player.Id,
             StateMapIndex = _selectedState.MapIndex,
             Building = kind
-        });
-        _campaign.Commands.ApplyAll(_campaign);
+        }, refreshHud: true, wakeGlobe: true);
         ShowEconomyScreen();
     }
 
@@ -35,11 +34,10 @@ public partial class DealOrForceGame
     private void CancelConstruction(int projectId)
     {
         if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player) return;
-        _campaign.Commands.Enqueue(new CancelConstructionCommand
+        CommitImmediateCampaignCommand(new CancelConstructionCommand
         {
             IssuerId = player.Id, ProjectId = projectId
-        });
-        _campaign.Commands.ApplyAll(_campaign);
+        }, refreshHud: true, wakeGlobe: true);
         ShowEconomyScreen();
         RefreshStateAffairs();
     }
@@ -48,13 +46,12 @@ public partial class DealOrForceGame
     {
         if (ObserverUiRules.IsObserving(_campaign, _observerMode) || _campaign?.Player is not { } player) return;
         if (_selectedState is null || _selectedState.NationMapIndex != player.MapIndex) return;
-        _campaign.Commands.Enqueue(new QueueConstructionCommand
+        CommitImmediateCampaignCommand(new QueueConstructionCommand
         {
             IssuerId = player.Id,
             StateMapIndex = _selectedState.MapIndex,
             Building = kind
-        });
-        _campaign.Commands.ApplyAll(_campaign);
+        }, refreshHud: true, wakeGlobe: true);
         ShowEconomyScreen();
     }
 

@@ -46,6 +46,9 @@ static class AndroidPlatformTests
         RunRenderSnapshotNameTests();
         RunConcurrentCatalogReloadSafetyTests();
         RunCombatAndMovementArrowTests();
+        RunMobileFirstBootDefaultsTests();
+        RunSupportMarkerNoFlickerAndReadabilityTests();
+        RunS22HotfixRegressionTests();
     }
 
     private static void RunPlatformProfileTests()
@@ -1159,10 +1162,10 @@ static class AndroidPlatformTests
     {
         var cBg = Campaign.CreateBootstrap(91122);
         cBg.IsPaused = false;
-        cBg.Speed = 5;
+        cBg.Speed = 8;
         using var runner = new BackgroundSimRunner();
         runner.Start(cBg);
-        runner.SyncClockState(paused: false, speed: 5);
+        runner.SyncClockState(paused: false, speed: 8);
 
         var sw = Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < 5000)
@@ -1194,15 +1197,17 @@ static class AndroidPlatformTests
 
         var cSync = Campaign.CreateBootstrap(91122);
         cSync.IsPaused = false;
-        cSync.Speed = 5;
-        cSync.RuntimeStepHoursOverride = BackgroundSimRunner.AdaptiveStepHours(5);
+        cSync.Speed = 8;
+        cSync.RuntimeStepHoursOverride = BackgroundSimRunner.AdaptiveStepHours(8);
         while (cSync.ElapsedHours < cBg.ElapsedHours)
             cSync.Tick();
         cSync.RuntimeStepHoursOverride = 0;
 
-        Check(cSync.ElapsedHours == cBg.ElapsedHours &&
-              CampaignFingerprint.Of(cBg) == CampaignFingerprint.Of(cSync),
-            $"BackgroundSimRunner staged StepFor matches synchronous Campaign.Tick fingerprint at {cBg.ElapsedHours}h");
+        var bgFp = CampaignFingerprint.Of(cBg);
+        var syncFp = CampaignFingerprint.Of(cSync);
+        Check(cSync.ElapsedHours == cBg.ElapsedHours && bgFp == syncFp,
+            $"BackgroundSimRunner staged StepFor matches synchronous Campaign.Tick fingerprint at {cBg.ElapsedHours}h " +
+            $"(syncH={cSync.ElapsedHours}, bgD={cBg.ElapsedDays}, syncD={cSync.ElapsedDays}, bgRng={cBg.Random.State}, syncRng={cSync.Random.State}, bgFp=0x{bgFp:X16}, syncFp=0x{syncFp:X16})");
     }
 
     private static void RunBackgroundSimMobilePacingTests()
@@ -1245,17 +1250,17 @@ static class AndroidPlatformTests
         Check(!ReferenceEquals(snap3.NationRanksById, snap4.NationRanksById) && snap4.RankWeek == gateWorld.ElapsedDays / 7,
             "Weekly boundary unpaused Capture recomputes CountryRankings cleanly");
 
-        // 3. Batched Speed-5 mobile pacing (22 ms/day target) with 30 FPS reader non-starvation.
+        // 3. Batched Speed-8 mobile pacing (22 ms/day target) with 30 FPS reader non-starvation.
         // Pre-warm weekly passes and BackgroundSimRunner pacing path before timing so cold JIT
         // compilation never causes a false maxConsecutiveMisses spike.
         JitWarmup.PrepareWeeklyPasses();
         var warmupWorld = Campaign.CreateBootstrap(91120);
         warmupWorld.IsPaused = false;
-        warmupWorld.Speed = 5;
+        warmupWorld.Speed = 8;
         using (var warmupRunner = new BackgroundSimRunner { MobilePacing = true, MinSpeed5DayIntervalMs = 22.0 })
         {
             warmupRunner.Start(warmupWorld);
-            warmupRunner.SyncClockState(paused: false, speed: 5);
+            warmupRunner.SyncClockState(paused: false, speed: 8);
             var warmSw = Stopwatch.StartNew();
             while (warmSw.ElapsedMilliseconds < 2500)
             {
@@ -1277,14 +1282,14 @@ static class AndroidPlatformTests
 
         var cBg = Campaign.CreateBootstrap(91123);
         cBg.IsPaused = false;
-        cBg.Speed = 5;
+        cBg.Speed = 8;
         using var runner = new BackgroundSimRunner
         {
             MobilePacing = true,
             MinSpeed5DayIntervalMs = 22.0
         };
         runner.Start(cBg);
-        runner.SyncClockState(paused: false, speed: 5);
+        runner.SyncClockState(paused: false, speed: 8);
 
         var sw = Stopwatch.StartNew();
         var readSuccesses = 0;
@@ -1327,16 +1332,16 @@ static class AndroidPlatformTests
         Check(cBg.ElapsedDays >= 4 && cBg.ElapsedHours >= 96 && !cBg.MidStep,
             $"Batched MobilePacing BackgroundSimRunner completed >= 4 days cleanly ({cBg.ElapsedDays}d / {cBg.ElapsedHours}h in {pacingElapsedMs} ms)");
         Check(cBg.RenderSnapshot.ElapsedDays >= 4 && cBg.RenderSnapshot.NationRanksById.Count > 0,
-            "CampaignRenderSnapshot tracks batched Speed-5 progress and cached rankings");
+            "CampaignRenderSnapshot tracks batched Speed-8 progress and cached rankings");
         Check(readSuccesses >= 2 && maxConsecutiveMisses <= 2,
             $"Mobile 30 FPS reader acquires read windows without starvation (reads={readSuccesses}, maxConsecutiveMisses={maxConsecutiveMisses})");
         Check(pacingElapsedMs >= 50,
-            $"MobilePacing enforces steady ~22ms/day EMA Speed-5 pacing ({pacingElapsedMs} ms >= 50 ms for {cBg.ElapsedDays} days)");
+            $"MobilePacing enforces steady ~22ms/day EMA Speed-8 pacing ({pacingElapsedMs} ms >= 50 ms for {cBg.ElapsedDays} days)");
 
         var cSync = Campaign.CreateBootstrap(91123);
         cSync.IsPaused = false;
-        cSync.Speed = 5;
-        cSync.RuntimeStepHoursOverride = BackgroundSimRunner.MobileAdaptiveStepHours(5);
+        cSync.Speed = 8;
+        cSync.RuntimeStepHoursOverride = BackgroundSimRunner.MobileAdaptiveStepHours(8);
         while (cSync.ElapsedHours < cBg.ElapsedHours)
             cSync.Tick();
         cSync.RuntimeStepHoursOverride = 0;
@@ -1345,17 +1350,17 @@ static class AndroidPlatformTests
               CampaignFingerprint.Of(cBg) == CampaignFingerprint.Of(cSync),
             $"Batched MobilePacing BackgroundSimRunner matches synchronous Campaign.Tick fingerprint at {cBg.ElapsedHours}h");
 
-        // 4. Uncapped desktop batched Speed-5 determinism (MinSpeed5DayIntervalMs = 0).
+        // 4. Uncapped desktop batched Speed-8 determinism (MinSpeed5DayIntervalMs = 0).
         var cDesk = Campaign.CreateBootstrap(91127);
         cDesk.IsPaused = false;
-        cDesk.Speed = 5;
+        cDesk.Speed = 8;
         using var deskRunner = new BackgroundSimRunner
         {
             MobilePacing = false,
             MinSpeed5DayIntervalMs = 0.0
         };
         deskRunner.Start(cDesk);
-        deskRunner.SyncClockState(paused: false, speed: 5);
+        deskRunner.SyncClockState(paused: false, speed: 8);
         var deskSw = Stopwatch.StartNew();
         while (deskSw.ElapsedMilliseconds < 5000)
         {
@@ -1377,14 +1382,14 @@ static class AndroidPlatformTests
         deskRunner.Stop();
         var cDeskSync = Campaign.CreateBootstrap(91127);
         cDeskSync.IsPaused = false;
-        cDeskSync.Speed = 5;
-        cDeskSync.RuntimeStepHoursOverride = BackgroundSimRunner.AdaptiveStepHours(5);
+        cDeskSync.Speed = 8;
+        cDeskSync.RuntimeStepHoursOverride = BackgroundSimRunner.AdaptiveStepHours(8);
         while (cDeskSync.ElapsedHours < cDesk.ElapsedHours)
             cDeskSync.Tick();
         cDeskSync.RuntimeStepHoursOverride = 0;
         Check(cDesk.ElapsedHours >= 72 && cDeskSync.ElapsedHours == cDesk.ElapsedHours &&
               CampaignFingerprint.Of(cDesk) == CampaignFingerprint.Of(cDeskSync),
-            $"Uncapped desktop batched Speed-5 matches synchronous Campaign.Tick fingerprint at {cDesk.ElapsedHours}h");
+            $"Uncapped desktop batched Speed-8 matches synchronous Campaign.Tick fingerprint at {cDesk.ElapsedHours}h");
 
         var root = FindRepoRoot();
         var datePlate = File.ReadAllText(Path.Combine(root, "Scripts", "ui", "Shell", "ShellDatePlateView.cs"));
@@ -1809,19 +1814,25 @@ static class AndroidPlatformTests
     private static void RunMobileAdaptiveStepHoursAndMidnightAlignmentTests()
     {
         Check(BackgroundSimRunner.MobileAdaptiveStepHours(1) == 1 &&
-              BackgroundSimRunner.MobileAdaptiveStepHours(2) == 2 &&
-              BackgroundSimRunner.MobileAdaptiveStepHours(3) == 4 &&
-              BackgroundSimRunner.MobileAdaptiveStepHours(4) == 8 &&
-              BackgroundSimRunner.MobileAdaptiveStepHours(5) == 24,
-            "MobileAdaptiveStepHours maps Speed 1..5 to 1h/2h/4h/8h/24h");
+              BackgroundSimRunner.MobileAdaptiveStepHours(2) == 1 &&
+              BackgroundSimRunner.MobileAdaptiveStepHours(3) == 1 &&
+              BackgroundSimRunner.MobileAdaptiveStepHours(4) == 2 &&
+              BackgroundSimRunner.MobileAdaptiveStepHours(5) == 4 &&
+              BackgroundSimRunner.MobileAdaptiveStepHours(6) == 6 &&
+              BackgroundSimRunner.MobileAdaptiveStepHours(7) == 12 &&
+              BackgroundSimRunner.MobileAdaptiveStepHours(8) == 24,
+            "MobileAdaptiveStepHours maps Speed 1..8 to 1h/1h/1h/2h/4h/6h/12h/24h");
 
         var defines = new Defines { SecondsPerDay = 5f, HoursPerTick = 1 };
-        Check(Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 1) - 2.20) < 1e-4 &&
-              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 2) - 0.90) < 1e-4 &&
-              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 3) - 0.34) < 1e-4 &&
-              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 4) - 0.10) < 1e-4 &&
-              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 5) - 0.0) < 1e-9,
-            "MobileStepSecondsPerDay returns brisk AoH3-style day intervals (2.20, 0.90, 0.34, 0.10, 0.0)");
+        Check(Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 1) - 9.00) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 2) - 4.50) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 3) - 2.25) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 4) - 1.00) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 5) - 0.475) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 6) - 0.21) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 7) - 0.08) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.MobileStepSecondsPerDay(defines, 8) - 0.0) < 1e-9,
+            "MobileStepSecondsPerDay returns smooth 8-speed intervals (9.00, 4.50, 2.25, 1.00, 0.475, 0.21, 0.08, 0.0)");
 
         var campaign = Campaign.CreateBootstrap(91131);
         var region = campaign.States.First(s => s.NationMapIndex == campaign.Player.MapIndex);
@@ -1836,7 +1847,7 @@ static class AndroidPlatformTests
             $"Campaign advances to 14:00 cleanly ({campaign.ElapsedHours}h, hour={campaign.Date.Hour})");
 
         var fpBeforeOverride = CampaignFingerprint.Of(campaign);
-        campaign.RuntimeStepHoursOverride = BackgroundSimRunner.MobileAdaptiveStepHours(5);
+        campaign.RuntimeStepHoursOverride = BackgroundSimRunner.MobileAdaptiveStepHours(8);
         var overrideField = typeof(Campaign).GetField("RuntimeStepHoursOverride",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         var hasJsonIgnore = overrideField?.GetCustomAttributes(
@@ -1845,17 +1856,17 @@ static class AndroidPlatformTests
               !SaveSystem.ExportScenarioJson(campaign, "runtime-override-check").Contains("RuntimeStepHoursOverride", StringComparison.Ordinal),
             "RuntimeStepHoursOverride is transient ([JsonIgnore], excluded from CampaignFingerprint and JSON serialization)");
         Check(campaign.TickHours == 10 && campaign.Defines.HoursPerTick == 1,
-            $"At 14:00 with Speed-5 override, TickHours aligns to 10h without mutating Defines.HoursPerTick (TickHours={campaign.TickHours})");
+            $"At 14:00 with Speed-8 override, TickHours aligns to 10h without mutating Defines.HoursPerTick (TickHours={campaign.TickHours})");
 
         campaign.Tick();
         Check(campaign.ElapsedHours == 24 && campaign.ElapsedDays == 1 && campaign.Date.Hour == 0,
-            $"First Speed-5 step from 14:00 advances 10h to 00:00 next day without skipping a day ({campaign.ElapsedHours}h, day={campaign.ElapsedDays}, hour={campaign.Date.Hour})");
+            $"First Speed-8 step from 14:00 advances 10h to 00:00 next day without skipping a day ({campaign.ElapsedHours}h, day={campaign.ElapsedDays}, hour={campaign.Date.Hour})");
         Check(campaign.TickHours == 24,
-            $"At 00:00 with Speed-5 override, TickHours expands to 24h (TickHours={campaign.TickHours})");
+            $"At 00:00 with Speed-8 override, TickHours expands to 24h (TickHours={campaign.TickHours})");
 
         campaign.Tick();
         Check(campaign.ElapsedHours == 48 && campaign.ElapsedDays == 2 && campaign.Date.Hour == 0,
-            $"Subsequent Speed-5 step advances 24h cleanly ({campaign.ElapsedHours}h, day={campaign.ElapsedDays}, hour={campaign.Date.Hour})");
+            $"Subsequent Speed-8 step advances 24h cleanly ({campaign.ElapsedHours}h, day={campaign.ElapsedDays}, hour={campaign.Date.Hour})");
 
         campaign.RuntimeStepHoursOverride = BackgroundSimRunner.MobileAdaptiveStepHours(1);
         Check(campaign.TickHours == 1 && campaign.Defines.HoursPerTick == 1,
@@ -1878,7 +1889,7 @@ static class AndroidPlatformTests
             MinSpeed5DayIntervalMs = 0.0
         };
         runner.Start(bgCampaign);
-        runner.SyncClockState(paused: false, speed: 5);
+        runner.SyncClockState(paused: false, speed: 8);
         var waitSw = Stopwatch.StartNew();
         while (waitSw.ElapsedMilliseconds < 5000)
         {
@@ -1920,7 +1931,7 @@ static class AndroidPlatformTests
         campaign.AttachProvinceTopology(ProvinceTopology.Build(states, owners, 16, 8, _ => false));
         campaign.ObserverMode = true;
         campaign.IsPaused = false;
-        campaign.Speed = 5;
+        campaign.Speed = 8;
 
         using var runner = new BackgroundSimRunner
         {
@@ -1928,7 +1939,7 @@ static class AndroidPlatformTests
             MinSpeed5DayIntervalMs = 0.0
         };
         runner.Start(campaign);
-        runner.SyncClockState(paused: false, speed: 5);
+        runner.SyncClockState(paused: false, speed: 8);
 
         // Warm up at least one live day before racing the lock-stealer.
         var warmSw = Stopwatch.StartNew();
@@ -1983,7 +1994,7 @@ static class AndroidPlatformTests
                 }
                 sw.Stop();
                 Check(acquired && sw.ElapsedMilliseconds < 100,
-                    $"Priority tap probe {probe + 1}/5 preempts Speed-5 + lock-stealing reader within 100 ms ({sw.ElapsedMilliseconds} ms, acquired={acquired})");
+                    $"Priority tap probe {probe + 1}/5 preempts Speed-8 + lock-stealing reader within 100 ms ({sw.ElapsedMilliseconds} ms, acquired={acquired})");
             }
         }
         finally
@@ -2010,19 +2021,22 @@ static class AndroidPlatformTests
         Check(!defaults.MobilePacing && defaults.AdaptiveStepPacing,
             "BackgroundSimRunner enables AdaptiveStepPacing by default on desktop");
 
-        var expectedHours = new[] { 0, 1, 2, 4, 8, 24 };
-        for (var speed = 1; speed <= 5; speed++)
+        var expectedHours = new[] { 0, 1, 1, 1, 2, 4, 6, 12, 24 };
+        for (var speed = 1; speed <= 8; speed++)
         {
             Check(BackgroundSimRunner.AdaptiveStepHours(speed) == expectedHours[speed],
                 $"AdaptiveStepHours({speed}) == {expectedHours[speed]}h");
         }
         var testDefines = new Defines { SecondsPerDay = 5f, HoursPerTick = 1 };
-        Check(Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 1, mobilePacing: false) - 3.00) < 1e-4 &&
-              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 2, mobilePacing: false) - 1.20) < 1e-4 &&
-              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 3, mobilePacing: false) - 0.45) < 1e-4 &&
-              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 4, mobilePacing: false) - 0.125) < 1e-4 &&
-              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 5, mobilePacing: false) - 0.0) < 1e-9,
-            "AdaptiveStepSecondsPerDay desktop pacing table matches 3.00/1.20/0.45/0.125/0.0");
+        Check(Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 1, mobilePacing: false) - 12.00) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 2, mobilePacing: false) - 6.00) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 3, mobilePacing: false) - 3.00) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 4, mobilePacing: false) - 1.40) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 5, mobilePacing: false) - 0.65) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 6, mobilePacing: false) - 0.275) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 7, mobilePacing: false) - 0.10) < 1e-4 &&
+              Math.Abs(BackgroundSimRunner.AdaptiveStepSecondsPerDay(testDefines, 8, mobilePacing: false) - 0.0) < 1e-9,
+            "AdaptiveStepSecondsPerDay desktop pacing table matches 12.00/6.00/3.00/1.40/0.65/0.275/0.10/0.0");
 
         // Verify RuntimeStepHoursOverride stays [JsonIgnore] and is excluded from saves & fingerprints.
         var overrideField = typeof(Campaign).GetField("RuntimeStepHoursOverride",
@@ -2031,8 +2045,8 @@ static class AndroidPlatformTests
             typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), inherit: false).Length == 1;
         Check(hasJsonIgnore, "Campaign.RuntimeStepHoursOverride carries [JsonIgnore]");
 
-        // Verify desktop AdaptiveStepPacing steps 1h/2h/4h/8h/24h for Speed 1..5 when Defines.HoursPerTick == 1.
-        for (var speed = 1; speed <= 5; speed++)
+        // Verify desktop AdaptiveStepPacing steps 1h..24h across Speed 1..8 when Defines.HoursPerTick == 1.
+        for (var speed = 1; speed <= 8; speed++)
         {
             var cSpeed = Campaign.CreateBootstrap(91141);
             cSpeed.ObserverMode = true;
@@ -2073,12 +2087,12 @@ static class AndroidPlatformTests
                 $"Desktop AdaptiveStepPacing Speed {speed} steps in {expectedStep}h multiples (hours={cSpeed.ElapsedHours}, override={activeOverride})");
         }
 
-        // Fingerprint parity: desktop AdaptiveStepPacing at Speed 5 matches explicit Defines.HoursPerTick = 24 stepping.
+        // Fingerprint parity: desktop AdaptiveStepPacing at Speed 8 matches explicit Defines.HoursPerTick = 24 stepping.
         var cAdaptive = Campaign.CreateBootstrap(91141);
         cAdaptive.ObserverMode = true;
         cAdaptive.IsPaused = false;
         cAdaptive.Defines.HoursPerTick = 1;
-        cAdaptive.Speed = 5;
+        cAdaptive.Speed = 8;
         var fpBefore = CampaignFingerprint.Of(cAdaptive);
         using (var runner = new BackgroundSimRunner
         {
@@ -2088,7 +2102,7 @@ static class AndroidPlatformTests
         })
         {
             runner.Start(cAdaptive);
-            runner.SyncClockState(paused: false, speed: 5);
+            runner.SyncClockState(paused: false, speed: 8);
             var sw = Stopwatch.StartNew();
             while (sw.ElapsedMilliseconds < 5000)
             {
@@ -2111,7 +2125,7 @@ static class AndroidPlatformTests
         var cExplicit = Campaign.CreateBootstrap(91141);
         cExplicit.ObserverMode = true;
         cExplicit.IsPaused = false;
-        cExplicit.Speed = 5;
+        cExplicit.Speed = 8;
         Check(CampaignFingerprint.Of(cExplicit) == fpBefore,
             "Bootstrap fingerprint before desktop adaptive stepping is identical");
         cExplicit.Defines.HoursPerTick = 24;
@@ -2121,7 +2135,7 @@ static class AndroidPlatformTests
 
         Check(cAdaptive.ElapsedHours >= 72 && cExplicit.ElapsedHours == cAdaptive.ElapsedHours &&
               CampaignFingerprint.Of(cAdaptive) == CampaignFingerprint.Of(cExplicit),
-            $"Desktop AdaptiveStepPacing Speed 5 fingerprint matches explicit HoursPerTick=24 stepping at {cAdaptive.ElapsedHours}h");
+            $"Desktop AdaptiveStepPacing Speed 8 fingerprint matches explicit HoursPerTick=24 stepping at {cAdaptive.ElapsedHours}h");
     }
 
     private static void RunMobileBigLittleParallelDeterminismTests()
@@ -2204,6 +2218,317 @@ static class AndroidPlatformTests
         }
         Check(DeterministicParallel.MobileBigLittleCap == OperatingSystem.IsAndroid(),
             "MobileBigLittleCap restored to platform default cleanly");
+    }
+
+    private static void RunMobileFirstBootDefaultsTests()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "dof_mobile_firstboot_" + Guid.NewGuid().ToString("N"));
+        var settingsDir = Path.Combine(tempRoot, "settings");
+        var saveDir = Path.Combine(tempRoot, "saves");
+        Directory.CreateDirectory(settingsDir);
+        Directory.CreateDirectory(saveDir);
+        try
+        {
+            PlayerSettings.UseDirectory(settingsDir);
+            var compactAvailable = MapCatalog.IsAvailable(MapCatalog.CompactId);
+            Check(compactAvailable, "MapCatalog discovers world_compact before MobileFirstBootDefaults test");
+
+            Check(!MobileFirstBootDefaults.ApplyOnce(isMobilePlatform: false),
+                "MobileFirstBootDefaults.ApplyOnce(false) leaves desktop settings untouched");
+            Check(!PlayerSettings.Has(MobileFirstBootDefaults.MigrationKey) && !PlayerSettings.Has("map_pack") &&
+                  !PlayerSettings.Has("sim_tempo_preset"),
+                "Desktop boot writes no mobile default keys");
+
+            Check(MobileFirstBootDefaults.ApplyOnce(isMobilePlatform: true),
+                "MobileFirstBootDefaults.ApplyOnce(true) applies once on clean mobile install");
+            Check(PlayerSettings.Bool(MobileFirstBootDefaults.MigrationKey, false) &&
+                  PlayerSettings.Text("map_pack", "") == MapCatalog.CompactId &&
+                  PlayerSettings.Text("sim_tempo_preset", "") == "fast_mobile" &&
+                  PlayerSettings.Text("hours_per_tick", "") == "12" &&
+                  PlayerSettings.Text("economy_tick_days", "") == "14" &&
+                  PlayerSettings.Text("ai_calm_cadence", "") == "30",
+                "Mobile first boot selects world_compact and fast_mobile (12h / 14d eco / 30d AI)");
+
+            // Switching manually back to Standard World + Detailed must stick permanently across reboots.
+            PlayerSettings.Set("map_pack", MapCatalog.StandardId);
+            PlayerSettings.Set("sim_tempo_preset", "detailed");
+            Check(!MobileFirstBootDefaults.ApplyOnce(isMobilePlatform: true),
+                "Second mobile boot does not reapply migration");
+            Check(PlayerSettings.Text("map_pack", "") == MapCatalog.StandardId &&
+                  PlayerSettings.Text("sim_tempo_preset", "") == "detailed",
+                "Explicit player map and tempo overrides survive subsequent mobile boots");
+
+            // Existing mobile user who already chose custom map/tempo keeps those values on upgrade.
+            var upgradeDir = Path.Combine(tempRoot, "upgrade_settings");
+            Directory.CreateDirectory(upgradeDir);
+            PlayerSettings.UseDirectory(upgradeDir);
+            PlayerSettings.Set("map_pack", MapCatalog.TacticalId);
+            PlayerSettings.Set("sim_tempo_preset", "grand_rts");
+            Check(!MobileFirstBootDefaults.ApplyOnce(isMobilePlatform: true),
+                "Mobile upgrade migration marks applied without overwriting existing map_pack or tempo");
+            Check(PlayerSettings.Text("map_pack", "") == MapCatalog.TacticalId &&
+                  PlayerSettings.Text("sim_tempo_preset", "") == "grand_rts",
+                "Pre-existing mobile player choices remain world_tactical + grand_rts");
+
+            // Boot map resolution switches to save's MapId (e.g., legacy world_standard WW4) when Continue/Load is used.
+            var legacyCampaign = Campaign.CreateBootstrap(777);
+            var nA = legacyCampaign.Player ?? legacyCampaign.Nations[0];
+            var rA = legacyCampaign.States.First(s => s.NationMapIndex == nA.MapIndex);
+            var states = new ushort[256];
+            var owners = new ushort[256];
+            Array.Fill(states, (ushort)rA.MapIndex);
+            Array.Fill(owners, (ushort)nA.MapIndex);
+            legacyCampaign.AttachProvinceTopology(ProvinceTopology.Build(states, owners, 16, 16, _ => false));
+            legacyCampaign.MapId = MapCatalog.StandardId;
+            var meta = SaveSystem.Save(saveDir, "ww4_legacy", legacyCampaign, "", "WW4 Legacy");
+            Check(meta is not null && SaveSystem.List(saveDir).Any(s => s.Slot == "ww4_legacy"),
+                "Created temporary legacy world_standard save fixture");
+            Check(MobileFirstBootDefaults.ResolveBootMapId(MapCatalog.CompactId, loadLatest: false, loadSlot: null, saveDir) == MapCatalog.CompactId,
+                "New Campaign keeps configured world_compact on mobile");
+            Check(MobileFirstBootDefaults.ResolveBootMapId(MapCatalog.CompactId, loadLatest: true, loadSlot: null, saveDir) == MapCatalog.StandardId,
+                "Continue / LoadLatest resolves legacy save's world_standard prior to globe preload");
+            Check(MobileFirstBootDefaults.ResolveBootMapId(MapCatalog.CompactId, loadLatest: false, loadSlot: "ww4_legacy", saveDir) == MapCatalog.StandardId,
+                "Archive LoadSlot resolves target save's world_standard prior to globe preload");
+        }
+        finally
+        {
+            PlayerSettings.UseDirectory(null);
+            try { if (Directory.Exists(tempRoot)) Directory.Delete(tempRoot, recursive: true); }
+            catch { }
+        }
+    }
+
+    private static void RunSupportMarkerNoFlickerAndReadabilityTests()
+    {
+        var root = FindRepoRoot();
+        var supportLayout = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeSupportLayout.cs"));
+        Check(supportLayout.Contains("AlphaCut=Discard", StringComparison.Ordinal) &&
+              !supportLayout.Contains("AlphaCutMode.Disabled", StringComparison.Ordinal) &&
+              supportLayout.Contains(".72f,.75f,.78f,1f", StringComparison.Ordinal) &&
+              supportLayout.Contains("LayoutPosition", StringComparison.Ordinal) &&
+              supportLayout.Contains("HasLayoutPosition", StringComparison.Ordinal) &&
+              supportLayout.Contains("KeepOrFindSupportOffset", StringComparison.Ordinal),
+            "GlobeSupportLayout eliminates AlphaCut switching flicker, keeps opaque faded tint, and applies layout hysteresis");
+
+        var supportPres = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeSupportPresentation.cs"));
+        Check(supportPres.Contains("AlphaCutMode.Discard", StringComparison.Ordinal) &&
+              !supportPres.Contains("AlphaCutMode.Disabled", StringComparison.Ordinal) &&
+              supportPres.Contains("RenderPriority = 6", StringComparison.Ordinal) &&
+              supportPres.Contains("NoDepthTest = true", StringComparison.Ordinal) &&
+              supportPres.Contains("FontSize = 40", StringComparison.Ordinal) &&
+              supportPres.Contains("ToNum(marker.Node.GlobalPosition)", StringComparison.Ordinal),
+            "GlobeSupportPresentation uses sorted depth bias, crisp readiness label, and GlobalPosition horizon visibility");
+
+        var battleMap = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "BattleMapPresentation.cs"));
+        Check(battleMap.Contains("dy = -4; dy <= 4", StringComparison.Ordinal) &&
+              !battleMap.Contains("dy = -7; dy <= 7", StringComparison.Ordinal),
+            "BattleMapPresentation packs compact status shield/pips into top header so DivisionCount is unobstructed");
+
+        var unitsMarkers = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobePresentation.UnitsAndMarkers.cs"));
+        var lockFreeSync = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeLockFreeSync.cs"));
+        Check(unitsMarkers.Contains("FontSize = 44", StringComparison.Ordinal) &&
+              unitsMarkers.Contains("strategic ? 58 : 44", StringComparison.Ordinal) &&
+              lockFreeSync.Contains("FontSize = 44", StringComparison.Ordinal) &&
+              lockFreeSync.Contains("TextureFilter = BaseMaterial3D.TextureFilterEnum.Linear", StringComparison.Ordinal),
+            "Globe army stack counters use 2x supersampled crisp typography (44/58px) and smooth condition bars");
+
+        var pickerWorld = File.ReadAllText(Path.Combine(root, "Scripts", "ui", "CountryPickerWorldSetupUI.cs"));
+        var pickerUi = File.ReadAllText(Path.Combine(root, "Scripts", "ui", "CountrySelectionUI.cs"));
+        var panelsJson = File.ReadAllText(Path.Combine(root, "game", "gui", "00_panels.json"));
+        var pickerActionsLayout = InterfaceSkin.Layout("picker.actions");
+        var pickerActionsWidth = pickerActionsLayout.OffsetRight - pickerActionsLayout.OffsetLeft;
+        Check(pickerWorld.Contains("PickerWorldFormatCard", StringComparison.Ordinal) &&
+              pickerWorld.Contains("PickerWorldFormatDrawer", StringComparison.Ordinal) &&
+              pickerWorld.Contains("PickerWorldFormatToggle", StringComparison.Ordinal) &&
+              pickerWorld.Contains("Visible = false", StringComparison.Ordinal) &&
+              pickerWorld.Contains("QueuePickerActionsLayout()", StringComparison.Ordinal) &&
+              !pickerWorld.Contains("new Color(", StringComparison.Ordinal) &&
+              pickerWorld.Contains("PersistTempoSelection(", StringComparison.Ordinal) &&
+              pickerWorld.Contains("keptSettings", StringComparison.Ordinal) &&
+              pickerWorld.Contains("PlayerSettings.Set(\"sim_tempo_preset\"", StringComparison.Ordinal) &&
+              pickerWorld.Contains("PlayerSettings.Set(\"hours_per_tick\"", StringComparison.Ordinal) &&
+              !pickerUi.Contains("new Color(", StringComparison.Ordinal) &&
+              pickerUi.Contains("new HBoxContainer { Name = \"PickerActionsFlow\"", StringComparison.Ordinal) &&
+              pickerUi.Contains("CollapsePickerWorldFormat()", StringComparison.Ordinal) &&
+              pickerActionsWidth > 0f && pickerActionsWidth <= 620f &&
+              panelsJson.Contains("\"picker.actions\"", StringComparison.Ordinal),
+            $"CountryPickerWorldSetupUI defaults to compact 1-line collapsed brass World Format bar with drawer toggle, palette tokens, Tempo persistence, single-row action bar, and compact width ({pickerActionsWidth:0}px <= 620px)");
+    }
+
+    private static void RunS22HotfixRegressionTests()
+    {
+        var root = FindRepoRoot();
+        var previousMap = MapCatalog.ActiveMapId;
+        var tempDir = Path.Combine(Path.GetTempPath(), "dof_s22_hotfix_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            // 1. Legacy pre-MapId saves (omitting MapId in JSON) resolve by persisted ProvinceCount across List / ResolveBootMapId / Load.
+            static void WritePreMapIdSave(string dir, string slot, int provinceCount, DateTime savedUtc)
+            {
+                var payload = new Dictionary<string, object>
+                {
+                    ["EmbeddedMetadata"] = new Dictionary<string, object>
+                    {
+                        ["FormatVersion"] = SaveSystem.FormatVersion,
+                        ["Slot"] = slot,
+                        ["DisplayName"] = slot,
+                        ["NationTag"] = "SAU",
+                        ["NationName"] = "Saudi Arabia",
+                        ["GameDate"] = "21 March 2025",
+                        ["ElapsedDays"] = 445,
+                        ["Seed"] = 777,
+                        ["SavedUtc"] = savedUtc,
+                        ["GameVersion"] = SaveSystem.GameVersion,
+                        ["MapDataVersion"] = SaveSystem.MapDataVersion,
+                        ["ProvinceCount"] = provinceCount,
+                        ["ModFingerprint"] = "",
+                        ["Checksum"] = "",
+                        ["CompressedBytes"] = 0,
+                        ["IsAutosave"] = slot == SaveSystem.AutoSlot
+                    },
+                    ["FormatVersion"] = SaveSystem.FormatVersion,
+                    ["GameVersion"] = SaveSystem.GameVersion,
+                    ["MapDataVersion"] = SaveSystem.MapDataVersion,
+                    ["ModFingerprint"] = "",
+                    ["ProvinceCount"] = provinceCount,
+                    ["Seed"] = 777,
+                    ["ScenarioId"] = "2024",
+                    ["Date"] = new GameDate(2025, 3, 21),
+                    ["ElapsedDays"] = 445,
+                    ["PlayerId"] = 0,
+                    ["Nations"] = new[] { new Nation { Id = 0, MapIndex = 1, Tag = "SAU", Name = "Saudi Arabia", Population = 1_000_000L } },
+                    ["States"] = new[] { new ScenarioState { MapIndex = 10, NationMapIndex = 1, NationId = "SAU", Id = "st1", Name = "Riyadh", Population = 1_000_000L } },
+                    ["ProvinceController"] = new ushort[provinceCount + 1],
+                    ["ProvinceOccupation"] = new float[provinceCount + 1],
+                    ["ProvinceOwner"] = new ushort[provinceCount + 1],
+                    ["ProvinceState"] = new ushort[provinceCount + 1],
+                    ["ScenarioRules"] = new Defines()
+                };
+                var path = Path.Combine(dir, slot + SaveSystem.Extension);
+                var json = JsonSerializer.SerializeToUtf8Bytes(payload, new JsonSerializerOptions { IncludeFields = true });
+                using var fs = File.Create(path);
+                using var gz = new System.IO.Compression.GZipStream(fs, System.IO.Compression.CompressionLevel.Fastest);
+                gz.Write(json);
+            }
+
+            var saveDir = Path.Combine(tempDir, "saves");
+            Directory.CreateDirectory(saveDir);
+            var now = DateTime.UtcNow;
+            WritePreMapIdSave(saveDir, "legacy_unknown", 777, now.AddMinutes(-3));
+            WritePreMapIdSave(saveDir, "legacy_tactical", 18_493, now.AddMinutes(-2));
+            WritePreMapIdSave(saveDir, SaveSystem.AutoSlot, 10_370, now.AddMinutes(-1));
+
+            var listed = SaveSystem.List(saveDir);
+            var autoMeta = listed.FirstOrDefault(s => s.Slot == SaveSystem.AutoSlot);
+            var tacMeta = listed.FirstOrDefault(s => s.Slot == "legacy_tactical");
+            var unkMeta = listed.FirstOrDefault(s => s.Slot == "legacy_unknown");
+            Check(autoMeta is not null && autoMeta.MapId == MapCatalog.CompactId &&
+                  tacMeta is not null && tacMeta.MapId == MapCatalog.TacticalId &&
+                  unkMeta is not null && unkMeta.MapId == MapCatalog.StandardId,
+                "SaveSystem.List infers world_compact (10,370) and world_tactical (18,493) for pre-MapId saves and falls back to world_standard otherwise");
+
+            Check(MobileFirstBootDefaults.ResolveBootMapId(MapCatalog.StandardId, loadLatest: true, loadSlot: null, saveDir) == MapCatalog.CompactId &&
+                  MobileFirstBootDefaults.ResolveBootMapId(MapCatalog.StandardId, loadLatest: false, loadSlot: "legacy_tactical", saveDir) == MapCatalog.TacticalId,
+                "ResolveBootMapId selects world_compact / world_tactical for legacy pre-MapId saves before globe preload");
+
+            MapCatalog.SetActiveMap(MapCatalog.StandardId);
+            var compactLoaded = SaveSystem.Load(saveDir, SaveSystem.AutoSlot, "", activeProvinceCount: 34_138);
+            Check(compactLoaded.Success && MapCatalog.ActiveMapId == MapCatalog.CompactId &&
+                  compactLoaded.Campaign.MapId == MapCatalog.CompactId && compactLoaded.Metadata?.MapId == MapCatalog.CompactId,
+                $"SaveSystem.Load switches to world_compact and restores legacy pre-MapId 10,370-province save (warning='{compactLoaded.Warning}')");
+
+            MapCatalog.SetActiveMap(MapCatalog.StandardId);
+            var tacticalLoaded = SaveSystem.Load(saveDir, "legacy_tactical", "", activeProvinceCount: 34_138);
+            Check(tacticalLoaded.Success && MapCatalog.ActiveMapId == MapCatalog.TacticalId &&
+                  tacticalLoaded.Campaign.MapId == MapCatalog.TacticalId && tacticalLoaded.Metadata?.MapId == MapCatalog.TacticalId,
+                $"SaveSystem.Load switches to world_tactical and restores legacy pre-MapId 18,493-province save (warning='{tacticalLoaded.Warning}')");
+
+            // 2. SaveLoadUI null-safe _pickerLayer guard & failure-dismiss return to MainMenu (no bare-globe softlock).
+            var saveLoadSrc = File.ReadAllText(Path.Combine(root, "Scripts", "ui", "SaveLoadUI.cs"));
+            var loadingUiSrc = File.ReadAllText(Path.Combine(root, "Scripts", "ui", "LoadingScreenUI.cs"));
+            Check(!saveLoadSrc.Contains("_pickerLayer is { Visible: false }", StringComparison.Ordinal) &&
+                  saveLoadSrc.Contains("(_pickerLayer is null || !_pickerLayer.Visible)", StringComparison.Ordinal) &&
+                  saveLoadSrc.Contains("(_hudLayer is null || !_hudLayer.Visible)", StringComparison.Ordinal) &&
+                  saveLoadSrc.Contains("!_campaignInProgress", StringComparison.Ordinal) &&
+                  saveLoadSrc.Contains("onFailureDismissed: ReturnToMainMenuIfNoSurface", StringComparison.Ordinal) &&
+                  loadingUiSrc.Contains("onFailureDismissed?.Invoke()", StringComparison.Ordinal),
+                "SaveLoadUI + LoadingScreenUI guard null _pickerLayer and return to MainMenu after dismissing a failed MainMenu load");
+
+            // 3. Coarser-map crossing folds route to system.log so errors.log stays strictly 0 B on Compact boot.
+            var wasLogging = DiagnosticLogs.Enabled;
+            if (!wasLogging)
+            {
+                var compactLogDir = Path.Combine(tempDir, "logs_compact");
+                DiagnosticLogs.Start(compactLogDir);
+                try
+                {
+                    MapCatalog.SetActiveMap(MapCatalog.CompactId);
+                    var builtCompact = MapRasterCatalog.TryBuildProvinceTopology(
+                        WorldMapSource.States, WorldMapSource.Control, WorldMapSource.Width, WorldMapSource.Height,
+                        out var compactMap, out var compactWhy);
+                    Check(builtCompact && compactMap is not null, $"Built real world_compact topology ({compactWhy})");
+                }
+                finally { DiagnosticLogs.Stop(); }
+                var compactErrBytes = new FileInfo(Path.Combine(compactLogDir, "errors.log")).Length;
+                var compactSysLog = File.ReadAllText(Path.Combine(compactLogDir, "system.log"));
+                Check(compactErrBytes == 0 && compactSysLog.Contains("CROSSING_REJECTED", StringComparison.Ordinal),
+                    $"world_compact crossing folds leave errors.log strictly 0 B ({compactErrBytes} B) and log to system.log");
+
+                var stdLogDir = Path.Combine(tempDir, "logs_standard");
+                DiagnosticLogs.Start(stdLogDir);
+                try
+                {
+                    MapCatalog.SetActiveMap(MapCatalog.StandardId);
+                    var tinyStates = new ushort[16];
+                    var tinyOwners = new ushort[16];
+                    Array.Fill(tinyStates, (ushort)1);
+                    Array.Fill(tinyOwners, (ushort)1);
+                    var tinyMap = ProvinceTopology.Build(tinyStates, tinyOwners, 4, 4, _ => false);
+                    LandCrossings.Attach(tinyMap);
+                }
+                finally { DiagnosticLogs.Stop(); }
+                var stdErrLog = File.ReadAllText(Path.Combine(stdLogDir, "errors.log"));
+                Check(stdErrLog.Contains("CROSSING_REJECTED", StringComparison.Ordinal),
+                    "world_standard continues logging CROSSING_REJECTED to errors.log");
+            }
+
+            // 4. Support/reserve readiness label hides when faded behind an army counter and centers cleanly inside its bay.
+            var supportPresSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeSupportPresentation.cs"));
+            var supportLayoutSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeSupportLayout.cs"));
+            var unitsMarkersSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobePresentation.UnitsAndMarkers.cs"));
+            Check(supportPresSrc.Contains("SupportReadinessVisible(SupportMapMarker marker)", StringComparison.Ordinal) &&
+                  supportPresSrc.Contains("!marker.DisplayFaded", StringComparison.Ordinal) &&
+                  supportPresSrc.Contains("Offset = new Vector2(48f, -17f)", StringComparison.Ordinal) &&
+                  supportPresSrc.Contains("platePixel * .34f", StringComparison.Ordinal) &&
+                  supportLayoutSrc.Contains("SupportReadinessVisible(m)", StringComparison.Ordinal) &&
+                  supportLayoutSrc.Contains("!CounterRoomOccupied(room.Grow(2))", StringComparison.Ordinal) &&
+                  unitsMarkersSrc.Contains("SupportReadinessVisible(marker)", StringComparison.Ordinal),
+                "Support readiness label hides when overlapped/faded behind divisions and fits inside the support card bay");
+
+            // 5. Built-in map.json manifests ship clean UTF-8 Cyrillic (no BOM, no \\uXXXX escapes) and load in MapCatalog.
+            foreach (var (mapId, expectedRu) in new[]
+                     {
+                         (MapCatalog.CompactId, "Компактный мир"),
+                         (MapCatalog.TacticalId, "Тактический мир")
+                     })
+            {
+                var manifestPath = Path.Combine(root, "game", "maps", mapId, "map.json");
+                var rawBytes = File.ReadAllBytes(manifestPath);
+                var hasBom = rawBytes.Length >= 3 && rawBytes[0] == 0xEF && rawBytes[1] == 0xBB && rawBytes[2] == 0xBF;
+                var rawText = System.Text.Encoding.UTF8.GetString(rawBytes);
+                Check(!hasBom && !rawText.Contains("\\u", StringComparison.Ordinal) && rawText.Contains(expectedRu, StringComparison.Ordinal),
+                    $"game/maps/{mapId}/map.json is clean UTF-8 without BOM or \\uXXXX escapes");
+                Check(MapCatalog.TryGet(mapId, out var pack) && pack.LocalizedName("russian") == expectedRu,
+                    $"MapCatalog loads readable Russian name '{expectedRu}' for {mapId}");
+            }
+        }
+        finally
+        {
+            MapCatalog.SetActiveMap(previousMap);
+            try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, recursive: true); }
+            catch { }
+        }
     }
 
     private static string FindRepoRoot()

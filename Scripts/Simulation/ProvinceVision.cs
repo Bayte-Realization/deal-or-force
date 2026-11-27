@@ -39,6 +39,7 @@ public static partial class CampaignIntel
         public int Epoch;
         public int ManualEpoch;
         public readonly Dictionary<int, ProvinceVision> Viewers = new();
+        public ProvinceVision[] ViewersDense = Array.Empty<ProvinceVision>();
         // Provinces grouped by who controls them (ProvincesHeldBy), with what they were built from.
         public int HeldManualEpoch = -1, HeldRevision = -1;
         public ushort[] HeldSource;
@@ -65,87 +66,84 @@ public static partial class CampaignIntel
         public readonly Dictionary<int, List<int>> InvasionBeachesByNation = new();
     }
 
-    /// <summary>
-    /// The provinces a map index controls, in ascending order, from a grouping rebuilt only when
-    /// the map or the day changes. An agent network reveals a share of its target's provinces,
-    /// and walking all thirty-five thousand of them to find those was four fifths of every
-    /// visibility rebuild - a hundred rebuilds a day in a world at war.
-    /// </summary>
     internal static ReadOnlySpan<int> ProvincesHeldBy(Campaign c, ushort[] controllers, int mapIndex)
     {
         var cache = Caches.GetOrCreateValue(c);
         lock (cache.SyncGate)
         {
-            // Only check controller bytes when MapRevision changed, controllers reference changed,
-            // or a caller explicitly invoked CampaignIntel.Invalidate(c). Hourly actor-position
-            // refreshes (InvalidateActors) skip the 70 KB SequenceEqual completely.
-            if (cache.HeldManualEpoch != cache.ManualEpoch || cache.HeldRevision != c.MapRevision || !ReferenceEquals(cache.HeldSource, controllers))
+            return ProvincesHeldByLocked(c, cache, controllers, mapIndex);
+        }
+    }
+
+    private static ReadOnlySpan<int> ProvincesHeldByLocked(Campaign c, Cache cache, ushort[] controllers, int mapIndex)
+    {
+        // Only check controller bytes when MapRevision changed, controllers reference changed,
+        // or a caller explicitly invoked CampaignIntel.Invalidate(c). Hourly actor-position
+        // refreshes (InvalidateActors) skip the 70 KB SequenceEqual completely.
+        if (cache.HeldManualEpoch != cache.ManualEpoch || cache.HeldRevision != c.MapRevision || !ReferenceEquals(cache.HeldSource, controllers))
+        {
+            if (controllers.AsSpan().SequenceEqual(cache.HeldCopy))
             {
-                if (controllers.AsSpan().SequenceEqual(cache.HeldCopy))
+                cache.HeldSource = controllers;
+                cache.HeldRevision = c.MapRevision;
+                cache.HeldManualEpoch = cache.ManualEpoch;
+            }
+            else
+            {
+                var top = 0;
+                var prevCopy = cache.HeldCopy;
+                var sameLength = prevCopy.Length == controllers.Length;
+                for (var p = 1; p < controllers.Length; p++)
                 {
-                    cache.HeldSource = controllers;
-                    cache.HeldRevision = c.MapRevision;
-                    cache.HeldManualEpoch = cache.ManualEpoch;
+                    var cur = controllers[p];
+                    if (cur > top) top = cur;
+                    if (sameLength)
+                    {
+                        var old = prevCopy[p];
+                        if (old > top) top = old;
+                    }
+                }
+                if (cache.HeldStart.Length < top + 2) { cache.HeldStart = new int[top + 2]; cache.HeldNext = new int[top + 2]; }
+                if (cache.HeldProvinces.Length < controllers.Length) cache.HeldProvinces = new int[controllers.Length];
+                if (cache.ControllerVersion.Length < top + 2) Array.Resize(ref cache.ControllerVersion, top + 2);
+
+                if (!sameLength)
+                {
+                    cache.ControllerGeneration++;
                 }
                 else
                 {
-                    // Rebuilt every time a province changes hands, which in a world at war is hourly:
-                    // the arrays are kept and refilled rather than allocated again.
-                    var top = 0;
-                    var prevCopy = cache.HeldCopy;
-                    var sameLength = prevCopy.Length == controllers.Length;
+                    var versions = cache.ControllerVersion;
                     for (var p = 1; p < controllers.Length; p++)
                     {
                         var cur = controllers[p];
-                        if (cur > top) top = cur;
-                        if (sameLength)
+                        var old = prevCopy[p];
+                        if (cur != old)
                         {
-                            var old = prevCopy[p];
-                            if (old > top) top = old;
+                            versions[cur]++;
+                            versions[old]++;
                         }
                     }
-                    if (cache.HeldStart.Length < top + 2) { cache.HeldStart = new int[top + 2]; cache.HeldNext = new int[top + 2]; }
-                    if (cache.HeldProvinces.Length < controllers.Length) cache.HeldProvinces = new int[controllers.Length];
-                    if (cache.ControllerVersion.Length < top + 2) Array.Resize(ref cache.ControllerVersion, top + 2);
-
-                    if (!sameLength)
-                    {
-                        cache.ControllerGeneration++;
-                    }
-                    else
-                    {
-                        var versions = cache.ControllerVersion;
-                        for (var p = 1; p < controllers.Length; p++)
-                        {
-                            var cur = controllers[p];
-                            var old = prevCopy[p];
-                            if (cur != old)
-                            {
-                                versions[cur]++;
-                                versions[old]++;
-                            }
-                        }
-                    }
-
-                    var start = cache.HeldStart;
-                    Array.Clear(start);
-                    for (var p = 1; p < controllers.Length; p++) start[controllers[p] + 1]++;
-                    for (var i = 1; i < start.Length; i++) start[i] += start[i - 1];
-                    var next = cache.HeldNext;
-                    Array.Copy(start, next, start.Length);
-                    var provinces = cache.HeldProvinces;
-                    for (var p = 1; p < controllers.Length; p++) provinces[next[controllers[p]]++] = p;
-                    cache.HeldSource = controllers;
-                    if (!sameLength) cache.HeldCopy = new ushort[controllers.Length];
-                    Array.Copy(controllers, cache.HeldCopy, controllers.Length);
-                    cache.HeldRevision = c.MapRevision;
-                    cache.HeldManualEpoch = cache.ManualEpoch;
                 }
+
+                var start = cache.HeldStart;
+                Array.Clear(start);
+                for (var p = 1; p < controllers.Length; p++) start[controllers[p] + 1]++;
+                for (var i = 1; i < start.Length; i++) start[i] += start[i - 1];
+                var next = cache.HeldNext;
+                Array.Copy(start, next, start.Length);
+                var provinces = cache.HeldProvinces;
+                for (var p = 1; p < controllers.Length; p++) provinces[next[controllers[p]]++] = p;
+                cache.HeldSource = controllers;
+                if (!sameLength) cache.HeldCopy = new ushort[controllers.Length];
+                Array.Copy(controllers, cache.HeldCopy, controllers.Length);
+                cache.HeldRevision = c.MapRevision;
+                cache.HeldManualEpoch = cache.ManualEpoch;
             }
-            if (mapIndex < 0 || mapIndex + 1 >= cache.HeldStart.Length) return ReadOnlySpan<int>.Empty;
-            var from = cache.HeldStart[mapIndex];
-            return cache.HeldProvinces.AsSpan(from, cache.HeldStart[mapIndex + 1] - from);
         }
+        if (mapIndex < 0 || mapIndex + 1 >= cache.HeldStart.Length) return ReadOnlySpan<int>.Empty;
+        var from = cache.HeldStart[mapIndex];
+        return cache.HeldProvinces.AsSpan(from, cache.HeldStart[mapIndex + 1] - from);
     }
     private static readonly ConditionalWeakTable<Campaign, Cache> Caches = new();
 
@@ -178,8 +176,17 @@ public static partial class CampaignIntel
         var cache = Caches.GetOrCreateValue(c);
         lock (cache.SyncGate)
         {
-            if (!cache.Viewers.TryGetValue(viewerId, out var view))
+            ProvinceVision view;
+            if ((uint)viewerId < 4096u)
+            {
+                if (viewerId >= cache.ViewersDense.Length)
+                    Array.Resize(ref cache.ViewersDense, Math.Max(viewerId + 32, Math.Max(128, cache.ViewersDense.Length * 2)));
+                view = cache.ViewersDense[viewerId] ??= new ProvinceVision();
+            }
+            else if (!cache.Viewers.TryGetValue(viewerId, out view))
+            {
                 cache.Viewers[viewerId] = view = new ProvinceVision();
+            }
             var map = c.ProvinceMap;
             var stamp = HashCode.Combine(c.ElapsedDays, c.MapRevision, cache.Epoch, c.Armies.Count,
                 c.Battles.Count, c.Fleets.Count, map?.ProvinceCount ?? 0);
@@ -206,7 +213,7 @@ public static partial class CampaignIntel
 
             // Refresh the per-controller index once; nations whose own controlled provinces did not
             // change reuse their cached TerritoryReach directly instead of re-flooding 35k provinces.
-            var owned = ProvincesHeldBy(c, controllers, nation.MapIndex);
+            var owned = ProvincesHeldByLocked(c, cache, controllers, nation.MapIndex);
             var controllerVersion = (uint)nation.MapIndex < (uint)cache.ControllerVersion.Length
                 ? cache.ControllerVersion[nation.MapIndex] : 0;
 

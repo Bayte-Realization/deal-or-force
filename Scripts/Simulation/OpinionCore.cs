@@ -523,7 +523,7 @@ public static class OpinionSystem
     private static WorkerBatchScratch _workerScratch;
 
     private static void FlushSettleChunk(Campaign campaign, WorkerBatchScratch scratch,
-        bool imagesEnabled, HashSet<int> greatPowers)
+        bool imagesEnabled, HashSet<int> greatPowers, TerritorialDisputeIndex disputes, bool useDisputes)
     {
         var count = scratch.Pairs.Count;
         if (count == 0) return;
@@ -650,10 +650,12 @@ public static class OpinionSystem
                 scratch.EsteemBa[i] = 0f;
             }
 
-            var leftClaim = LostLands.HasClaimedLand(campaign, left, right);
-            var rightClaim = LostLands.HasClaimedLand(campaign, right, left);
-            var leftHome = TerritorialClaims.HoldsOurHomeland(campaign, left, right);
-            var rightHome = TerritorialClaims.HoldsOurHomeland(campaign, right, left);
+            var mayLeft = !useDisputes || disputes.MayHaveDispute(left.Id, right.Id);
+            var mayRight = !useDisputes || disputes.MayHaveDispute(right.Id, left.Id);
+            var leftClaim = mayLeft && LostLands.HasClaimedLand(campaign, left, right);
+            var rightClaim = mayRight && LostLands.HasClaimedLand(campaign, right, left);
+            var leftHome = mayLeft && TerritorialClaims.HoldsOurHomeland(campaign, left, right);
+            var rightHome = mayRight && TerritorialClaims.HoldsOurHomeland(campaign, right, left);
             if (leftClaim || rightClaim || leftHome || rightHome)
             {
                 flags |= NativeDiplomacyKernels.PairFlagClaimOrHome;
@@ -729,6 +731,8 @@ public static class OpinionSystem
         public bool ImagesEnabled;
         public HashSet<int> GreatPowers;
         public AiStatecraft.DiplomaticLodSnapshot LodSnapshot;
+        public TerritorialDisputeIndex Disputes;
+        public bool UseDisputes;
 
         public SettleQueue(Campaign campaign)
         {
@@ -741,6 +745,8 @@ public static class OpinionSystem
                 var imagesOn = ImagesEnabled;
                 var gps = GreatPowers;
                 var lodSnap = LodSnapshot;
+                var disputes = Disputes;
+                var useDisputes = UseDisputes;
 
                 for (var index = from; index < to; index++)
                 {
@@ -762,11 +768,11 @@ public static class OpinionSystem
 
                     scratch.Pairs.Add((relation, left, right));
                     if (scratch.Pairs.Count >= KernelChunkSize)
-                        FlushSettleChunk(Campaign, scratch, imagesOn, gps);
+                        FlushSettleChunk(Campaign, scratch, imagesOn, gps, disputes, useDisputes);
                 }
 
                 if (scratch.Pairs.Count > 0)
-                    FlushSettleChunk(Campaign, scratch, imagesOn, gps);
+                    FlushSettleChunk(Campaign, scratch, imagesOn, gps, disputes, useDisputes);
             };
         }
     }
@@ -791,12 +797,17 @@ public static class OpinionSystem
         queue.ImagesEnabled = SocialMemory.ImagesEnabled(campaign);
         queue.GreatPowers = AllianceSystem.GreatPowers(campaign);
         queue.LodSnapshot = AiStatecraft.AcquireDiplomaticLod(campaign);
+        var disputes = campaign.Caches.TerritorialDisputes;
+        disputes.WarmForTick(campaign);
+        queue.Disputes = disputes;
+        queue.UseDisputes = disputes.IsActiveFor(campaign);
         for (var index = 0; index < waiting.Count; index++)
         {
             if (campaign.NationById(waiting[index].A) is { } left) SocialMemory.NationKey(left);
             if (campaign.NationById(waiting[index].B) is { } right) SocialMemory.NationKey(right);
         }
         DeterministicParallel.ForRange(campaign, 0, waiting.Count, queue.SettleRange);
+        disputes.EndTick();
         waiting.Clear();
     }
 

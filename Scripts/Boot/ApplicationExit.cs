@@ -66,32 +66,30 @@ public partial class ApplicationExit : Node
                 if (DealOrForceGame.PendingFlagWarmups > 0 || TextureWarmup.PendingWarmups > 0)
                     await ToSignal(_tree.CreateTimer(.02, true, false, true), SceneTreeTimer.SignalName.Timeout);
             }
-            if (DealOrForceGame.PendingFlagWarmups > 0)
-                GD.PushWarning("[dof] optional flag warmups still pending at exit: " + DealOrForceGame.PendingFlagWarmups);
-            if (TextureWarmup.PendingWarmups > 0)
-                GD.PushWarning("[dof] optional texture warmups still pending at exit: " + TextureWarmup.PendingWarmups);
+            if (DealOrForceGame.PendingFlagWarmups > 0) GD.PushWarning("[dof] optional flag warmups still pending at exit: " + DealOrForceGame.PendingFlagWarmups);
+            if (TextureWarmup.PendingWarmups > 0) GD.PushWarning("[dof] optional texture warmups still pending at exit: " + TextureWarmup.PendingWarmups);
             await ToSignal(_tree.CreateTimer(.1, true, false, true), SceneTreeTimer.SignalName.Timeout);
+            DrainManagedGpuResources();
             await ToSignal(_tree, SceneTree.SignalName.ProcessFrame);
         }
-        catch (Exception error)
-        {
-            GD.PushError("[dof] application exit cleanup failed: " + error);
-            _state.Request(1);
-        }
+        catch (Exception error) { GD.PushError("[dof] application exit cleanup failed: " + error); _state.Request(1); }
         GD.Print("[dof] application exit ready code=" + _state.ExitCode);
         if (IsInstanceValid(_tree)) _tree.Quit(_state.ExitCode);
     }
 
+    private static void DrainManagedGpuResources()
+    {
+        BattleBadgeGpu.ReleaseStaticResources(); GlobePresentation.ReleaseStaticCapitalHaloResources(); FlagClothPresentation.ReleaseStaticResources();
+        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+    }
+
     private static void StopAudio(Node root)
     {
-        var flat = root.FindChildren("*", "AudioStreamPlayer", true, false);
-        foreach (var node in flat)
+        foreach (var node in root.FindChildren("*", "AudioStreamPlayer", true, false))
             if (node is AudioStreamPlayer player) { player.Stop(); player.Stream = null; }
-        var spatial = root.FindChildren("*", "AudioStreamPlayer3D", true, false);
-        foreach (var node in spatial)
+        foreach (var node in root.FindChildren("*", "AudioStreamPlayer3D", true, false))
             if (node is AudioStreamPlayer3D player) { player.Stop(); player.Stream = null; }
-        var planar = root.FindChildren("*", "AudioStreamPlayer2D", true, false);
-        foreach (var node in planar)
+        foreach (var node in root.FindChildren("*", "AudioStreamPlayer2D", true, false))
             if (node is AudioStreamPlayer2D player) { player.Stop(); player.Stream = null; }
     }
 

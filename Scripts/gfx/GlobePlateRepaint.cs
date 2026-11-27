@@ -31,9 +31,9 @@ public sealed partial class GlobePresentation
     private const double FrontierRepaintSeconds = 0.50;
     private const double FastSimPlateRepaintSeconds = 0.35;
     private const double FastSimFrontierRepaintSeconds = 0.85;
-    private const double GpuPlateRepaintSeconds = 0.16;
-    private const double GpuFrontierRepaintSeconds = 0.30;
-    private const double MobilePlateRepaintSeconds = 1.0;
+    private const double GpuPlateRepaintSeconds = 0.05;
+    private const double GpuFrontierRepaintSeconds = 0.35;
+    private const double MobilePlateRepaintSeconds = 0.25;
 
     private ImageTexture _plateTexture;
     private Simulation.PoliticalPlateSource _plateSource;
@@ -157,7 +157,7 @@ public sealed partial class GlobePresentation
             }
             _gpuMapBound = true;
             var frontierSummary = _gpuMapCompute.HasFrontier
-                ? $"{_gpuMapCompute.FrontierWidth}x{_gpuMapCompute.FrontierHeight} (6-pass 1+JFA)"
+                ? $"{_gpuMapCompute.FrontierWidth}x{_gpuMapCompute.FrontierHeight} (5-pass subpixel 1+JFA)"
                 : "off";
             GD.Print($"[dof] gpu_map_compute active: plate={_gpuMapCompute.PlateWidth}x{_gpuMapCompute.PlateHeight} frontier={frontierSummary} driver={RenderingServer.GetCurrentRenderingDriverName()}");
         }
@@ -197,12 +197,12 @@ public sealed partial class GlobePresentation
         {
             if (needPlate) _plateShownOwners = owners;
             if (wantFrontierNow) _frontierShownOwners = owners;
-            UploadPlateCatchUp(owners);
+            if (needPlate) UploadPlateCatchUp(owners);
             return true;
         }
         _plateColoursStale |= updateColors;
         DisposeGpuMapCompute(markStaleForCpuFallback: true);
-        _platePending = needFrontier && !wantFrontierNow;
+        _platePending = needPlate || (needFrontier && !wantFrontierNow);
         return false;
     }
 
@@ -221,7 +221,7 @@ public sealed partial class GlobePresentation
         if (_gpuMapCompute is { IsPending: true }) return;
 
         var now = Time.GetTicksMsec();
-        var fastForward = fastForwardOverride ?? (_campaign is { IsPaused: false, Speed: >= 4 });
+        var fastForward = fastForwardOverride ?? (_campaign is { IsPaused: false, Speed: >= 7 });
         var gpuReady = _gpuMapBound && _gpuMapCompute is { IsReady: true };
         ResolvePlateCooldowns(gpuReady, fastForward, out var plateCooldownMs, out var frontierCooldownMs);
 
@@ -238,8 +238,10 @@ public sealed partial class GlobePresentation
             return;
         }
 
-        var wantFrontierNow = needFrontier && frontierReadyByTime;
-        _platePending = needFrontier && !wantFrontierNow;
+        // Never dispatch Plate and Frontier on the same frame: when both are ready,
+        // dispatch Plate now and leave _platePending = true so Frontier runs on a subsequent frame.
+        var wantFrontierNow = !needPlate && needFrontier && frontierReadyByTime;
+        _platePending = needPlate ? needFrontier : (needFrontier && !wantFrontierNow);
         var owners = ownersOverride is { Length: > 0 } ? ownersOverride : (ushort[])topology.ProvinceToNation.Clone();
         var authoredOwners = _paintedOwner;
         var shades = Simulation.MapBorderStyles.PlateShades();
@@ -248,8 +250,8 @@ public sealed partial class GlobePresentation
         if (TryDispatchGpuPlateRepaint(owners, authoredOwners, shades, now, needPlate, needFrontier, wantFrontierNow))
             return;
 
-        _plateWorkStartedStale = _plateColoursStale;
-        _plateColoursStale = false;
+        _plateWorkStartedStale = needPlate && _plateColoursStale;
+        if (needPlate) _plateColoursStale = false;
         _plateWorkOwners = owners;
         var prevPlateOwners = _plateWorkStartedStale ? null : _plateShownOwners;
         var prevFrontierOwners = _frontierShownOwners;
@@ -258,15 +260,20 @@ public sealed partial class GlobePresentation
         if (wantFrontierNow) _frontierRequestedMsec = now;
         var frontierAuthored = wantFrontierNow ? _frontierAuthored : null;
         var forceFullPlate = _plateWorkStartedStale;
+        var paintPlate = needPlate;
 
         // Tier A CPU Path (Android ARM64 NEON, Compatibility/GLES3, headless):
         // Incremental dirty-rect PoliticalPlate + FrontierField + incremental mipmap pyramid.
         _plateWork = Task.Run(() =>
         {
-            var plateMipBytes = Simulation.PoliticalPlate.PaintDirtyMipmappedInto(
-                source, prevPlateOwners, owners, authoredOwners, colors, shades,
-                forceFullPlate, ref _plateMipScratch, out _);
-            var image = Image.CreateFromData(source.Width, source.Height, true, Image.Format.Rgba8, plateMipBytes);
+            Image image = null;
+            if (paintPlate)
+            {
+                var plateMipBytes = Simulation.PoliticalPlate.PaintDirtyMipmappedInto(
+                    source, prevPlateOwners, owners, authoredOwners, colors, shades,
+                    forceFullPlate, ref _plateMipScratch, out _);
+                image = Image.CreateFromData(source.Width, source.Height, true, Image.Format.Rgba8, plateMipBytes);
+            }
             Image frontier = null;
             ushort[] frontierDoneOwners = null;
             if (frontierAuthored is not null)
@@ -376,17 +383,21 @@ public sealed partial class GlobePresentation
         {
             _plateWork = null;
             var uploaded = false;
-            if (done.IsCompletedSuccessfully && done.Result.Plate is { } image)
+            if (done.IsCompletedSuccessfully && (done.Result.Plate is not null || done.Result.Frontier is not null))
             {
+                var image = done.Result.Plate;
                 var frontier = done.Result.Frontier;
                 var frontierDoneOwners = done.Result.FrontierOwners;
                 _plateWorkStartedStale = false;
                 if (frontier is not null)
                 {
-                    // Stagger FrontierField GPU upload (Frame N) and Plate GPU upload (Frame N+1) across
-                    // separate frames so a single frame never uploads 32 MB of mipmapped textures at once.
-                    _pendingPlateUpload = image;
-                    _pendingPlateOwners = _plateWorkOwners;
+                    if (image is not null)
+                    {
+                        // Stagger FrontierField GPU upload (Frame N) and Plate GPU upload (Frame N+1) across
+                        // separate frames so a single frame never uploads 32 MB of mipmapped textures at once.
+                        _pendingPlateUpload = image;
+                        _pendingPlateOwners = _plateWorkOwners;
+                    }
                     try
                     {
                         ApplyFrontier(frontier);
@@ -395,7 +406,7 @@ public sealed partial class GlobePresentation
                     finally { frontier.Dispose(); }
                     uploaded = true;
                 }
-                else
+                else if (image is not null)
                 {
                     try
                     {

@@ -132,8 +132,7 @@ public partial class DealOrForceGame
         if (refusal.Length > 0)
         { _constructionPlacementFeedback.Text = refusal; PlayStrategicCue("ui_error"); return true; }
         var previous = _campaign.Construction.Count(p => p.NationId == player.Id);
-        _campaign.Commands.Enqueue(new QueueConstructionCommand { IssuerId = player.Id, StateMapIndex = pick.State.MapIndex, Building = kind });
-        _campaign.Commands.ApplyAll(_campaign);
+        CommitImmediateCampaignCommand(new QueueConstructionCommand { IssuerId = player.Id, StateMapIndex = pick.State.MapIndex, Building = kind }, true, true);
         var accepted = _campaign.Construction.Count(p => p.NationId == player.Id) > previous;
         _selectedState = pick.State; _selectedProvinceId = pick.ProvinceId;
         _constructionPreviewHour = -1;

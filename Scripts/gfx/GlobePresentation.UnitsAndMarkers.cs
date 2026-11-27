@@ -71,6 +71,37 @@ public sealed partial class GlobePresentation
         public bool CachedIsMoving;
         public bool HasPendingArrivalGlide;
         public string CachedNodeName = "";
+        public bool IsLockFreeSynced;
+        public int LockFreeProvinceId;
+        public int LockFreeLeadArmyId;
+        public int LockFreeArmyGroupId = -1;
+        public int LockFreeNextProvinceId;
+        public float LockFreeMarchProgress;
+        public float LockFreeDivisions;
+        public float LockFreePersonnel;
+        public int LockFreeStructureFingerprint;
+        public byte LockFreeOrgBin;
+        public byte LockFreeStrBin;
+        public byte LockFreeConditionFlags;
+        public byte LockFreeCounterStance;
+        public bool LockFreeConditionKnown;
+        public bool LockFreeAnyInBattle;
+        public bool LockFreeAnyCutOff;
+        public float LockFreeAvgOrganisation;
+        public float LockFreeAvgPlanning;
+        public float LockFreeAvgSupply;
+        public readonly List<int> LockFreeArmyIds = new();
+        public readonly List<int> LockFreeDisplayArmyIds = new();
+
+        public int EffectiveProvinceId => IsLockFreeSynced && LockFreeProvinceId > 0
+            ? LockFreeProvinceId
+            : (Stack.Count > 0 ? Stack[0].ProvinceId : 0);
+        public int EffectiveLeadArmyId => IsLockFreeSynced && LockFreeLeadArmyId > 0
+            ? LockFreeLeadArmyId
+            : (Stack.Count > 0 ? Stack[0].Id : -1);
+        public int EffectiveArmyGroupId => IsLockFreeSynced
+            ? LockFreeArmyGroupId
+            : (Stack.Count > 0 ? Stack[0].ArmyGroupId : -1);
     }
 
     private readonly Stack<ArmyStackMarker> _armyMarkerPool = new();
@@ -104,14 +135,33 @@ public sealed partial class GlobePresentation
         foreach (var marker in _armyStacks.Values)
         {
             if (marker.Node is null || !IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
-            var stack = marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack;
             var keep = false;
-            for (var i = 0; i < stack.Count; i++)
+            if (marker.LockFreeDisplayArmyIds.Count > 0)
             {
-                if (visibleArmies.Contains(stack[i].Id) || _selectedArmyIds.Contains(stack[i].Id))
+                for (var i = 0; i < marker.LockFreeDisplayArmyIds.Count; i++)
                 {
-                    keep = true;
-                    break;
+                    var id = marker.LockFreeDisplayArmyIds[i];
+                    if (visibleArmies.Contains(id) || _selectedArmyIds.Contains(id)) { keep = true; break; }
+                }
+            }
+            else if (marker.LockFreeArmyIds.Count > 0)
+            {
+                for (var i = 0; i < marker.LockFreeArmyIds.Count; i++)
+                {
+                    var id = marker.LockFreeArmyIds[i];
+                    if (visibleArmies.Contains(id) || _selectedArmyIds.Contains(id)) { keep = true; break; }
+                }
+            }
+            else
+            {
+                var stack = marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack;
+                for (var i = 0; i < stack.Count; i++)
+                {
+                    if (visibleArmies.Contains(stack[i].Id) || _selectedArmyIds.Contains(stack[i].Id))
+                    {
+                        keep = true;
+                        break;
+                    }
                 }
             }
             if (!keep) marker.Node.Visible = false;
@@ -139,6 +189,9 @@ public sealed partial class GlobePresentation
             // while it was hidden; the structure fingerprint alone would otherwise say
             // "nothing changed" and leave the map empty.
             _armyStructureFingerprint = int.MinValue;
+            _lockFreeArmyStructureFingerprint = int.MinValue;
+            _lastLockFreeArmyVersion = -1;
+            _hydratedLockFreeArmyVersion = -1;
         }
     }
     private bool _militaryMarkersEnabled = true;
@@ -200,13 +253,12 @@ public sealed partial class GlobePresentation
                 ? new Vector3(marker.Plate.Texture.GetWidth() / 176f, marker.Plate.Texture.GetHeight() / 104f, 1f)
                 : Vector3.One;
         }
-        marker.Count.PixelSize = platePixel * 1.45f;
-        marker.Count.FontSize = _flatMap && _flatStrategicCounters ? 30 : 21;
-        marker.Count.OutlineSize = _flatMap ? 2 : Mathf.Max(1, Mathf.RoundToInt(4 * _counterScale));
+        marker.Count.PixelSize = platePixel * 0.56f;
+        marker.Count.FontSize = _flatMap && _flatStrategicCounters ? 58 : 44;
+        marker.Count.OutlineSize = _flatMap ? 6 : Mathf.Max(4, Mathf.RoundToInt(8 * _counterScale));
         marker.Count.Position = Vector3.Zero;
-        // The centred two-line block uses the same texture-space anchor in both
-        // projections. A separate flat-map offset put the figures on top of the icon.
-        marker.Count.Offset = new Vector2(1f, 4f);
+        // Center strictly inside the dark readout bay (x=60..121, y=25.5..73.5), clear of top header pips.
+        marker.Count.Offset = new Vector2(4.5f, 1.5f);
         if (marker.ConditionBars is not null)
         {
             marker.ConditionBars.FixedSize = marker.Plate.FixedSize;
@@ -240,23 +292,26 @@ public sealed partial class GlobePresentation
                 if (!IsInstanceValid(marker.Node)) continue;
                 if (force || detailChanged || !marker.LayoutInitialized || !marker.FlatLayout) SizeArmyCounter(marker);
                 marker.Node.Scale = Vector3.One * _counterWorldPixel * _counterFlatFar;
-                if (force || detailChanged) marker.Count.FontSize = strategic ? 30 : 21;
+                var targetFont = strategic ? 58 : 44;
+                if ((force || detailChanged) && marker.Count.FontSize != targetFont) marker.Count.FontSize = targetFont;
             }
             foreach (var parts in _fleetNodes.Values)
             {
                 if (force || detailChanged || parts.Plate.FixedSize) SizeFleetCounter(parts);
                 parts.Node.Scale = Vector3.One * _counterWorldPixel * _counterFlatFar;
                 parts.Count.Visible = !strategic;
-                if (force || detailChanged) parts.Count.FontSize = strategic ? 30 : 24;
+                var targetFont = strategic ? 30 : 24;
+                if ((force || detailChanged) && parts.Count.FontSize != targetFont) parts.Count.FontSize = targetFont;
             }
             foreach (var marker in _supportMapMarkers.Values)
             {
                 if (force || detailChanged || marker.Plate.FixedSize) PlaceSupportMarker(marker);
                 marker.Node.Scale = Vector3.One * _counterWorldPixel * _counterFlatFar;
-                marker.Readiness.Visible = !strategic && _selectedSupportIds.Contains(marker.Formation.Id);
+                marker.Readiness.Visible = SupportReadinessVisible(marker);
                 if (force || detailChanged)
                 {
-                    marker.Readiness.FontSize = strategic ? 30 : 20;
+                    var targetFont = strategic ? 56 : 40;
+                    if (marker.Readiness.FontSize != targetFont) marker.Readiness.FontSize = targetFont;
                     PaintSupportMarker(marker, marker.Formation);
                 }
             }
@@ -289,12 +344,49 @@ public sealed partial class GlobePresentation
         {
             if (marker.Node is null || !IsInstanceValid(marker.Node)) continue;
             SizeArmyCounter(marker);
-            marker.Count.FontSize = 21;
-            marker.Count.Text = marker.CountText;
+            if (marker.Count.FontSize != 44) marker.Count.FontSize = 44;
+            if (!string.Equals(marker.Count.Text, marker.CountText, StringComparison.Ordinal))
+                marker.Count.Text = marker.CountText;
         }
-        foreach (var parts in _fleetNodes.Values) { SizeFleetCounter(parts); parts.Count.FontSize = 24; }
+        foreach (var parts in _fleetNodes.Values) { SizeFleetCounter(parts); if (parts.Count.FontSize != 24) parts.Count.FontSize = 24; }
         foreach (var marker in _supportMapMarkers.Values)
             if (IsInstanceValid(marker.Node)) PlaceSupportMarker(marker);
+    }
+
+    private readonly List<Simulation.Army> _pickedArmyScratch = new();
+
+    private bool TryResolveLockFreeMarkerArmies(ArmyStackMarker marker, out IReadOnlyList<Simulation.Army> armies)
+    {
+        armies = null;
+        var ids = marker.LockFreeDisplayArmyIds.Count > 0 ? marker.LockFreeDisplayArmyIds : marker.LockFreeArmyIds;
+        if (ids.Count == 0 || _campaign is null) return false;
+        var heldAlready = _campaign.AccessGate.IsHeldByCurrentThread;
+        var campaign = _campaign;
+        if (!heldAlready && !TryBeginPriorityActionRead(out campaign, 45))
+            return false;
+        try
+        {
+            _pickedArmyScratch.Clear();
+            var allArmies = campaign.Armies;
+            for (var i = 0; i < allArmies.Count; i++)
+            {
+                var army = allArmies[i];
+                for (var k = 0; k < ids.Count; k++)
+                {
+                    if (army.Id == ids[k])
+                    {
+                        _pickedArmyScratch.Add(army);
+                        break;
+                    }
+                }
+            }
+            armies = _pickedArmyScratch.Count > 0 ? _pickedArmyScratch.ToArray() : Array.Empty<Simulation.Army>();
+            return _pickedArmyScratch.Count > 0;
+        }
+        finally
+        {
+            if (!heldAlready) campaign.ExitRead();
+        }
     }
 
     private bool TryPickArmyStack(Vector2 pixel, out IReadOnlyList<Simulation.Army> armies, bool selectableOnly = true)
@@ -304,21 +396,31 @@ public sealed partial class GlobePresentation
         // A bigger counter is a bigger target: the radius that finds it follows the size
         // it is actually drawn at, or clicking a close-up counter near its edge misses.
         var bestDistance = float.MaxValue;
+        ArmyStackMarker bestMarker = null;
         foreach (var marker in _armyStacks.Values)
         {
             var node = marker.Node;
-            var candidates = marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack;
             if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
             if (!node.IsVisibleInTree()) continue;
             if (!TryHitSurfaceArmyCard(marker, pixel, out var distance)) continue;
             if (distance >= bestDistance) continue;
             bestDistance = distance;
-            // The counter still blocks a click on the province behind it, but foreign
-            // formations never enter selection or expose their detailed army tooltip.
-            armies = selectableOnly
-                ? candidates.Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)).ToArray()
-                : candidates;
+            bestMarker = marker;
         }
+        if (bestMarker is null) return false;
+        IReadOnlyList<Simulation.Army> candidates;
+        if (bestMarker.IsLockFreeSynced && bestMarker.LockFreeArmyIds.Count > 0)
+        {
+            if (!TryResolveLockFreeMarkerArmies(bestMarker, out candidates))
+                candidates = bestMarker.DisplayStack.Count > 0 ? bestMarker.DisplayStack : bestMarker.Stack;
+        }
+        else
+        {
+            candidates = bestMarker.DisplayStack.Count > 0 ? bestMarker.DisplayStack : bestMarker.Stack;
+        }
+        armies = selectableOnly
+            ? candidates.Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)).ToArray()
+            : candidates;
         return armies is not null;
     }
 
@@ -347,14 +449,29 @@ public sealed partial class GlobePresentation
         _selectedArmyIds.UnionWith(selected);
         InvalidateFlatCounterDensity();
         _routeFingerprint = int.MinValue;
-        foreach (var (node, armies) in _armyByMarker)
+        foreach (var marker in _armyStacks.Values)
         {
-            if (!IsInstanceValid(node)) continue;
-            var plate = node.GetChildOrNull<Sprite3D>(0);
-            if (plate is null) continue;
-            var chosen = armies.Any(army => selected.Contains(army.Id));
-            plate.Modulate = chosen ? new Color(1f, 0.96f, 0.86f, 1f) : Colors.White;
-            if (plate.GetChildOrNull<Sprite3D>(0) is { } glow) glow.Visible = chosen;
+            var node = marker.Node;
+            if (!IsInstanceValid(node) || marker.Plate is null) continue;
+            var chosen = false;
+            if (marker.LockFreeArmyIds.Count > 0)
+            {
+                for (var i = 0; i < marker.LockFreeArmyIds.Count; i++)
+                    if (selected.Contains(marker.LockFreeArmyIds[i])) { chosen = true; break; }
+                if (!chosen)
+                    for (var i = 0; i < marker.LockFreeDisplayArmyIds.Count; i++)
+                        if (selected.Contains(marker.LockFreeDisplayArmyIds[i])) { chosen = true; break; }
+            }
+            else
+            {
+                var stack = marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack;
+                for (var i = 0; i < stack.Count; i++)
+                    if (selected.Contains(stack[i].Id)) { chosen = true; break; }
+            }
+            var targetMod = chosen ? new Color(1f, 0.96f, 0.86f, 1f) : Colors.White;
+            if (marker.Plate.Modulate != targetMod) marker.Plate.Modulate = targetMod;
+            if (marker.Glow is not null && IsInstanceValid(marker.Glow) && marker.Glow.Visible != chosen)
+                marker.Glow.Visible = chosen;
         }
     }
 
@@ -739,7 +856,7 @@ public sealed partial class GlobePresentation
                 Name = "OrganisationEquipmentBars", Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 RenderPriority = 10,
                 NoDepthTest = true, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest
+                TextureFilter = BaseMaterial3D.TextureFilterEnum.Linear
             };
             // A sibling of the plate: status colours must not inherit its red battle tint.
             node.AddChild(marker.ConditionBars);
@@ -748,14 +865,14 @@ public sealed partial class GlobePresentation
             {
                 Name = "DivisionCount",
                 Text = "",
-                FontSize = 21,
+                FontSize = 44,
                 PixelSize = CounterTextPixelSize * _counterScale,
-                LineSpacing = -5f,
+                LineSpacing = -10f,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 FixedSize = false,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                OutlineSize = Mathf.RoundToInt(CounterOutlineSize * _counterScale),
+                OutlineSize = Mathf.RoundToInt(8 * _counterScale),
                 Modulate = Ui.Colour("military.ready"),
                 OutlineModulate = Ui.Colour("globe.label_outline"),
                 Position = Vector3.Zero,
@@ -844,6 +961,8 @@ public sealed partial class GlobePresentation
 
     private void SyncArmyMarkerReadouts()
     {
+        var budgetClock = System.Diagnostics.Stopwatch.GetTimestamp();
+        var updatedLabels = 0;
         foreach (var marker in _armyStacks.Values)
         {
             if (marker.Node is null || !IsInstanceValid(marker.Node)) continue;
@@ -864,6 +983,8 @@ public sealed partial class GlobePresentation
             }
             if (!marker.Node.Visible) continue;
             if (marker.Plate is not null && !marker.Plate.Visible) continue;
+            if (updatedLabels > 0 && System.Diagnostics.Stopwatch.GetElapsedTime(budgetClock).TotalMilliseconds >= ActiveLabel3dFrameBudgetMs())
+                continue;
             var stack = marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack;
             if (stack.Count == 0) continue;
             var divisions = 0f;
@@ -877,17 +998,21 @@ public sealed partial class GlobePresentation
             var menTenths = (int)MathF.Round(personnel / 100f);
             if (marker.ShownDivisions == divCount && marker.ShownMenTenths == menTenths) continue;
             var divChanged = marker.ShownDivisions != divCount;
-            marker.ShownDivisions = divCount;
-            marker.ShownMenTenths = menTenths;
             var text = marker.ShownCompact
                 ? divCount.ToString()
                 : $"{divCount}\n{menTenths / 10f:0.#}k";
+            marker.ShownDivisions = divCount;
+            marker.ShownMenTenths = menTenths;
             if (!string.Equals(marker.CountText, text, StringComparison.Ordinal))
             {
                 marker.CountText = text;
                 if (marker.Count is not null && marker.Count.Visible &&
-                    (!_flatMap || marker.DisplayProvinces <= 1 || marker.Plate?.Visible == true))
+                    (!_flatMap || marker.DisplayProvinces <= 1 || marker.Plate?.Visible == true) &&
+                    !string.Equals(marker.Count.Text, text, StringComparison.Ordinal))
+                {
                     marker.Count.Text = text;
+                    updatedLabels++;
+                }
                 if (divChanged) InvalidateFlatCounterDensity();
             }
         }
@@ -901,7 +1026,7 @@ public sealed partial class GlobePresentation
         hash.Add(FlagCatalog.VisualStateHash(campaign));
         hash.Add(SettingsCatalog.Flag("movement_flags"));
         hash.Add(SettingsCatalog.Chosen("map_divisions"));
-        hash.Add(ShownCountryId);
+        hash.Add(ShownCountryId); hash.Add(FogOfWarActive); hash.Add(campaign.Player?.Id ?? -1); hash.Add(campaign.ObserverMode);
         hash.Add(campaign.Armies.Count);
         foreach (var army in campaign.Armies)
         {

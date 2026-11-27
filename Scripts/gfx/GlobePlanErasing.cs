@@ -13,11 +13,11 @@ public sealed partial class GlobePresentation
     private int _drawingPlanId = -1;
     private bool _drawingPlanObjective;
 
-    private bool TryPickPlan(Vector2 pixel, out int id, out bool objective)
+    private bool TryPickPlan(Vector2 pixel, out int id, out bool objective, float maxDistance = DesktopPlanEraseRadiusPx)
     {
         id = -1; objective = false;
         if (_campaign?.Player is null || !IsInstanceValid(_camera)) return false;
-        var best = 14f;
+        var best = maxDistance;
         // The same sampled geometry that was drawn; no second approximation of arrows.
         foreach (var segment in _planHitSegments)
         {

@@ -133,6 +133,7 @@ public static partial class MovementRules
 
         internal int[] RawOrderScratch = Array.Empty<int>();
         internal readonly RawRowComparer RawRowOrderComparer = new();
+        internal ulong CachedPopulationStamp;
 
         internal sealed class RawRowComparer : IComparer<int>
         {
@@ -674,18 +675,22 @@ public static partial class MovementRules
                 }
             }
         var faiths = definition.DistinctFaiths;
-        for (var fi = 0; fi < faiths.Length; fi++)
-            if (cache.ByReligionBuckets.TryGetValue(faiths[fi], out var buckets))
-            {
-                var span = CollectionsMarshal.AsSpan(buckets);
-                for (var i = 0; i < span.Length; i++)
+        if (faiths.Length > 0)
+        {
+            var hasPeoples = peoples.Length > 0;
+            for (var fi = 0; fi < faiths.Length; fi++)
+                if (cache.ByReligionBuckets.TryGetValue(faiths[fi], out var buckets))
                 {
-                    var bucket = span[i];
-                    if (definition.HasPeople(bucket.Culture)) continue;
-                    ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(counted, bucket.Region, out _);
-                    entry.Faithful += bucket.Size;
+                    var span = CollectionsMarshal.AsSpan(buckets);
+                    for (var i = 0; i < span.Length; i++)
+                    {
+                        var bucket = span[i];
+                        if (hasPeoples && definition.HasPeople(bucket.Culture)) continue;
+                        ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(counted, bucket.Region, out _);
+                        entry.Faithful += bucket.Size;
+                    }
                 }
-            }
+        }
         return counted;
     }
 

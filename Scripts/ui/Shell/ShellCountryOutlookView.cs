@@ -68,8 +68,8 @@ internal static class ShellCountryOutlookView
                 row.AddChild(ico);
             }
 
-            row.AddChild(ShellCountryDossierView.MakeLabel(ctx, title, "shell.sans", 11, "shell.paper_muted", clip: true, expand: true));
-            var capLbl = ShellCountryDossierView.MakeLabel(ctx, capital, "shell.serif_semibold", 11, "shell.brass_hi", clip: true);
+            row.AddChild(ShellCountryDossierView.MakeLabel(ctx, title, "shell.sans", 11, "shell.paper_muted", clip: false, expand: false));
+            var capLbl = ShellCountryDossierView.MakeLabel(ctx, capital, "shell.serif_semibold", 11, "shell.brass_hi", clip: true, expand: true);
             capLbl.HorizontalAlignment = HorizontalAlignment.Right;
             row.AddChild(capLbl);
             return;
@@ -77,8 +77,8 @@ internal static class ShellCountryOutlookView
 
         var kv = new HBoxContainer { Name = "ShellOverviewCapitalRow", CustomMinimumSize = new Vector2(0, 20), ClipContents = true };
         kv.AddThemeConstantOverride("separation", 6);
-        kv.AddChild(ShellCountryDossierView.MakeLabel(ctx, title, "shell.sans", 11, "shell.paper_muted", clip: true, expand: true));
-        var val = ShellCountryDossierView.MakeLabel(ctx, capital, "shell.sans", 11, "shell.paper", clip: true);
+        kv.AddChild(ShellCountryDossierView.MakeLabel(ctx, title, "shell.sans", 11, "shell.paper_muted", clip: false, expand: false));
+        var val = ShellCountryDossierView.MakeLabel(ctx, capital, "shell.sans", 11, "shell.paper", clip: true, expand: true);
         val.HorizontalAlignment = HorizontalAlignment.Right;
         kv.AddChild(val);
         parent.AddChild(kv);
@@ -99,7 +99,7 @@ internal static class ShellCountryOutlookView
             TooltipText = Ui.Tip(BuildTooltip(outlook))
         };
         row.AddThemeConstantOverride("separation", 6);
-        row.AddChild(ShellCountryDossierView.MakeLabel(ctx, Loc.Get("Domestic outlook"), "shell.sans", 11, "shell.paper_muted", clip: true));
+        row.AddChild(ShellCountryDossierView.MakeLabel(ctx, Loc.Get("Domestic outlook"), "shell.sans", 11, "shell.paper_muted", clip: false));
         var val = ShellCountryDossierView.MakeLabel(ctx, Loc.Format("Main drag: {0}", Loc.Get(drag.Source)),
             "shell.sans", 11, "shell.state.warning_text", clip: true, expand: true);
         val.HorizontalAlignment = HorizontalAlignment.Right;

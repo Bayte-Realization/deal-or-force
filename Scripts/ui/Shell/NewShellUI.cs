@@ -63,6 +63,7 @@ public partial class DealOrForceGame
         _newShellRoot.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _hudLayer.AddChild(_newShellRoot);
         EnsureNewShellFlagClothPulse();
+        TouchScrollController.EnsureInstalled(this);
         _shell = new ShellOrchestrator(CreateShellContext(_newShellRoot));
         _shell.Build();
         ApplyUiShellSetting();
@@ -72,13 +73,7 @@ public partial class DealOrForceGame
     {
         if (_newShellRoot is null) return;
         if (_newShellRoot.GetNodeOrNull<FlagClothSettingsPulse>("NewShellFlagClothPulse") is null)
-        {
-            _newShellRoot.AddChild(new FlagClothSettingsPulse
-            {
-                Name = "NewShellFlagClothPulse",
-                ProcessMode = ProcessModeEnum.Always
-            });
-        }
+            _newShellRoot.AddChild(new FlagClothSettingsPulse { Name = "NewShellFlagClothPulse", ProcessMode = ProcessModeEnum.Always });
         _ = FlagClothPresentation.Material;
         FlagClothPresentation.Synchronize();
     }
@@ -286,7 +281,24 @@ public partial class DealOrForceGame
         layer?.MoveToFront();
     }
 
-    internal void FitNewShellWorkspaceLayer(Control layer) => _shell?.FitWorkspaceLayer(layer);
+    internal void FitNewShellWorkspaceLayer(Control layer) { _shell?.FitWorkspaceLayer(layer); if (layer == _supportLayer && _supportLayer is { Visible: true }) FitNewShellSupportPanel(); }
+
+    private void FitNewShellSupportPanel()
+    {
+        if (_supportLayer is not { Visible: true } || _shell is null || _newShellRoot is null || !IsInstanceValid(_newShellRoot)) return;
+        if (_supportLayer.GetNodeOrNull<Control>("SupportForcesPanel") is not { } panel || !IsInstanceValid(panel)) return;
+        var profile = _shell.CurrentProfile();
+        var dock = ShellDockRules.ComputeLeftAndBottomDock(profile, anyLeftPanelVisible: true, fullWorkspaceVisible: false);
+        var topY = MathF.Max(dock.LeftPanel.Y, ShellLayout.XpStripRect(profile).Bottom + 6f);
+        var bottomY = MathF.Min(profile.FullWorkspace.Bottom, dock.BottomStrip.Y - 8f);
+        if (bottomY - topY < 320f) bottomY = MathF.Max(topY + 320f, profile.FullWorkspace.Bottom);
+        var x0 = dock.LeftPanel.X;
+        var x1 = MathF.Min(profile.FullWorkspace.Right, x0 + MathF.Max(dock.LeftPanel.W, MathF.Min(profile.Compact ? 560f : 620f, profile.FullWorkspace.W)));
+        var toLayer = _supportLayer.GetGlobalTransformWithCanvas().AffineInverse() * _newShellRoot.GetGlobalTransformWithCanvas();
+        var (p0, p1) = (toLayer * new Vector2(x0, topY), toLayer * new Vector2(x1, bottomY));
+        panel.SetAnchorsPreset(LayoutPreset.TopLeft);
+        panel.OffsetLeft = MathF.Round(p0.X); panel.OffsetTop = MathF.Round(p0.Y); panel.OffsetRight = MathF.Round(p1.X); panel.OffsetBottom = MathF.Round(p1.Y);
+    }
 
     internal Control BuildDiplomacyLeaderBadge(Nation nation, LeaderProfile hos, int width, int height)
     {
@@ -320,13 +332,7 @@ public partial class DealOrForceGame
     private void SyncPlanningBarDock()
     {
         if (IsNewShellActive) { SyncNewShellLeftAndBottomDock(); return; }
-        if (!IsInstanceValid(_armyBar)) return;
-        var left = _armyBar.OffsetLeft;
-        if (Math.Abs(_planningBar.OffsetLeft - left) > 0.5f)
-        {
-            _planningBar.OffsetLeft = left;
-            _planningBar.OffsetRight = left + _planningBar.GetCombinedMinimumSize().X;
-        }
+        DockPlanningBarClassic();
     }
 
     private void HideLegacyLeftAndBottomCards()
@@ -347,48 +353,37 @@ public partial class DealOrForceGame
         var modalOpen = IsAnyShellModalOpen();
         if (modalOpen)
         {
-            if (_planningBar is { Visible: true } && IsInstanceValid(_planningBar))
-                _planningBar.Visible = false;
-            if (_armyPanel is { Visible: true } && IsInstanceValid(_armyPanel))
-                _armyPanel.Visible = false;
+            if (_planningBar is { Visible: true } && IsInstanceValid(_planningBar)) _planningBar.Visible = false;
+            if (_armyPanel is { Visible: true } && IsInstanceValid(_armyPanel)) _armyPanel.Visible = false;
         }
 
         var anyLeft = !modalOpen && ((_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
-                      (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) ||
-                      (_movementPanel is { Visible: true }) || _shell.WorkPanel.IsVisible);
-        var pbarW = _planningBar is not null && IsInstanceValid(_planningBar) ? Math.Max(340f, _planningBar.GetCombinedMinimumSize().X) : 520f;
-        var dock = ShellDockRules.ComputeLeftAndBottomDock(profile, anyLeft, modalOpen, pbarW);
-        var leftRect = dock.LeftPanel with { X = profile.LeftPanel.X };
-        if (profile.Compact)
-        {
-            var maxRight = Math.Min(profile.NewsCard.X - 12f, profile.AlertColumn.X - 12f);
-            var cappedW = Math.Max(240f, Math.Min(leftRect.W, maxRight - leftRect.X));
-            leftRect = leftRect with { W = cappedW };
-        }
+            (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) ||
+            (_formationBar is { Visible: true }) || (_movementPanel is { Visible: true }) || _shell.WorkPanel.IsVisible);
+        var (pbarW, pbarH) = MeasurePlanningBarDesiredSize();
+        var dock = ShellDockRules.ComputeLeftAndBottomDock(profile, anyLeft, modalOpen, pbarW, pbarH);
+        var leftRect = dock.LeftPanel;
+        if (!profile.TouchMode && profile.Compact)
+            leftRect = leftRect with { W = Math.Max(240f, Math.Min(leftRect.W, Math.Min(profile.NewsCard.X - 12f, profile.AlertColumn.X - 12f) - leftRect.X)) };
 
-        PlaceLeftPanelIfVisible(_armyPanel, leftRect);
-        PlaceLeftPanelIfVisible(_sidePanel, leftRect);
-        PlaceLeftPanelIfVisible(_fleetPanel, leftRect);
-        PlaceLeftPanelIfVisible(_countryCard, leftRect);
+        PlaceLeftPanelIfVisible(_armyPanel, leftRect); PlaceLeftPanelIfVisible(_sidePanel, leftRect);
+        PlaceLeftPanelIfVisible(_fleetPanel, leftRect); PlaceLeftPanelIfVisible(_countryCard, leftRect);
+        PlaceLeftPanelIfVisible(_formationBar, leftRect);
 
         _shell.WorkPanel.ApplyDock(profile, dock with { LeftPanel = leftRect });
         _shell.Strip.ApplyDock(profile, dock);
-        if (!modalOpen && _planningBar is not null && IsInstanceValid(_planningBar) && _planningBar.Visible)
-            ShellContext.PlaceRect(_planningBar, dock.PlanningBar);
+        if (!modalOpen && _planningBar is { Visible: true } && IsInstanceValid(_planningBar)) ShellContext.PlaceRect(_planningBar, dock.PlanningBar);
+        RaiseArmyAndPlanningChromeForNewShell(modalOpen);
+        if (!modalOpen && _formationBar is { Visible: true } && IsInstanceValid(_formationBar) &&
+            _hudLayer is not null && _newShellRoot is not null && IsInstanceValid(_newShellRoot) && _formationBar.GetIndex() < _newShellRoot.GetIndex())
+            _hudLayer.MoveChild(_formationBar, Math.Min(_hudLayer.GetChildCount() - 1, _newShellRoot.GetIndex() + 1));
+        if (_supportLayer is { Visible: true } && IsInstanceValid(_supportLayer)) { FitNewShellSupportPanel(); _supportLayer.MoveToFront(); }
     }
 
-    private static void PlaceLeftPanelIfVisible(Control lp, ShellRect rect)
-    {
-        if (lp is { Visible: true } && IsInstanceValid(lp))
-        {
-            lp.ClipContents = true;
-            ShellContext.PlaceRect(lp, rect);
-        }
-    }
+    private static void PlaceLeftPanelIfVisible(Control lp, ShellRect rect) { if (lp is { Visible: true } && IsInstanceValid(lp)) { lp.ClipContents = true; ShellContext.PlaceRect(lp, rect); } }
 
     private static bool LeftPanelDrifted(Control lp, float expectedX, bool compact, float compactRightCap) =>
-        lp is { Visible: true } && IsInstanceValid(lp) &&
-        (MathF.Abs(lp.OffsetLeft - expectedX) > 2f || (compact && lp.OffsetRight > compactRightCap));
+        lp is { Visible: true } && IsInstanceValid(lp) && (MathF.Abs(lp.OffsetLeft - expectedX) > 2f || (compact && lp.OffsetRight > compactRightCap));
 
     private void RebuildClassicChromeCache()
     {
@@ -480,7 +475,7 @@ public partial class DealOrForceGame
             SyncNewShellModalState(verifiedActive: true);
         var anyLegacyLeft = (_armyPanel is { Visible: true }) || (_sidePanel is { Visible: true }) ||
                             (_fleetPanel is { Visible: true }) || (_countryCard is { Visible: true }) ||
-                            (_movementPanel is { Visible: true });
+                            (_formationBar is { Visible: true }) || (_movementPanel is { Visible: true });
         var anyLeft = anyLegacyLeft || _shell.WorkPanel.IsVisible;
         var leftDrifted = false;
         if (anyLegacyLeft)
@@ -490,7 +485,8 @@ public partial class DealOrForceGame
             leftDrifted = LeftPanelDrifted(_armyPanel, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
                           LeftPanelDrifted(_sidePanel, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
                           LeftPanelDrifted(_fleetPanel, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
-                          LeftPanelDrifted(_countryCard, profile.LeftPanel.X, profile.Compact, compactRightCap);
+                          LeftPanelDrifted(_countryCard, profile.LeftPanel.X, profile.Compact, compactRightCap) ||
+                          LeftPanelDrifted(_formationBar, profile.LeftPanel.X, profile.Compact, compactRightCap);
         }
         if (anyLeft != _newShellLastLeftVisible || leftDrifted)
         {

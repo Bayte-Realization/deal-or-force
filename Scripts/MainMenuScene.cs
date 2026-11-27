@@ -160,13 +160,12 @@ public partial class MainMenuScene : Control
         }
         catch (Exception ex) { LogMenuError("FontCatalog.Load", ex); }
 
-        // And the language the player chose last time. The preferences live in the one game
-        // folder under Documents (or sandbox user:// on mobile), and nothing has told the store
-        // where that is yet - the campaign scene is what normally does it, and it is not running.
+        // Load preferences from the persistent game folder and apply one-time mobile defaults before reading settings.
         try
         {
             GamePaths.Prepare();
             PlayerSettings.UseDirectory(GamePaths.Settings);
+            MobileFirstBootDefaults.ApplyOnce(DealOrForceGame.IsMobilePlatform);
             var chosen = SettingsCatalog.Chosen("language");
             if (chosen.Length > 0) Loc.Language = chosen;
         }
@@ -280,6 +279,7 @@ public partial class MainMenuScene : Control
                     ClipText = true,
                     SizeFlagsHorizontal = SizeFlags.ExpandFill
                 };
+                heroTitle.SetMeta(SourceMeta, "shell.hero_continue_title");
                 MenuChromeTheme.StyleExistingLabel(heroTitle, 12, MenuChromeTheme.BrassHi, serif: false, bold: true);
                 heroTop.AddChild(heroTitle);
 

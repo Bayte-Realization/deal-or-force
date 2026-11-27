@@ -216,7 +216,7 @@ internal static class AtlasSurfaceSkin
         // or an empty one.
         if (_lamps[on ? 1 : 0] is { } cached) return cached;
         const int size = 28;
-        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        using var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
         image.Fill(Colors.Transparent);
         var gold = Ui.Colour("text.accent");
         var dim = Ui.Colour("text.muted");
@@ -254,7 +254,7 @@ internal static class AtlasSurfaceSkin
     internal static Texture2D MusicGlyph()
     {
         if (_musicGlyph is not null) return _musicGlyph;
-        var image = Image.CreateEmpty(48, 48, false, Image.Format.Rgba8);
+        using var image = Image.CreateEmpty(48, 48, false, Image.Format.Rgba8);
         image.Fill(Colors.Transparent);
         for (var y = 0; y < 48; y++)
         for (var x = 0; x < 48; x++)
@@ -304,7 +304,7 @@ internal static class AtlasSurfaceSkin
         if (level is Level.Instrument or Level.Document)
             fill = fill.Lerp(deep, 0.28f);
         const int size = 96;
-        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        using var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
         var relief = Relief;
         for (var y = 0; y < size; y++)
         for (var x = 0; x < size; x++)
@@ -327,7 +327,7 @@ internal static class AtlasSurfaceSkin
     {
         if (_grain is not null) return _grain;
         const int size = 64;
-        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        using var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
         var amount = AtlasSurfaceLighting.GrainAmount(Ui.Metric("atlas.grain", .018f));
         for (var y = 0; y < size; y++)
         for (var x = 0; x < size; x++)

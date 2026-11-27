@@ -574,10 +574,72 @@ public static class MarketSystem
         public float[] WeeklyTradeBalance = Array.Empty<float>();
         public float[] WeeklyTariffIncome = Array.Empty<float>();
 
+        private MarketQuote[][] _nationQuoteRows = Array.Empty<MarketQuote[]>();
+        private int[] _nationQuoteCounts = Array.Empty<int>();
+        private object _quoteCacheCatalogSnap;
+        private int _quoteMaxGoodIndex = -1;
+        public MarketQuote[][] ActivePriceQuoteRows = Array.Empty<MarketQuote[]>();
+
+        public void PrepareQuoteTable(IReadOnlyList<Nation> nations, CommodityCatalog.SnapshotData catalogSnap)
+        {
+            var maxId = -1;
+            for (var i = 0; i < nations.Count; i++)
+                if (nations[i].Id > maxId) maxId = nations[i].Id;
+
+            if (maxId >= _nationQuoteRows.Length)
+            {
+                var next = Math.Max(maxId + 64, 128);
+                Array.Resize(ref _nationQuoteRows, next);
+                Array.Resize(ref _nationQuoteCounts, next);
+            }
+
+            var maxGood = Math.Max(0, catalogSnap.ByIndex.Length - 1);
+            if (!ReferenceEquals(_quoteCacheCatalogSnap, catalogSnap) || _quoteMaxGoodIndex != maxGood)
+            {
+                Array.Fill(_nationQuoteCounts, -1);
+                _quoteCacheCatalogSnap = catalogSnap;
+                _quoteMaxGoodIndex = maxGood;
+            }
+        }
+
+        public MarketQuote[] GetNationQuotes(Nation nation, CommodityCatalog.SnapshotData catalogSnap)
+        {
+            var id = nation.Id;
+            if ((uint)id >= (uint)_nationQuoteRows.Length) return null;
+            var marketCount = nation.Market.Count;
+            var row = _nationQuoteRows[id];
+            if (row is not null && _nationQuoteCounts[id] == marketCount &&
+                ReferenceEquals(_quoteCacheCatalogSnap, catalogSnap))
+            {
+                return row;
+            }
+            var needed = Math.Max(_quoteMaxGoodIndex + 1, catalogSnap.ByIndex.Length);
+            if (row is null || row.Length < needed)
+                _nationQuoteRows[id] = row = new MarketQuote[needed];
+            else
+                Array.Clear(row);
+
+            foreach (var quote in nation.Market.Values)
+            {
+                var idx = (int)quote.Commodity;
+                if ((uint)idx < (uint)row.Length)
+                    row[idx] = quote;
+            }
+            _nationQuoteCounts[id] = marketCount;
+            return row;
+        }
+
+        public void InvalidateNationQuotes(int nationId)
+        {
+            if ((uint)nationId < (uint)_nationQuoteCounts.Length)
+                _nationQuoteCounts[nationId] = -1;
+        }
+
         public void EnsurePriceCapacity(int goodCount, int nationCount)
         {
             if (BasePrices.Length < goodCount) BasePrices = new float[goodCount];
             if (TradedWorld.Length < goodCount) TradedWorld = new byte[goodCount];
+            if (ActivePriceQuoteRows.Length < nationCount) ActivePriceQuoteRows = new MarketQuote[nationCount][];
             var total = goodCount * nationCount;
             if (Demand.Length < total) Demand = new float[total];
             if (Production.Length < total) Production = new float[total];
@@ -641,6 +703,9 @@ public static class MarketSystem
         var active = campaign.ActiveNations;
         var activeCount = active.Count;
         var tallies = CollectTallies(campaign);
+        var catalogSnap = CommodityCatalog.Snapshot;
+        var batchBuffers = KernelBuffers.GetOrCreateValue(campaign);
+        batchBuffers.PrepareQuoteTable(campaign.Nations, catalogSnap);
         if (activeCount > 0 && Campaign.StageOverdue()) yield return 0;
 
         // A whole-step caller has no frame to hand back: the countries go to the workers as one
@@ -654,7 +719,7 @@ public static class MarketSystem
             using (SimProfiler.Measure("    mkt:balance"))
             {
                 DeterministicParallel.For(campaign, start, end, index =>
-                    CalculateNationalBalance(campaign, active[index], tallies.Get(active[index].Id), administrations), minItems: 8);
+                    CalculateNationalBalance(campaign, active[index], tallies.Get(active[index].Id), administrations, batchBuffers), minItems: 8);
             }
             if (end < activeCount && Campaign.StageOverdue()) yield return 0;
         }
@@ -669,7 +734,6 @@ public static class MarketSystem
         // price writes to every country, but no good reads another, so a stage can end
         // between any two of them. This used to be one block at the end of a market week -
         // 7,8 ms that a frame had to carry whole, on the week a market week runs.
-        var catalogSnap = CommodityCatalog.Snapshot;
         var catalogue = catalogSnap.AllGoods;
         var marketNations = _marketNationsScratch ??= new List<Nation>(activeCount);
         marketNations.Clear();
@@ -721,7 +785,12 @@ public static class MarketSystem
 
         var byIndex = catalogSnap.ByIndex;
         var buf = KernelBuffers.GetOrCreateValue(campaign);
+        buf.PrepareQuoteTable(campaign.Nations, catalogSnap);
         buf.EnsurePriceCapacity(goodCount, nationCount);
+
+        var nationQuoteRows = buf.ActivePriceQuoteRows;
+        for (var i = 0; i < nationCount; i++)
+            nationQuoteRows[i] = buf.GetNationQuotes(nations[i], catalogSnap);
 
         for (var g = 0; g < goodCount; g++)
         {
@@ -737,7 +806,11 @@ public static class MarketSystem
             for (var i = 0; i < nationCount; i++)
             {
                 var idx = row + i;
-                if (!nations[i].Market.TryGetValue(commodity, out var quote))
+                var qRow = nationQuoteRows[i];
+                var quote = qRow is not null && (uint)cidx < (uint)qRow.Length
+                    ? qRow[cidx]
+                    : nations[i].Market.GetValueOrDefault(commodity);
+                if (quote is null)
                 {
                     buf.QuoteRefs[idx] = null;
                     buf.Demand[idx] = 0f;
@@ -802,6 +875,7 @@ public static class MarketSystem
 
         var byIndex = catalogSnap.ByIndex;
         var buf = KernelBuffers.GetOrCreateValue(campaign);
+        buf.PrepareQuoteTable(campaign.Nations, catalogSnap);
         buf.EnsureClearCapacity(batchCount, goodCount);
 
         for (var g = 0; g < goodCount; g++)
@@ -826,11 +900,16 @@ public static class MarketSystem
                 continue;
             }
 
+            var qRow = buf.GetNationQuotes(nation, catalogSnap);
             var row = packedCount * goodCount;
             var complete = true;
             for (var g = 0; g < goodCount; g++)
             {
-                if (!nation.Market.TryGetValue(catalogue[g], out var quote))
+                var cidx = (int)catalogue[g];
+                var quote = qRow is not null && (uint)cidx < (uint)qRow.Length
+                    ? qRow[cidx]
+                    : nation.Market.GetValueOrDefault(catalogue[g]);
+                if (quote is null)
                 {
                     complete = false;
                     break;
@@ -982,26 +1061,6 @@ public static class MarketSystem
     /// Summed in the order the hand-written sum used, then anything a mod declared, so the
     /// shipped buildings add up to the same float they always did.
     /// </summary>
-    internal static float JobsDemanded(ScenarioState state)
-    {
-        if (state.Buildings.Count == 0) return 0f;
-        EnsureJobOrderCache();
-        var jobs = 0f;
-        var weights = _jobOrderJobs;
-        for (var k = 0; k < JobOrder.Length; k++)
-            if (state.Buildings.TryGetValue(JobOrder[k], out var count) && count != 0)
-                jobs += count * weights[k];
-        if (_hasExtraJobBuildings)
-        {
-            foreach (var (kind, count) in state.Buildings)
-            {
-                if ((int)kind <= (int)BuildingKind.ResearchLab || count == 0) continue;
-                jobs += count * BuildingCatalog.Get(kind).Jobs;
-            }
-        }
-        return jobs;
-    }
-
     private static readonly BuildingKind[] JobOrder =
     {
         BuildingKind.Agriculture, BuildingKind.CivilianIndustry, BuildingKind.ExtractionIndustry,
@@ -1013,6 +1072,51 @@ public static class MarketSystem
         BuildingKind.University, BuildingKind.Hospital, BuildingKind.Barracks
     };
 
+    private static readonly int[] JobSlotByKind = BuildJobSlotByKind();
+
+    private static int[] BuildJobSlotByKind()
+    {
+        var max = 0;
+        for (var i = 0; i < JobOrder.Length; i++)
+            if ((int)JobOrder[i] > max) max = (int)JobOrder[i];
+        var map = new int[max + 1];
+        Array.Fill(map, -1);
+        for (var i = 0; i < JobOrder.Length; i++)
+            map[(int)JobOrder[i]] = i;
+        return map;
+    }
+
+    internal static float JobsDemanded(ScenarioState state)
+    {
+        if (state.Buildings.Count == 0) return 0f;
+        EnsureJobOrderCache();
+        var weights = _jobOrderJobs;
+        Span<int> counts = stackalloc int[JobOrder.Length];
+        var slotMap = JobSlotByKind;
+        var hasExtra = false;
+        foreach (var (kind, count) in state.Buildings)
+        {
+            var idx = (int)kind;
+            if ((uint)idx < (uint)slotMap.Length && slotMap[idx] >= 0)
+                counts[slotMap[idx]] = count;
+            else if (_hasExtraJobBuildings && idx > (int)BuildingKind.ResearchLab && count != 0)
+                hasExtra = true;
+        }
+        var jobs = 0f;
+        for (var k = 0; k < JobOrder.Length; k++)
+            if (counts[k] != 0)
+                jobs += counts[k] * weights[k];
+        if (hasExtra)
+        {
+            foreach (var (kind, count) in state.Buildings)
+            {
+                if ((int)kind <= (int)BuildingKind.ResearchLab || count == 0) continue;
+                jobs += count * BuildingCatalog.Get(kind).Jobs;
+            }
+        }
+        return jobs;
+    }
+
     /// <summary>
     /// Workers a state can actually put in those jobs, in millions. Not everyone alive is
     /// available: children, the retired and the unemployable are already priced out by the
@@ -1021,12 +1125,11 @@ public static class MarketSystem
     internal static float WorkersAvailable(ScenarioState state)
     {
         const float WorkingAgeShare = 0.62f;
-        var groups = state.PopulationGroups;
-        var count = groups.Count;
-        if (count == 0) return state.Population / 1_000_000f * WorkingAgeShare;
+        var groups = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(state.PopulationGroups);
+        if (groups.Length == 0) return state.Population / 1_000_000f * WorkingAgeShare;
 
         var workers = 0f;
-        for (var i = 0; i < count; i++)
+        for (var i = 0; i < groups.Length; i++)
         {
             var group = groups[i];
             // The upper class runs capital rather than filling a shift; everyone else works.
@@ -1153,7 +1256,7 @@ public static class MarketSystem
     }
 
     private static void CalculateNationalBalance(Campaign campaign, Nation nation, NationTally tallies,
-        IReadOnlyDictionary<int, List<ScenarioState>> administrations)
+        IReadOnlyDictionary<int, List<ScenarioState>> administrations, KernelBatchBuffers batchBuffers = null)
     {
         // Every good the catalog knows, not only when the market is empty.
         //
@@ -1165,20 +1268,72 @@ public static class MarketSystem
         // probe per good per country per week and cannot be got wrong.
         // Walked as the snapshot's array (the order CommodityCatalog.All gives) rather than through
         // the interface, which boxed an enumerator for every country every market week.
-        var allGoods = CommodityCatalog.Snapshot.AllGoods;
-        for (var gi = 0; gi < allGoods.Length; gi++)
+        var catalogSnap = CommodityCatalog.Snapshot;
+        var allGoods = catalogSnap.AllGoods;
+        var quoteRow = batchBuffers?.GetNationQuotes(nation, catalogSnap);
+        if (quoteRow is not null && nation.Market.Count >= allGoods.Length)
         {
-            var commodity = allGoods[gi];
-            if (!nation.Market.ContainsKey(commodity))
-                nation.Market[commodity] = new MarketQuote { Commodity = commodity, Price = CommodityCatalog.Get(commodity).BasePrice };
+            var allPresent = true;
+            for (var gi = 0; gi < allGoods.Length; gi++)
+            {
+                var cidx = (int)allGoods[gi];
+                if ((uint)cidx >= (uint)quoteRow.Length || quoteRow[cidx] is null)
+                {
+                    allPresent = false;
+                    break;
+                }
+            }
+            if (allPresent)
+            {
+                for (var qi = 0; qi < quoteRow.Length; qi++)
+                {
+                    var quote = quoteRow[qi];
+                    if (quote is null) continue;
+                    quote.Production = 0f;
+                    quote.Demand = 0f;
+                    quote.Imports = 0f;
+                    quote.Exports = 0f;
+                }
+            }
+            else
+            {
+                for (var gi = 0; gi < allGoods.Length; gi++)
+                {
+                    var commodity = allGoods[gi];
+                    if (!nation.Market.ContainsKey(commodity))
+                        nation.Market[commodity] = new MarketQuote { Commodity = commodity, Price = CommodityCatalog.Get(commodity).BasePrice };
+                }
+                batchBuffers!.InvalidateNationQuotes(nation.Id);
+                foreach (var quote in nation.Market.Values)
+                {
+                    quote.Production = 0f;
+                    quote.Demand = 0f;
+                    quote.Imports = 0f;
+                    quote.Exports = 0f;
+                }
+            }
         }
-
-        foreach (var quote in nation.Market.Values)
+        else
         {
-            quote.Production = 0f;
-            quote.Demand = 0f;
-            quote.Imports = 0f;
-            quote.Exports = 0f;
+            var added = false;
+            for (var gi = 0; gi < allGoods.Length; gi++)
+            {
+                var commodity = allGoods[gi];
+                if (!nation.Market.ContainsKey(commodity))
+                {
+                    nation.Market[commodity] = new MarketQuote { Commodity = commodity, Price = CommodityCatalog.Get(commodity).BasePrice };
+                    added = true;
+                }
+            }
+            if (added) batchBuffers?.InvalidateNationQuotes(nation.Id);
+
+            foreach (var quote in nation.Market.Values)
+            {
+                quote.Production = 0f;
+                quote.Demand = 0f;
+                quote.Imports = 0f;
+                quote.Exports = 0f;
+            }
         }
 
         // The regions whose economy answers to it: its own, less those another country holds,

@@ -284,17 +284,17 @@ public sealed partial class GlobePresentation
             WritePixel(pixels, width, x, y, color);
         }
 
-        // 4. Tactical status pips in the top header strip (x = 45..92, y = 2..14 — clear of flag, count & echelon).
+        // 4. Compact tactical status pips strictly in top header strip (y = 2..10, clear of center readout bay).
         if ((flags & ArmyFlagEncircled) != 0)
-            DrawStatusPipDisc(pixels, width, 52, 8, 5, negCol.Lightened(0.12f), new Color(1f, 0.96f, 0.92f), isExclamation: true);
+            DrawStatusPipDisc(pixels, width, 50, 6, 4, negCol.Lightened(0.12f), new Color(1f, 0.96f, 0.92f), isExclamation: true);
         else if ((flags & ArmyFlagLowSupply) != 0)
-            DrawStatusPipTriangle(pixels, width, 52, 8, 5, warnCol.Lightened(0.10f), new Color(0.08f, 0.06f, 0.04f));
+            DrawStatusPipTriangle(pixels, width, 50, 6, 4, warnCol.Lightened(0.10f), new Color(0.08f, 0.06f, 0.04f));
 
         if ((flags & ArmyFlagEntrenched) != 0)
-            DrawStatusPipShield(pixels, width, 67, 8, Ui.Colour("state.info").Lightened(0.22f), new Color(0.95f, 0.98f, 1.0f));
+            DrawStatusPipShield(pixels, width, 64, 6, Ui.Colour("state.info").Lightened(0.22f), new Color(0.95f, 0.98f, 1.0f));
 
         if ((flags & ArmyFlagMoving) != 0)
-            DrawStatusPipChevron(pixels, width, 82, 8, posCol.Lightened(0.22f));
+            DrawStatusPipChevron(pixels, width, 78, 6, posCol.Lightened(0.22f));
 
         using var img = Image.CreateFromData(width, height, false, Image.Format.Rgba8, pixels);
         return ImageTexture.CreateFromImage(img);
@@ -310,17 +310,13 @@ public sealed partial class GlobePresentation
             var dy = y - cy;
             var d = MathF.Sqrt(dx * dx + dy * dy);
             if (d > r + 1.0f) continue;
-            WritePixel(pixels, w, x, y, d > r - 1.2f ? dark : fill);
+            WritePixel(pixels, w, x, y, d > r - 1.1f ? dark : fill);
         }
         if (isExclamation)
         {
-            for (var y = cy - 4; y <= cy + 1; y++)
-            {
-                WritePixel(pixels, w, cx, y, mark);
-                WritePixel(pixels, w, cx + 1, y, mark);
-            }
-            WritePixel(pixels, w, cx, cy + 4, mark);
-            WritePixel(pixels, w, cx + 1, cy + 4, mark);
+            for (var y = cy - 2; y <= cy; y++) { WritePixel(pixels, w, cx, y, mark); WritePixel(pixels, w, cx + 1, y, mark); }
+            WritePixel(pixels, w, cx, cy + 2, mark);
+            WritePixel(pixels, w, cx + 1, cy + 2, mark);
         }
     }
 
@@ -339,22 +335,22 @@ public sealed partial class GlobePresentation
                 WritePixel(pixels, w, x, y, edge ? dark : fill);
             }
         }
-        for (var y = cy - 3; y <= cy + 1; y++) WritePixel(pixels, w, cx, y, mark);
-        WritePixel(pixels, w, cx, cy + 4, mark);
+        for (var y = cy - 2; y <= cy; y++) WritePixel(pixels, w, cx, y, mark);
+        WritePixel(pixels, w, cx, cy + 2, mark);
     }
 
     private static void DrawStatusPipShield(byte[] pixels, int w, int cx, int cy, Color fill, Color rim)
     {
         var dark = new Color(0.04f, 0.05f, 0.07f, 0.98f);
-        for (var dy = -7; dy <= 7; dy++)
+        for (var dy = -4; dy <= 4; dy++)
         {
-            var half = dy <= 1 ? 6 : Math.Max(0, 6 - (dy - 1));
+            var half = dy <= 0 ? 3 : Math.Max(0, 3 - dy);
             for (var dx = -half - 1; dx <= half + 1; dx++)
             {
                 var x = cx + dx;
                 var y = cy + dy;
-                var outer = dx == -half - 1 || dx == half + 1 || dy == -7 || dy == 7;
-                var innerRim = !outer && (Math.Abs(dx) >= half - 1 || dy == -6);
+                var outer = dx == -half - 1 || dx == half + 1 || dy == -4 || dy == 4;
+                var innerRim = !outer && (Math.Abs(dx) >= half || dy == -3);
                 WritePixel(pixels, w, x, y, outer ? dark : innerRim ? rim : fill);
             }
         }
@@ -363,14 +359,14 @@ public sealed partial class GlobePresentation
     private static void DrawStatusPipChevron(byte[] pixels, int w, int cx, int cy, Color fill)
     {
         var dark = new Color(0.03f, 0.05f, 0.04f, 0.98f);
-        for (var dy = -6; dy <= 6; dy++)
+        for (var dy = -4; dy <= 4; dy++)
         {
-            var tip = 4 - Math.Abs(dy);
-            for (var dx = tip - 5; dx <= tip + 2; dx++)
+            var tip = 3 - Math.Abs(dy);
+            for (var dx = tip - 4; dx <= tip + 1; dx++)
             {
                 var x = cx + dx;
                 var y = cy + dy;
-                var isCore = dx >= tip - 3 && dx <= tip;
+                var isCore = dx >= tip - 2 && dx <= tip;
                 WritePixel(pixels, w, x, y, isCore ? fill : dark);
             }
         }

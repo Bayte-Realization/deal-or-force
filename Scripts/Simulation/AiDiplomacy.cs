@@ -372,7 +372,7 @@ public static partial class AiStatecraft
             return false;
         }
         var crisis = recipient.Treasury < recipient.Gdp * defines.AiAidCrisisTreasuryOfGdp;
-        if (!crisis)
+        if (!crisis && AiFiscalPolicy.AtWar(campaign, recipient))
         {
             var liveWars = Warfare.LiveWars(campaign);
             for (var wi = 0; wi < liveWars.Count; wi++)
@@ -458,7 +458,8 @@ public static partial class AiStatecraft
             if (state.MapIndex == owner.CapitalStateMapIndex) continue;
             if (hasCooldowns &&
                 buyer.DecisionAvailableDay.GetValueOrDefault(KindredKey(owner.Id)) > campaign.ElapsedDays) continue;
-            if (CampaignDiplomacy.AtWar(campaign, buyer.Id, owner.Id)) continue;
+            if (AiFiscalPolicy.AtWar(campaign, buyer) && AiFiscalPolicy.AtWar(campaign, owner) &&
+                CampaignDiplomacy.AtWar(campaign, buyer.Id, owner.Id)) continue;
             if (!owner.IsHuman && Ultimatum.ProtectsHomelandSale(campaign, owner, state)) continue;
             long ourPeople = 0;
             var groups = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(state.PopulationGroups);

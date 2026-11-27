@@ -631,11 +631,10 @@ public partial class DealOrForceGame
             return;
         }
 
-        _campaign.Commands.Enqueue(new QueueConstructionCommand
+        CommitImmediateCampaignCommand(new QueueConstructionCommand
         {
             IssuerId = nation.Id, StateMapIndex = stateMapIndex, Building = kind
-        });
-        _campaign.Commands.ApplyAll(_campaign);
+        }, refreshHud: true, wakeGlobe: true);
         _stateFiscalFeedback.Text = Waterfront.OfRegion(_campaign, stateMapIndex) == WaterAccess.Inland &&
             Waterfront.NeedsWater(kind)
             ? Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days. Inland water: it will be worth {4} of a coastal one.",

@@ -80,7 +80,7 @@ public partial class DealOrForceGame
         controls.AddChild(slower);
         _pause = ActionButton("II", TogglePause, 34, 28, true);
         _pause.Name = "DatePlatePause";
-        _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space). Keys 1 to 5 and the marks choose the speed without starting time; plus and minus make it one step faster or slower."));
+        _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space). Keys 1 to 8 and the marks choose the speed without starting time; plus and minus make it one step faster or slower."));
         StyleHudButton(_pause, true);
         controls.AddChild(_pause);
         var faster = ActionButton("+", () => StepSpeed(1), 28, 28);
@@ -265,8 +265,8 @@ public partial class DealOrForceGame
                 _speedPips.Paused = paused;
                 _speedPips.QueueRedraw();
             }
-            _speedPips.TooltipText = Ui.Tip(rate + "\n" +
-                Tr("Keys 1 to 5, or a click on a mark, set the speed and let time run; plus and minus step it."));
+            _speedPips.TooltipText = Ui.Tip(rate + "\n" + SmoothTimePacer.FormatSpeedTooltipSuffix(ActiveSmoothTimeMode()) + "\n" +
+                Tr("Keys 1 to 8, or a click on a mark, set the speed and let time run; plus and minus step it."));
             _speedPips.AccessibilityName = Simulation.Loc.Format("Campaign speed {0} (key {0})", speed);
         }
         if (_speedButtons.Count == 2)
@@ -320,8 +320,8 @@ public partial class DealOrForceGame
             QueueRedraw();
         }
 
-        private static float PipSize => Mathf.Clamp(Ui.Metric("hud.speed_pips", 8f), 5f, 16f);
-        private static float PipGap => Mathf.Round(PipSize * .5f);
+        private static float PipSize => Mathf.Clamp(MathF.Round(Ui.Metric("hud.speed_pips", 8f) * .64f), 5f, 10f);
+        private static float PipGap => Mathf.Clamp(MathF.Round(PipSize * .4f), 2f, 4f);
 
         public override Vector2 _GetMinimumSize() =>
             new(PipSize * DatePlateClock.Fastest + PipGap * (DatePlateClock.Fastest - 1), 28f);
@@ -330,7 +330,7 @@ public partial class DealOrForceGame
         {
             var size = PipSize;
             var gap = PipGap;
-            var tallest = size * 1.9f;
+            var tallest = Mathf.Round(size * (.9f + .25f * (DatePlateClock.Fastest - 1)));
             var floor = (Size.Y + tallest) * .5f;
             // Dimmer while paused: the speed is still read, and so is the stillness.
             var lit = Ui.Colour("button.primary_border", Paused ? .55f : 1f);

@@ -843,7 +843,7 @@ public partial class DealOrForceGame
         // or an older pending cadence: the reliable target owns the simulation's step size.
         _networkHostDay = elapsedDays;
         _campaign.IsPaused = paused;
-        _speed = Math.Clamp(speed, 1, 5);
+        _speed = Math.Clamp(speed, 1, _campaign?.Defines?.MaxSpeed ?? 8);
         _pause.Text = paused ? "▶" : "II";
         // The host's pace and pause, onto the date plate's marks and the reach of "−" and "+":
         // a paused client takes no day steps, so no refresh would carry them there otherwise.

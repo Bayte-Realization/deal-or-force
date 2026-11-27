@@ -7,6 +7,110 @@ namespace DealOrForce.Simulation;
 public static partial class MovementRules
 {
     [ThreadStatic] private static List<ScenarioState> _zoneCandidatesScratch;
+    private const int MaxGarrisonDense = 65536;
+    [ThreadStatic] private static bool _garrisonScopeActive;
+    [ThreadStatic] private static bool _garrisonBuilt;
+    [ThreadStatic] private static WeakReference<Campaign> _garrisonCampaignRef;
+    [ThreadStatic] private static ProvinceTopology _garrisonMap;
+    [ThreadStatic] private static int _garrisonArmiesCount;
+    [ThreadStatic] private static int _garrisonOwnershipRev;
+    [ThreadStatic] private static int _garrisonMapRev;
+    [ThreadStatic] private static int _garrisonStatesCount;
+    [ThreadStatic] private static int _garrisonMaxStateMap;
+    [ThreadStatic] private static int _garrisonStampToken;
+    [ThreadStatic] private static float[] _garrisonStrengthByState;
+    [ThreadStatic] private static int[] _garrisonStampByState;
+    [ThreadStatic] private static int[] _garrisonOwnerByState;
+
+    internal static void BeginUprisingGarrisonScope(Campaign campaign)
+    {
+        _garrisonScopeActive = true; _garrisonBuilt = false;
+        if (_garrisonCampaignRef is null) _garrisonCampaignRef = new WeakReference<Campaign>(campaign); else _garrisonCampaignRef.SetTarget(campaign);
+    }
+
+    internal static void EndUprisingGarrisonScope()
+    {
+        _garrisonScopeActive = _garrisonBuilt = false;
+        _garrisonCampaignRef?.SetTarget(null); _garrisonMap = null;
+    }
+
+    internal static void InvalidateUprisingGarrisonScope() { _garrisonBuilt = false; }
+
+    private static bool TryGetScopedGarrison(Campaign campaign, ProvinceTopology topology, Nation owner, ScenarioState region, out float garrison)
+    {
+        garrison = 0f;
+        if (!_garrisonScopeActive || _garrisonCampaignRef?.TryGetTarget(out var scopedCampaign) != true || !ReferenceEquals(scopedCampaign, campaign) || (uint)region.MapIndex >= MaxGarrisonDense) return false;
+
+        var armies = campaign.Armies;
+        if (!_garrisonBuilt || !ReferenceEquals(_garrisonMap, topology) ||
+            _garrisonArmiesCount != armies.Count ||
+            _garrisonOwnershipRev != campaign.OwnershipRevision ||
+            _garrisonMapRev != campaign.MapRevision ||
+            _garrisonStatesCount != campaign.States.Count)
+        {
+            var states = campaign.States;
+            var maxMap = 0;
+            for (var i = 0; i < states.Count; i++)
+                if (states[i].MapIndex > maxMap) maxMap = states[i].MapIndex;
+            if ((uint)maxMap >= MaxGarrisonDense) return false;
+
+            var needed = Math.Max(maxMap + 1, 256);
+            if (_garrisonStrengthByState is null || _garrisonStrengthByState.Length < needed)
+            {
+                _garrisonStrengthByState = new float[needed];
+                _garrisonStampByState = new int[needed];
+                _garrisonOwnerByState = new int[needed];
+            }
+
+            if (++_garrisonStampToken == int.MaxValue)
+            {
+                Array.Clear(_garrisonStampByState, 0, _garrisonStampByState.Length);
+                _garrisonStampToken = 1;
+            }
+            var token = _garrisonStampToken;
+
+            Array.Fill(_garrisonOwnerByState, -1, 0, needed);
+            for (var i = 0; i < states.Count; i++)
+            {
+                var st = states[i];
+                if ((uint)st.MapIndex < (uint)needed)
+                    _garrisonOwnerByState[st.MapIndex] = campaign.NationByMapIndex(st.NationMapIndex)?.Id ?? -1;
+            }
+
+            var provinceToState = topology.ProvinceToState;
+            var provinceCount = topology.ProvinceCount;
+            var strengthByState = _garrisonStrengthByState;
+            var stampByState = _garrisonStampByState;
+            var ownerByState = _garrisonOwnerByState;
+            for (var i = 0; i < armies.Count; i++)
+            {
+                var army = armies[i];
+                if (army.ProvinceId <= 0 || army.ProvinceId > provinceCount) continue;
+                var sm = provinceToState[army.ProvinceId];
+                if ((uint)sm >= (uint)needed || army.NationId != ownerByState[sm]) continue;
+                if (stampByState[sm] != token)
+                {
+                    stampByState[sm] = token;
+                    strengthByState[sm] = 0f;
+                }
+                strengthByState[sm] += army.Divisions * army.Strength;
+            }
+
+            _garrisonMap = topology;
+            _garrisonArmiesCount = armies.Count;
+            _garrisonOwnershipRev = campaign.OwnershipRevision;
+            _garrisonMapRev = campaign.MapRevision;
+            _garrisonStatesCount = states.Count;
+            _garrisonMaxStateMap = maxMap;
+            _garrisonBuilt = true;
+        }
+
+        if (region.MapIndex > _garrisonMaxStateMap) return false;
+        garrison = _garrisonStampByState[region.MapIndex] == _garrisonStampToken
+            ? _garrisonStrengthByState[region.MapIndex]
+            : 0f;
+        return true;
+    }
 
     // ------------------------------------------------------------------ uprisings ------
 
@@ -22,13 +126,15 @@ public static partial class MovementRules
         var support = state.Support.GetValueOrDefault(region.MapIndex);
         if (!float.IsFinite(support) || !float.IsFinite(state.Cadres) || !float.IsFinite(state.Legitimacy) ||
             !float.IsFinite(region.Stability)) return 0f;
-        var own = PeopleOf(region, definition, out _);
+        var own = !NeedsPeopleIndex(campaign)
+            ? PeopleOf(campaign, region, definition, out _)
+            : PeopleOf(region, definition, out _);
         var share = region.Population > 0 ? own / (float)region.Population : 0f;
 
         // Who is there to stop it: the owner's divisions standing in the region.
         var topology = campaign.ProvinceMap;
         var garrison = 0f;
-        if (topology is not null && owner is not null)
+        if (topology is not null && owner is not null && !TryGetScopedGarrison(campaign, topology, owner, region, out garrison))
         {
             var armies = campaign.Armies;
             var provinceToState = topology.ProvinceToState;
@@ -394,6 +500,7 @@ public static partial class MovementRules
             if (provinceToState[province] == region.MapIndex) provinces.Add(province);
 
         StatePartition.Annex(campaign, provinces, nation, asConquest: false);
+        InvalidateUprisingGarrisonScope();
         // The ground changes hands, and so does the part of the garrison standing on it: an
         // agreed referendum divides the army as surely as a contested one, only quietly. That
         // division belongs to the ACT, not to the region, and is made once in SettleTransfer -

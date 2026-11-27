@@ -110,6 +110,25 @@ public static class HouseholdEconomy
         float food, float energy, float medicine, bool atWar) =>
         ReviewCore(c, n, s, annualConditions, food, energy, medicine, atWar, MarketSystem.JobsDemanded(s));
 
+    internal static bool ReviewGroupsForBatch(Campaign c, Nation n, ScenarioState s, float annualConditions,
+        float food, float energy, float medicine, float buildingJobs)
+    {
+        if (!c.Defines.HouseholdDynamicsEnabled || s.LastHouseholdReviewDay == c.ElapsedDays || s.Unclaimed || s.Population <= 0)
+            return false;
+        s.LastHouseholdReviewDay = c.ElapsedDays;
+        ReviewGroupsPhase(c, n, s, annualConditions, food, energy, medicine, buildingJobs);
+        return true;
+    }
+
+    internal static void FinishBatchedVitalStep(Campaign c, Nation n, ScenarioState s, long rb, long rd)
+    {
+        s.ReviewBirths = rb;
+        s.ReviewDeaths = rd;
+        EconomySystem.AdjustStatePopulation(s, rb - rd);
+        s.Radicalism = Math.Clamp(s.Radicalism + s.LivelihoodStress * .001f, 0, 1);
+        BeliefDynamics.Review(c, n, s, c.Defines.EconomyTickDays);
+    }
+
     [ThreadStatic] private static HouseholdScratch _householdScratch;
 
     private sealed class HouseholdScratch
@@ -141,6 +160,19 @@ public static class HouseholdEconomy
     {
         if (!c.Defines.HouseholdDynamicsEnabled || s.LastHouseholdReviewDay == c.ElapsedDays || s.Unclaimed || s.Population <= 0) return;
         s.LastHouseholdReviewDay = c.ElapsedDays;
+        ReviewGroupsPhase(c, n, s, annualConditions, food, energy, medicine, buildingJobs);
+        var interval = Math.Clamp(c.Defines.EconomyTickDays, 1, 365) / 365f;
+        var (birth, death, _) = VitalRatesCore(c, n, s, food, energy, medicine, atWar, netBreakdown: null);
+        s.ReviewBirths = (long)Math.Round(s.Population * (double)birth * interval);
+        s.ReviewDeaths = Math.Min(s.Population + s.ReviewBirths, (long)Math.Round(s.Population * (double)death * interval));
+        EconomySystem.AdjustStatePopulation(s, s.ReviewBirths - s.ReviewDeaths);
+        s.Radicalism = Math.Clamp(s.Radicalism + s.LivelihoodStress * .001f, 0, 1);
+        BeliefDynamics.Review(c, n, s, c.Defines.EconomyTickDays);
+    }
+
+    private static void ReviewGroupsPhase(Campaign c, Nation n, ScenarioState s, float annualConditions,
+        float food, float energy, float medicine, float buildingJobs)
+    {
         var interval = Math.Clamp(c.Defines.EconomyTickDays, 1, 365) / 365f;
         var share = DemographicCycle.WorkingShare(s);
         var groups = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(s.PopulationGroups);
@@ -268,12 +300,6 @@ public static class HouseholdEconomy
             }
             if (groups.Length > 0) s.StandardOfLiving = M.Lerp(s.StandardOfLiving, (float)(living / s.Population), .08f);
         }
-        var (birth, death, _) = VitalRatesCore(c, n, s, food, energy, medicine, atWar, netBreakdown: null);
-        s.ReviewBirths = (long)Math.Round(s.Population * (double)birth * interval);
-        s.ReviewDeaths = Math.Min(s.Population + s.ReviewBirths, (long)Math.Round(s.Population * (double)death * interval));
-        EconomySystem.AdjustStatePopulation(s, s.ReviewBirths - s.ReviewDeaths);
-        s.Radicalism = Math.Clamp(s.Radicalism + s.LivelihoodStress * .001f, 0, 1);
-        BeliefDynamics.Review(c, n, s, c.Defines.EconomyTickDays);
     }
 
     /// <summary>

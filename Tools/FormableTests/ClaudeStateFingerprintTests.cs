@@ -123,20 +123,32 @@ public static class ClaudeStateFingerprintTests
         // domestic_crises feature table (0x2158CC78B911DB8A -> 0x340561118E3ACD50). The regional
         // fields the same slice added (acceptance, exhaustion, autonomy) are mixed only when set, and
         // this fixture has no regions; removing exactly the two bindings restores the 10 November value.
-        Check(fixture == 0x340561118E3ACD50UL,
-            $"registered land arrangement metadata retains the recorded golden fingerprint (got 0x{fixture:X16})");
+        // 27 November: AbandonDoctrineCommand, CancelDoctrineStudyCommand (tactical_doctrines) and
+        // AbandonStrategicDoctrineCommand (strategic_doctrines) joined the feature command table
+        // (0x340561118E3ACD50 -> 0x55AD5C2A8747AA81); removing only those three bindings restores the
+        // 17 November golden bit-for-bit, proving no new default state bytes leaked.
+        Check(fixture == 0x55AD5C2A8747AA81UL,
+            $"registered doctrine-cancel & land arrangement metadata retains the recorded golden fingerprint (got 0x{fixture:X16})");
+        var withoutDoctrineCancel = Fixture();
+        WithoutDoctrineCancel(withoutDoctrineCancel);
+        var withoutDoctrineCancelPrint = CampaignFingerprint.Of(withoutDoctrineCancel);
+        Check(withoutDoctrineCancelPrint == 0x340561118E3ACD50UL,
+            $"and without the three doctrine-cancel bindings it is the 17 November golden (got 0x{withoutDoctrineCancelPrint:X16})");
         var withoutAutonomy = Fixture();
+        WithoutDoctrineCancel(withoutAutonomy);
         WithoutAutonomy(withoutAutonomy);
         var withoutAutonomyPrint = CampaignFingerprint.Of(withoutAutonomy);
         Check(withoutAutonomyPrint == 0x2158CC78B911DB8AUL,
             $"and without the two regional autonomy bindings it is the 10 November golden (got 0x{withoutAutonomyPrint:X16})");
         var withoutSeaLift = Fixture();
+        WithoutDoctrineCancel(withoutSeaLift);
         WithoutAutonomy(withoutSeaLift);
         withoutSeaLift.Defines.FeatureCommands.Remove("SeaLiftCommand");
         var withoutSeaLiftPrint = CampaignFingerprint.Of(withoutSeaLift);
         Check(withoutSeaLiftPrint == 0xD2110AF9B5F9FA1AUL,
             $"and without the SeaLiftCommand binding it is the previous golden (got 0x{withoutSeaLiftPrint:X16})");
         var beforeLand = Fixture();
+        WithoutDoctrineCancel(beforeLand);
         WithoutAutonomy(beforeLand);
         beforeLand.Defines.Features.Remove("land_arrangements");
         beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
@@ -151,6 +163,7 @@ public static class ClaudeStateFingerprintTests
         Check(beforeLandPrint == 0xE72B66556F67D038UL,
             $"removing exactly the land arrangement registrations restores the golden without them (got 0x{beforeLandPrint:X16})");
         var legacyMetadata = Fixture();
+        WithoutDoctrineCancel(legacyMetadata);
         WithoutAutonomy(legacyMetadata);
         legacyMetadata.Defines.Features.Remove("land_arrangements");
         legacyMetadata.Defines.FeatureCommands.Remove("LandArrangementCommand");
@@ -170,6 +183,13 @@ public static class ClaudeStateFingerprintTests
         DictionaryOrderIsNotAuthoritative();
         CompactPersistenceRetainsState();
         HashingDoesNotConsumeRandomness();
+    }
+
+    private static void WithoutDoctrineCancel(Campaign campaign)
+    {
+        campaign.Defines.FeatureCommands.Remove("AbandonDoctrineCommand");
+        campaign.Defines.FeatureCommands.Remove("CancelDoctrineStudyCommand");
+        campaign.Defines.FeatureCommands.Remove("AbandonStrategicDoctrineCommand");
     }
 
     private static void WithoutAutonomy(Campaign campaign)

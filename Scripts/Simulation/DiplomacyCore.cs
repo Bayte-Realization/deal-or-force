@@ -390,14 +390,24 @@ public static class CampaignDiplomacy
     }
 
     internal static bool CanDeclareWarQuiet(Campaign campaign, int attackerId, int defenderId,
-        bool onOwnInitiative = true)
+        bool onOwnInitiative = true) =>
+        CanDeclareWarQuietCore(campaign, attackerId, defenderId, onOwnInitiative,
+            checkAtWar: true, knownSharesLandBorder: null, attackerHasFleets: null);
+
+    internal static bool CanDeclareWarQuietFast(Campaign campaign, int attackerId, int defenderId,
+        bool checkAtWar, bool knownSharesLandBorder, bool attackerHasFleets, bool onOwnInitiative = true) =>
+        CanDeclareWarQuietCore(campaign, attackerId, defenderId, onOwnInitiative,
+            checkAtWar, knownSharesLandBorder, attackerHasFleets);
+
+    private static bool CanDeclareWarQuietCore(Campaign campaign, int attackerId, int defenderId,
+        bool onOwnInitiative, bool checkAtWar, bool? knownSharesLandBorder, bool? attackerHasFleets)
     {
         var attacker = campaign.NationById(attackerId);
         var defender = campaign.NationById(defenderId);
         if (attacker is null || defender is null || attacker == defender) return false;
         if (!campaign.HasOwnedLand(attacker) || !campaign.HasOwnedLand(defender)) return false;
         if (attacker.Landless || defender.Landless) return false;
-        if (AtWar(campaign, attackerId, defenderId)) return false;
+        if (checkAtWar && AtWar(campaign, attackerId, defenderId)) return false;
         var relation = Peek(campaign, attackerId, defenderId);
         var responding = SecessionResponse.CanContest(campaign, attacker, defender);
         var reclaiming = responding || SecessionResponse.Reclaiming(attacker, defender);
@@ -412,13 +422,21 @@ public static class CampaignDiplomacy
         }
         var newbornUprising = !onOwnInitiative && defender.SecededFromId == attacker.Id &&
             defender.LastSecessionDay == campaign.ElapsedDays;
-        if (!responding && !newbornUprising && !SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
+        if (!responding && !newbornUprising &&
+            !(knownSharesLandBorder ?? SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex)))
         {
-            var carriers = 0;
-            var fleets = campaign.Fleets;
-            for (var i = 0; i < fleets.Count; i++)
-                if (fleets[i].NationId == attackerId) carriers += fleets[i].Hulls;
-            if (carriers <= 0) return false;
+            if (attackerHasFleets.HasValue)
+            {
+                if (!attackerHasFleets.Value) return false;
+            }
+            else
+            {
+                var carriers = 0;
+                var fleets = campaign.Fleets;
+                for (var i = 0; i < fleets.Count; i++)
+                    if (fleets[i].NationId == attackerId) carriers += fleets[i].Hulls;
+                if (carriers <= 0) return false;
+            }
         }
         return true;
     }
@@ -581,6 +599,7 @@ public static class CampaignDiplomacy
     /// rebuilding reads live controllers and is always the right answer.
     /// </summary>
     private static long _borderForgetStamp;
+    [ThreadStatic] private static List<int> _borderSortScratch;
 
     public static bool SharesLandBorder(Campaign campaign, int mapA, int mapB) =>
         Borders(campaign).TryGetValue(mapA, out var set) && set.Contains(mapB);
@@ -606,17 +625,20 @@ public static class CampaignDiplomacy
         if (campaign is null || player is null) return null;
         Nation worst = null;
         var worstOpinion = float.MaxValue;
-        foreach (var nation in campaign.Nations)
+        if (Borders(campaign).TryGetValue(player.MapIndex, out var borderSet) && borderSet.Count > 0)
         {
-            if (nation.Id == player.Id || nation.Population <= 0 || nation.Movement is not null) continue;
-            if (!SharesLandBorder(campaign, player.MapIndex, nation.MapIndex)) continue;
-            var opinion = Peek(campaign, player.Id, nation.Id)?.Opinion ?? 0f;
-            if (worst is not null &&
-                (opinion > worstOpinion ||
-                 (opinion == worstOpinion && (nation.Population < worst.Population ||
-                  (nation.Population == worst.Population && nation.Id > worst.Id))))) continue;
-            worst = nation;
-            worstOpinion = opinion;
+            foreach (var nation in campaign.Nations)
+            {
+                if (nation.Id == player.Id || nation.Population <= 0 || nation.Movement is not null) continue;
+                if (!borderSet.Contains(nation.MapIndex)) continue;
+                var opinion = Peek(campaign, player.Id, nation.Id)?.Opinion ?? 0f;
+                if (worst is not null &&
+                    (opinion > worstOpinion ||
+                     (opinion == worstOpinion && (nation.Population < worst.Population ||
+                      (nation.Population == worst.Population && nation.Id > worst.Id))))) continue;
+                worst = nation;
+                worstOpinion = opinion;
+            }
         }
         if (worst is not null) return worst;
         foreach (var nation in campaign.Nations)
@@ -686,9 +708,31 @@ public static class CampaignDiplomacy
         campaign.BorderDay = campaign.ElapsedDays;
         campaign.BorderForgetStamp = _borderForgetStamp;
 
-        var lastOwner = 0;
-        var lastOther = 0;
-        HashSet<int> lastSet = null;
+        if (topology.Neighbors is not null &&
+            topology.Neighbors.Length == topology.ProvinceCount + 1 &&
+            Kernels.NativeProvinceGraph.ForMap(topology) is { } nativeGraph &&
+            nativeGraph.TryBorderPairs(controllers, out var pairs))
+        {
+            var lastOwner = 0;
+            HashSet<int> lastSet = null;
+            for (var i = 0; i < pairs.Length; i++)
+            {
+                var packed = pairs[i];
+                var owner = (int)(packed >> 16);
+                var other = (int)(packed & 0xFFFFu);
+                if (owner != lastOwner)
+                {
+                    lastOwner = owner;
+                    if (!table.TryGetValue(owner, out lastSet)) table[owner] = lastSet = new HashSet<int>();
+                }
+                lastSet.Add(other);
+            }
+            return table;
+        }
+
+        var fallbackLastOwner = 0;
+        var fallbackLastOther = 0;
+        HashSet<int> fallbackLastSet = null;
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             var owner = controllers[province];
@@ -698,17 +742,31 @@ public static class CampaignDiplomacy
             {
                 var other = controllers[neighbours[ni]];
                 if (other == 0 || other == owner) continue;
-                if (owner != lastOwner)
+                if (owner != fallbackLastOwner)
                 {
-                    lastOwner = owner;
-                    lastOther = 0;
-                    if (!table.TryGetValue(owner, out lastSet)) table[owner] = lastSet = new HashSet<int>();
+                    fallbackLastOwner = owner;
+                    fallbackLastOther = 0;
+                    if (!table.TryGetValue(owner, out fallbackLastSet)) table[owner] = fallbackLastSet = new HashSet<int>();
                 }
-                if (other == lastOther) continue;
-                lastSet.Add(other);
-                lastOther = other;
+                if (other == fallbackLastOther) continue;
+                fallbackLastSet.Add(other);
+                fallbackLastOther = other;
             }
         }
+        // Native TryBorderPairs emits pairs sorted ascending by (owner, other); canonicalise
+        // each multi-neighbour fallback set in ascending order so HashSet<int> iteration matches
+        // bit-for-bit across DOF_KERNELS_DISABLE=0 and 1.
+        var sortBuf = _borderSortScratch ??= new List<int>(16);
+        foreach (var set in table.Values)
+        {
+            if (set.Count <= 1) continue;
+            sortBuf.Clear();
+            foreach (var item in set) sortBuf.Add(item);
+            sortBuf.Sort();
+            set.Clear();
+            for (var i = 0; i < sortBuf.Count; i++) set.Add(sortBuf[i]);
+        }
+        sortBuf.Clear();
         return table;
     }
 }

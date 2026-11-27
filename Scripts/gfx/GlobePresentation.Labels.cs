@@ -109,8 +109,17 @@ public sealed partial class GlobePresentation
     /// million cells, and that goes on a task - a peace treaty should not drop a frame, and
     /// a name arriving a moment after the colour does is not something anybody can see.
     /// </summary>
+    private const double Label3dFrameBudgetMs = 1.5;
+    private Dictionary<int, TerritoryLabelAnchor> _deferredLabelAnchors;
+    private NationLabelSnapshot[] _deferredLabelNations;
+
     private void RefreshCountryLabelPlacement()
     {
+        if (_deferredLabelAnchors is { } deferredAnchors && _labelTask is null)
+        {
+            BuildCountryLabels(deferredAnchors, _deferredLabelNations);
+            return;
+        }
         var campaign = _campaign;
         if (campaign is null || !campaign.TryEnterRead(0, true)) return;
         try
@@ -166,7 +175,7 @@ public sealed partial class GlobePresentation
                 }
             }
             _labelOwner = snapshot;
-            var fastForward = campaign is { IsPaused: false, Speed: >= 4 };
+            var fastForward = campaign is { IsPaused: false, Speed: >= 7 };
             _nextCountryLabelPlaceMsec = nowMsec + (Platform.PlatformProfile.Current?.IsTouchPrimary == true
                 ? 850UL
                 : (fastForward ? 650UL : 400UL));
@@ -277,6 +286,9 @@ public sealed partial class GlobePresentation
         }
 
         var countryFont = PresentationFonts.For("map.countries");
+        var budgetClock = System.Diagnostics.Stopwatch.GetTimestamp();
+        var rebuiltCountries = 0;
+        var budgetExceeded = false;
 
         foreach (var (mapIndex, anchor) in anchors)
         {
@@ -300,19 +312,12 @@ public sealed partial class GlobePresentation
                 ? mapName + " (" + tag + ")" : mapName).ToUpperInvariant();
             _lastLabelNames[mapIndex] = mapName;
             if (text.Length == 0) continue;
-            // Retain the glyph instances when names or borders change. Replacing every
-            // Label3D at once overlaps old/new GPU resources with resized render targets,
-            // which can exhaust D3D12's descriptor heap during a language/window switch.
             var groupValid = _countryLabelGroups.TryGetValue(mapIndex, out var group) && IsInstanceValid(group);
             if (!groupValid)
             {
-                group = new Node3D { Name = $"CountryLabel_{tag}", Visible = false };
-                _countryLabelRoot.AddChild(group);
-                _countryLabelGroups[mapIndex] = group;
                 _countryGroupGlyphs.Remove(mapIndex);
                 _countryLabelCache.Remove(mapIndex);
             }
-            activeGroups.Add(mapIndex);
             if (!_countryGroupGlyphs.TryGetValue(mapIndex, out var existingGlyphs))
                 existingGlyphs = Array.Empty<Label3D>();
 
@@ -390,11 +395,41 @@ public sealed partial class GlobePresentation
                 CountryLabelCacheMatches(in cached, in anchor, text, fontSize, outline, pixelSize,
                     countryFont, reliefDisplacement, hasReliefGrid, existingGlyphs.Length))
             {
+                activeGroups.Add(mapIndex);
                 for (var g = 0; g < cached.Glyphs.Length; g++)
                     _countryGlyphs.Add(cached.Glyphs[g]);
                 _countryLabels.Add((mapIndex, group, cached.CenterNormal, anchor.Cells));
                 continue;
             }
+
+            // Defer remaining heavy Label3D text-mesh rebuilds cleanly across frames (<= 1.5 ms/frame).
+            if (budgetExceeded ||
+                (rebuiltCountries > 0 &&
+                 System.Diagnostics.Stopwatch.GetElapsedTime(budgetClock).TotalMilliseconds >= Label3dFrameBudgetMs))
+            {
+                budgetExceeded = true;
+                if (groupValid && _countryLabelCache.TryGetValue(mapIndex, out var prevCache))
+                {
+                    activeGroups.Add(mapIndex);
+                    for (var g = 0; g < prevCache.Glyphs.Length; g++)
+                        _countryGlyphs.Add(prevCache.Glyphs[g]);
+                    _countryLabels.Add((mapIndex, group, prevCache.CenterNormal, anchor.Cells));
+                }
+                continue;
+            }
+
+            rebuiltCountries++;
+            // Retain the glyph instances when names or borders change. Replacing every
+            // Label3D at once overlaps old/new GPU resources with resized render targets,
+            // which can exhaust D3D12's descriptor heap during a language/window switch.
+            if (!groupValid)
+            {
+                group = new Node3D { Name = $"CountryLabel_{tag}", Visible = false };
+                _countryLabelRoot.AddChild(group);
+                _countryLabelGroups[mapIndex] = group;
+                existingGlyphs = Array.Empty<Label3D>();
+            }
+            activeGroups.Add(mapIndex);
 
             anyCountryChanged = true;
             _countryAppliedVisible.Remove(mapIndex);
@@ -541,20 +576,31 @@ public sealed partial class GlobePresentation
                 anchor, text, fontSize, outline, pixelSize, countryFont,
                 reliefDisplacement, hasReliefGrid, centerNormal, cachedGlyphs.ToArray());
         }
-        _staleCountryGroupsScratch.Clear();
-        foreach (var id in _countryLabelGroups.Keys)
-            if (!activeGroups.Contains(id)) _staleCountryGroupsScratch.Add(id);
-        foreach (var id in _staleCountryGroupsScratch)
+        if (budgetExceeded)
         {
-            anyCountryChanged = true;
-            var group = _countryLabelGroups[id];
-            if (IsInstanceValid(group)) { _countryLabelRoot.RemoveChild(group); group.QueueFree(); }
-            _countryLabelGroups.Remove(id);
-            _countryGroupGlyphs.Remove(id);
-            _countryLabelCache.Remove(id);
-            _countryAppliedVisible.Remove(id);
-            _countryAppliedScale.Remove(id);
-            _countryAppliedAlpha.Remove(id);
+            _deferredLabelAnchors = anchors;
+            _deferredLabelNations = nations;
+            WakeGlobeRendering();
+        }
+        else
+        {
+            _deferredLabelAnchors = null;
+            _deferredLabelNations = null;
+            _staleCountryGroupsScratch.Clear();
+            foreach (var id in _countryLabelGroups.Keys)
+                if (!activeGroups.Contains(id)) _staleCountryGroupsScratch.Add(id);
+            foreach (var id in _staleCountryGroupsScratch)
+            {
+                anyCountryChanged = true;
+                var group = _countryLabelGroups[id];
+                if (IsInstanceValid(group)) { _countryLabelRoot.RemoveChild(group); group.QueueFree(); }
+                _countryLabelGroups.Remove(id);
+                _countryGroupGlyphs.Remove(id);
+                _countryLabelCache.Remove(id);
+                _countryAppliedVisible.Remove(id);
+                _countryAppliedScale.Remove(id);
+                _countryAppliedAlpha.Remove(id);
+            }
         }
         if (anyCountryChanged)
         {

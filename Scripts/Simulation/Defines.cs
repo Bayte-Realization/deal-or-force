@@ -257,8 +257,9 @@ public sealed partial class Defines
 	/// </summary>
 	// Save loading otherwise populates this non-empty default list, appending the
 	// saved five speeds on every reload. A saved speed table replaces defaults.
+	/// <summary>Seconds between campaign steps for speeds 1..8 (slowest -> fastest).</summary>
 	[JsonObjectCreationHandling(JsonObjectCreationHandling.Replace)]
-	public List<float> SpeedFactors { get; set; } = new() { 1f, 0.4f, 0.15f, 0.035f, 0.002f };
+	public List<float> SpeedFactors { get; set; } = new() { 2.40f, 1.20f, 0.60f, 0.28f, 0.13f, 0.055f, 0.020f, 0.002f };
 
 	// --- the globe ---
 

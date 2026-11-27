@@ -303,18 +303,36 @@ public static class MapRasterCatalog
         LakePath = null;
         StampPath = null;
         SourceControlPath = SourceStatesPath = SourceDisputesPath = null;
-        var descriptor = GameDataLoader.FindDataFile("map_data", DescriptorFile);
-        if (descriptor is not null) ApplyDirectory(Path.GetDirectoryName(descriptor)!, null);
+        if (!string.Equals(MapCatalog.ActiveMapId, MapCatalog.StandardId, StringComparison.Ordinal) &&
+            MapCatalog.ActiveEntry is { } pack && !string.IsNullOrWhiteSpace(pack.Directory))
+        {
+            var baseDescriptor = GameDataLoader.FindDataFile("map_data", DescriptorFile);
+            if (baseDescriptor is not null) ApplyDirectory(Path.GetDirectoryName(baseDescriptor)!, null);
+            ApplyDirectory(pack.Directory, null);
+            ProvincePath = MapCatalog.ResolveMapFile(ProvinceFile);
+            DefinitionPath = MapCatalog.ResolveMapFile(DefinitionFile);
+            RiverPath = MapCatalog.ResolveMapFile(RiverFile);
+            LakePath = MapCatalog.ResolveMapFile(LakeFile);
+            StampPath = MapCatalog.ResolveMapFile(StampFile);
+            SourceControlPath = MapCatalog.ResolveMapFile("source_control.png");
+            SourceStatesPath = MapCatalog.ResolveMapFile("source_states.png");
+            SourceDisputesPath = MapCatalog.ResolveMapFile("source_disputes.png");
+        }
         else
         {
-            ProvincePath = GameDataLoader.FindDataFile("map_data", ProvinceFile);
-            DefinitionPath = GameDataLoader.FindDataFile("map_data", DefinitionFile);
-            RiverPath = GameDataLoader.FindDataFile("map_data", RiverFile);
-            LakePath = GameDataLoader.FindDataFile("map_data", LakeFile);
-            StampPath = GameDataLoader.FindDataFile("map_data", StampFile);
-            SourceControlPath = GameDataLoader.FindDataFile("map_data", "source_control.png");
-            SourceStatesPath = GameDataLoader.FindDataFile("map_data", "source_states.png");
-            SourceDisputesPath = GameDataLoader.FindDataFile("map_data", "source_disputes.png");
+            var descriptor = MapCatalog.ResolveMapFile(DescriptorFile);
+            if (descriptor is not null) ApplyDirectory(Path.GetDirectoryName(descriptor)!, null);
+            else
+            {
+                ProvincePath = MapCatalog.ResolveMapFile(ProvinceFile);
+                DefinitionPath = MapCatalog.ResolveMapFile(DefinitionFile);
+                RiverPath = MapCatalog.ResolveMapFile(RiverFile);
+                LakePath = MapCatalog.ResolveMapFile(LakeFile);
+                StampPath = MapCatalog.ResolveMapFile(StampFile);
+                SourceControlPath = MapCatalog.ResolveMapFile("source_control.png");
+                SourceStatesPath = MapCatalog.ResolveMapFile("source_states.png");
+                SourceDisputesPath = MapCatalog.ResolveMapFile("source_disputes.png");
+            }
         }
         }
         finally
@@ -638,12 +656,33 @@ public static class MapRasterCatalog
         }
     }
 
+    public static void ExportPack(string directory, ProvinceTopology topology, ushort[] states = null) =>
+        ExportProvinceFiles(directory, topology, states);
+
     public static void Export(string directory, ProvinceTopology topology, HydrologyRaster hydrology,
         ushort[] states = null)
+    {
+        ExportProvinceFiles(directory, topology, states);
+
+        var rivers = new byte[topology.Width * topology.Height * 3];
+        var lakes = new byte[rivers.Length];
+        for (var cell = 0; cell < topology.Width * topology.Height; cell++)
+        {
+            var lake = hydrology.Pixels[cell * 2];
+            var river = hydrology.Pixels[cell * 2 + 1];
+            if (lake > 0) WriteColor(lakes, cell * 3, 0x3366FF);
+            if (river > 0) WriteColor(rivers, cell * 3, river <= 110 ? 0x1E5AA8 : river <= 190 ? 0x1E8CD2 : 0x2DD4FF);
+        }
+        DataMapPng.SaveRgb(Path.Combine(directory, RiverFile), topology.Width, topology.Height, rivers);
+        DataMapPng.SaveRgb(Path.Combine(directory, LakeFile), topology.Width, topology.Height, lakes);
+    }
+
+    private static void ExportProvinceFiles(string directory, ProvinceTopology topology, ushort[] states)
     {
         Directory.CreateDirectory(directory);
         if (states is not null)
         {
+            var regionFingerprint = RegionFingerprint(states);
             var note = "Written by Tools/MapDataCompiler. Not hand-edited - it records which " +
                 "region layer provinces.png was cut from, so a mismatch can say so instead of " +
                 "looking like a corrupt map.";
@@ -651,11 +690,13 @@ public static class MapRasterCatalog
             stamp.AppendLine("{");
             stamp.AppendLine($"  \"//\": \"{note}\",");
             stamp.AppendLine(string.Create(CultureInfo.InvariantCulture,
-                $"  \"regions\": {RegionFingerprint(states)},"));
+                $"  \"regions\": {regionFingerprint},"));
             stamp.AppendLine(string.Create(CultureInfo.InvariantCulture,
                 $"  \"provinces\": {topology.ProvinceCount}"));
             stamp.AppendLine("}");
             File.WriteAllText(Path.Combine(directory, StampFile), stamp.ToString(), new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(directory, MapCatalog.RegionFingerprintFile),
+                regionFingerprint.ToString(CultureInfo.InvariantCulture), new UTF8Encoding(false));
         }
 
         var provinces = new byte[topology.Width * topology.Height * 3];
@@ -669,28 +710,14 @@ public static class MapRasterCatalog
             provinces[cell * 3 + 2] = (byte)color;
         }
         DataMapPng.SaveRgb(Path.Combine(directory, ProvinceFile), topology.Width, topology.Height, provinces);
-        using (var writer = new StreamWriter(Path.Combine(directory, DefinitionFile), false, new UTF8Encoding(false)))
+        using var writer = new StreamWriter(Path.Combine(directory, DefinitionFile), false, new UTF8Encoding(false));
+        writer.WriteLine("province_id;r;g;b;state_id;nation_id");
+        for (var id = 1; id <= topology.ProvinceCount; id++)
         {
-            writer.WriteLine("province_id;r;g;b;state_id;nation_id");
-            for (var id = 1; id <= topology.ProvinceCount; id++)
-            {
-                var color = ColorForProvince(id);
-                writer.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                    $"{id};{(color >> 16) & 255};{(color >> 8) & 255};{color & 255};{topology.ProvinceToState[id]};{topology.ProvinceToNation[id]}"));
-            }
+            var color = ColorForProvince(id);
+            writer.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"{id};{(color >> 16) & 255};{(color >> 8) & 255};{color & 255};{topology.ProvinceToState[id]};{topology.ProvinceToNation[id]}"));
         }
-
-        var rivers = new byte[topology.Width * topology.Height * 3];
-        var lakes = new byte[rivers.Length];
-        for (var cell = 0; cell < topology.Width * topology.Height; cell++)
-        {
-            var lake = hydrology.Pixels[cell * 2];
-            var river = hydrology.Pixels[cell * 2 + 1];
-            if (lake > 0) WriteColor(lakes, cell * 3, 0x3366FF);
-            if (river > 0) WriteColor(rivers, cell * 3, river <= 110 ? 0x1E5AA8 : river <= 190 ? 0x1E8CD2 : 0x2DD4FF);
-        }
-        DataMapPng.SaveRgb(Path.Combine(directory, RiverFile), topology.Width, topology.Height, rivers);
-        DataMapPng.SaveRgb(Path.Combine(directory, LakeFile), topology.Width, topology.Height, lakes);
     }
 
     private static Dictionary<int, int> LoadDefinitions(string path)

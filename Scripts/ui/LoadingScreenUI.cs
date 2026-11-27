@@ -19,7 +19,7 @@ public partial class DealOrForceGame
     private double _loadingStageStart;
     private Control _loadingPreviousFocus;
 
-    private async Task<bool> RunLoadingOperation(string heading, Func<Task> operation, bool canReturn = false)
+    private async Task<bool> RunLoadingOperation(string heading, Func<Task> operation, bool canReturn = false, Action onFailureDismissed = null)
     {
         if (_isLoading) return false;
         _isLoading = true;
@@ -64,7 +64,7 @@ public partial class DealOrForceGame
             else GD.PushError($"[dof] loading failed ({_loadingStage}): {exception.Message}");
             _loadingScreen.ShowFailure(exception.Message, _loadingCanReturn, () =>
             {
-                if (_loadingCanReturn) CloseLoadingScreen();
+                if (_loadingCanReturn) { CloseLoadingScreen(); onFailureDismissed?.Invoke(); }
                 else ApplicationExit.Request(this);
             });
             return false;

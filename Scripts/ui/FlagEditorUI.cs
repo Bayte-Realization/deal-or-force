@@ -32,16 +32,19 @@ public partial class DealOrForceGame
         FlagRaster raster = null;
         var path = SpriteCatalog.TextureOf(sprite);
         if (!path.StartsWith(FlagDesignCatalog.TexturePrefix, StringComparison.Ordinal) &&
-            path.Length > 0 && ResourceLoader.Exists(path) && GD.Load<Texture2D>(path)?.GetImage() is { } image)
+            path.Length > 0 && ResourceLoader.Exists(path) && GD.Load<Texture2D>(path)?.GetImage() is { } loaded)
         {
-            image = (Image)image.Duplicate();
-            if (image.IsCompressed()) image.Decompress();
-            image.Convert(Image.Format.Rgba8);
-            var longest = Math.Max(image.GetWidth(), image.GetHeight());
-            if (longest > 256)
-                image.Resize(Math.Max(1, image.GetWidth() * 256 / longest), Math.Max(1, image.GetHeight() * 256 / longest),
-                    Image.Interpolation.Lanczos);
-            raster = new FlagRaster(image.GetWidth(), image.GetHeight(), image.GetData());
+            using (loaded)
+            {
+                using var image = (Image)loaded.Duplicate();
+                if (image.IsCompressed()) image.Decompress();
+                image.Convert(Image.Format.Rgba8);
+                var longest = Math.Max(image.GetWidth(), image.GetHeight());
+                if (longest > 256)
+                    image.Resize(Math.Max(1, image.GetWidth() * 256 / longest), Math.Max(1, image.GetHeight() * 256 / longest),
+                        Image.Interpolation.Lanczos);
+                raster = new FlagRaster(image.GetWidth(), image.GetHeight(), image.GetData());
+            }
         }
         return FlagEmblemRasters[sprite] = raster;
     }
@@ -566,8 +569,8 @@ public partial class DealOrForceGame
                 var exports = Path.Combine(AuthorRoot, "exports", "flags");
                 Directory.CreateDirectory(exports);
                 var raster = design.Render(512, FlagEmblemRaster);
-                Image.CreateFromData(raster.Width, raster.Height, false, Image.Format.Rgba8, raster.Pixels)
-                    .SavePng(Path.Combine(exports, design.Id + ".png"));
+                using var exportImage = Image.CreateFromData(raster.Width, raster.Height, false, Image.Format.Rgba8, raster.Pixels);
+                exportImage.SavePng(Path.Combine(exports, design.Id + ".png"));
                 FlagDesignCatalog.Put(design);
                 if (_campaign is not null) Refresh();
                 dirty?.Invoke(false);

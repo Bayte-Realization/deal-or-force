@@ -37,53 +37,10 @@ public partial class DealOrForceGame
         _hudLayer.AddChild(_planningBar);
         Ui.Place(_planningBar, "hud.planning_bar");
 
-        var column = new VBoxContainer();
+        var column = new VBoxContainer { ClipContents = true };
         column.AddThemeConstantOverride("separation", 3);
         _planningBar.AddChild(column);
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", Ui.Gap(4));
-        column.AddChild(row);
-
-        var height = Ui.Metric("planning_bar.button_height", 30);
-        // Where the line is: the whole border, or one drawn by hand.
-        var wholeFront = ArmyIconButton("Whole front", AssignWholeFront, 0, height, false, "plan_front");
-        wholeFront.Name = "WholeFront";
-        ArmyCommandTip(wholeFront, "Whole front",
-            "One front along every land border with every country at war with you. It grows and shrinks by itself as the line moves and as enemies join or leave the war; the selection spreads along all of it.");
-        row.AddChild(wholeFront);
-        // One border, and only that one: the order players asked to have back. A click takes the
-        // whole border with one country; a drag takes a stretch of it.
-        AddDrawButton(row, "One border", "plan_front", FrontLineKind.Defence, "Front on one border",
-            "Click a land border with a country: the selection takes that whole border, digs in, and keeps to it as the border moves - and to no other country. Or hold the right button and drag to take only a stretch of it.");
-        AddDrawButton(row, "Attack", "plan_attack", FrontLineKind.Offensive, "Offensive",
-            "With the selection on one front: drag with the right button where it should get to, inside the enemy's country. Shift+drag adds a later phase, Alt+drag redraws the current one.");
-        AddDrawButton(row, "Defend", "plan_fallback", FrontLineKind.Fallback, "Defensive line",
-            "Drag with the right button across your own ground: the selection spreads along the line and holds it at once, in peace or war.");
-        _planEraserButton = ArmyIconButton("", TogglePlanEraser, 0, height, false, "plan_erase");
-        ArmyCommandTip(_planEraserButton, "Eraser",
-            "Click a plan on the map to erase it. An offensive arrow erases only its objective and keeps the front it leaves from.");
-        row.AddChild(_planEraserButton);
-
-        row.AddChild(new VSeparator());
-        // The switch: an offensive waits on its front until it is told to go, and can be held again.
-        _planningExecute = ArmyIconButton("Execute", TogglePlanningExecution, 0, height, true, "plan_execute");
-        row.AddChild(_planningExecute);
-        var halt = ArmyIconButton("", () => IssueArmyOrder(ArmyOrder.Manual), 0, height, false, "army_halt");
-        ArmyCommandTip(halt, "Halt (H)", "Stop the selection where it stands, out of any plan.");
-        row.AddChild(halt);
-        var clear = ArmyIconButton("", ClearDrawnLine, 0, height, false, "plan_clear");
-        ArmyCommandTip(clear, "Clear plans", "Delete the plans of the selected divisions and stop their planned movement. Battles already joined go on.");
-        row.AddChild(clear);
-
-        // What the tool in hand does, and what it has drawn: the only instructions there are.
-        _drawFeedback = new Label
-        {
-            Text = "", AutowrapMode = TextServer.AutowrapMode.Off, ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
-        };
-        _drawFeedback.AddThemeFontSizeOverride("font_size", Ui.TypeStep((int)Ui.Metric("planning_bar.hint_font", 11)));
-        _drawFeedback.AddThemeColorOverride("font_color", Ui.Colour("text.muted"));
-        column.AddChild(_drawFeedback);
+        BuildPlanningBarControls(column);
     }
 
     /// <summary>Shown while divisions are selected or a tool is in hand; beside the orders panel.</summary>

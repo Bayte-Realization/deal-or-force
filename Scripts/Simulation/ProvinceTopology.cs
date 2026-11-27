@@ -6,6 +6,24 @@ using System.Linq;
 namespace DealOrForce.Simulation;
 
 /// <summary>
+/// Parameters controlling how administrative states are subdivided into tactical provinces.
+/// <see cref="Standard"/> matches the shipped 34,138-province world bit-for-bit; map packs override
+/// density globally or per climate/region (<see cref="SiberiaMultiplier"/>, <see cref="PolarMultiplier"/>,
+/// <see cref="DisputedCellsPerProvince"/>).
+/// </summary>
+public sealed record ProvinceBuildProfile(
+    int CellsPerProvince = ProvinceTopology.CellsPerProvince,
+    int DisputedCellsPerProvince = ProvinceTopology.DisputedCellsPerProvince,
+    float PolarFromLatitude = ProvinceTopology.PolarFromLatitude,
+    float PopulatedShare = ProvinceTopology.PopulatedShare,
+    float SiberiaMultiplier = 1f,
+    float PolarMultiplier = 1f,
+    int MinimumProvinceCells = ProvinceTopology.MinimumProvinceCells)
+{
+    public static readonly ProvinceBuildProfile Standard = new();
+}
+
+/// <summary>
 /// Deterministically subdivides administrative states into the same tactical map tier
 /// used by the source project. Province geometry is derived from moddable state/control
 /// rasters, never from presentation colours, so rendering and selection cannot disagree.
@@ -224,8 +242,18 @@ public sealed class ProvinceTopology
         ushort[] control,
         int width,
         int height,
-        Func<int, bool> isDisputed)
+        Func<int, bool> isDisputed) =>
+        Build(states, control, width, height, isDisputed, ProvinceBuildProfile.Standard);
+
+    public static ProvinceTopology Build(
+        ushort[] states,
+        ushort[] control,
+        int width,
+        int height,
+        Func<int, bool> isDisputed,
+        ProvinceBuildProfile profile)
     {
+        profile ??= ProvinceBuildProfile.Standard;
         if (states.Length != width * height || control.Length != states.Length)
             throw new ArgumentException("Political rasters must match the declared dimensions.");
 
@@ -244,6 +272,12 @@ public sealed class ProvinceTopology
         while (GreatestCommonDivisor(stride, states.Length) != 1) stride += 2;
         var cursor = 0;
         var rowGround = RowGround(width, height);
+        var polarFromLatitude = profile.PolarFromLatitude;
+        var populatedShare = profile.PopulatedShare;
+        var minProvinceCells = Math.Max(1, profile.MinimumProvinceCells);
+        var minFloor = minProvinceCells == MinimumProvinceCells
+            ? 18
+            : Math.Max(6, (int)MathF.Round(minProvinceCells * 0.75f));
 
         // A full-cycle modular walk scatters province seeds over the whole planet.
         // This removes the visible raster-scan bands while remaining deterministic.
@@ -260,18 +294,35 @@ public sealed class ProvinceTopology
             var province = provinceToState.Count;
             provinceToState.Add(state);
             provinceToNation.Add(control[start]);
-            var baseline = disputedStates.Contains(state) ? DisputedCellsPerProvince : CellsPerProvince;
+            var baseline = disputedStates.Contains(state) ? profile.DisputedCellsPerProvince : profile.CellsPerProvince;
             // The raster is equirectangular: a cell at 72 degrees covers a third of the ground a
             // cell at the equator does, so provinces of a fixed cell count put three times as many
             // provinces on Greenland per square kilometre as on the Ukraine steppe, and six times as
             // many on Antarctica. Past PolarFromLatitude a province grows with the ground it covers;
             // the provinces the ice gives up are spread over everywhere else (PopulatedShare), so
             // the map keeps its count and spends it where people live and fight.
-            var seedLatitude = MathF.Abs(90f - (start / width + 0.5f) * 180f / height);
+            var rawLatitude = 90f - (start / width + 0.5f) * 180f / height;
+            var seedLatitude = MathF.Abs(rawLatitude);
             // Only the world raster: a test grid of sixty-four cells has no latitudes to speak of.
-            var ground = width < WorldRasterWidth ? 1f : seedLatitude <= PolarFromLatitude ? PopulatedShare
-                : MathF.Cos(PolarFromLatitude * MathF.PI / 180f) / MathF.Max(0.0025f, MathF.Cos(seedLatitude * MathF.PI / 180f));
-            baseline = Math.Max(MinimumProvinceCells + 6, (int)MathF.Round(baseline * Math.Clamp(ground, 0.5f, 200f)));
+            var ground = width < WorldRasterWidth ? 1f : seedLatitude <= polarFromLatitude ? populatedShare
+                : MathF.Cos(polarFromLatitude * MathF.PI / 180f) / MathF.Max(0.0025f, MathF.Cos(seedLatitude * MathF.PI / 180f));
+            var multiplier = 1f;
+            if (width >= WorldRasterWidth)
+            {
+                if (profile.SiberiaMultiplier > 1f && rawLatitude >= 50f)
+                {
+                    var seedLongitude = (start % width + 0.5f) * 360f / width - 180f;
+                    if (seedLongitude >= 60f && seedLongitude <= 180f)
+                        multiplier *= profile.SiberiaMultiplier;
+                }
+                if (profile.PolarMultiplier > 1f && seedLatitude >= polarFromLatitude)
+                    multiplier *= profile.PolarMultiplier;
+            }
+            var clampedGround = Math.Clamp(ground, 0.5f, 200f);
+            var scaledCells = multiplier == 1f
+                ? baseline * clampedGround
+                : baseline * clampedGround * multiplier;
+            baseline = Math.Max(minProvinceCells + 6, (int)MathF.Round(scaledCells));
             // Keep neighbouring provinces recognisably different without turning
             // their borders into tendrils.  The resulting cells are a relaxed,
             // irregular Voronoi-like layer: mostly convex, occasionally elongated,
@@ -279,7 +330,7 @@ public sealed class ProvinceTopology
             // Deliberately use a broad area distribution. A narrow +/-25 % band made
             // the 40k layer read as a repeating field of fish-scales at strategic
             // zoom even though every border was technically irregular.
-            var minimumCap = Math.Max(18, (int)MathF.Round(baseline * 0.43f));
+            var minimumCap = Math.Max(minFloor, (int)MathF.Round(baseline * 0.43f));
             var maximumCap = Math.Max(minimumCap + 8, (int)MathF.Round(baseline * 1.72f));
             var cap = minimumCap + (int)(Hash((uint)province) % (uint)(maximumCap - minimumCap + 1));
             var seedX = start % width;

@@ -15,15 +15,25 @@ public sealed partial class Defines
 /// intention check, not a bonus to combat, a free annexation, or a truce bypass.</summary>
 public static partial class AiStatecraft
 {
+    [ThreadStatic] private static HashSet<int> _warAimEnemies;
+    [ThreadStatic] private static HashSet<int> _warAimStates;
+    [ThreadStatic] private static HashSet<int> _warAimApproaches;
+    [ThreadStatic] private static HashSet<int> _warAimLocal;
+
     internal static bool StrategicWarAim(Campaign c, Nation nation, StrategicWar war, ScenarioState region)
     {
         // A war of absorption values every region of the enemy, not just the one the
         // declaration named. Otherwise the front and the peace writer disagree about what
         // the war is for.
         if (!war.Limited &&
-            war.Justification is ("hegemony" or "annexation" or "reunification" or "conquest" or "imperialism") &&
-            war.EnemiesOf(nation.Id).Select(c.NationById)
-                .Any(enemy => enemy is not null && enemy.MapIndex == region.NationMapIndex)) return true;
+            war.Justification is ("hegemony" or "annexation" or "reunification" or "conquest" or "imperialism"))
+        {
+            foreach (var enemyId in war.EnemiesOf(nation.Id))
+            {
+                if (c.NationById(enemyId) is { } enemy && enemy.MapIndex == region.NationMapIndex)
+                    return true;
+            }
+        }
         if (region.MapIndex == war.ClaimedStateMapIndex ||
             TerritorialClaims.TitleOf(c, nation, region) == TerritorialTitle.Homeland) return true;
         // A rising's national ground: its own people next to the ground it already holds.
@@ -31,25 +41,54 @@ public static partial class AiStatecraft
         if (WarAims.RebelClaim(c, war, nation, region)) return true;
         // A small, authored consolidation project remains this participant's interest
         // inside a coalition war. Shared culture alone is not a world-conquest mandate.
-        if (!war.Limited && ConsolidationAim(c,nation,region)) return true;
+        if (!war.Limited && ConsolidationAim(c, nation, region)) return true;
         if (!war.IsAttacking(nation.Id) || war.Justification != "irredentism" || region.Population <= 0) return false;
-        var primary = region.PopulationGroups.Where(g => DemographyCatalog.IsPrimary(nation.Tag, g.Culture))
-            .Sum(g => Math.Max(0L, g.Size));
-        return primary > region.Population / 2;
+        return PrimaryPopulation(nation.Tag, region) > region.Population / 2;
+    }
+
+    private static long PrimaryPopulation(string tag, ScenarioState region)
+    {
+        var groups = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(region.PopulationGroups);
+        long primary = 0;
+        string lastCulture = null;
+        var lastPrimary = false;
+        for (var i = 0; i < groups.Length; i++)
+        {
+            var g = groups[i];
+            if (g.Size <= 0 || g.Culture is null) continue;
+            if (!ReferenceEquals(g.Culture, lastCulture))
+            {
+                lastCulture = g.Culture;
+                lastPrimary = DemographyCatalog.IsPrimary(tag, lastCulture);
+            }
+            if (lastPrimary) primary += g.Size;
+        }
+        return primary;
+    }
+
+    private static bool ContainsTagIgnoreCase(string[] tags, string tag)
+    {
+        for (var i = 0; i < tags.Length; i++)
+            if (string.Equals(tags[i], tag, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     internal static bool ConsolidationAim(Campaign c, Nation nation, ScenarioState region)
     {
-        if(region.Population<=0) return false;
-        var owner=c.Nations.Find(n=>n.MapIndex==region.NationMapIndex);
-        if(owner is null || owner.Id==nation.Id) return false;
-        var primary=region.PopulationGroups.Where(g=>DemographyCatalog.IsPrimary(nation.Tag,g.Culture))
-            .Sum(g=>Math.Max(0L,g.Size));
-        if(primary<=region.Population/2) return false;
-        return FormableNations.All.Any(f=>f.AiFoundation && f.RequiredTags.Length is >=2 and <=3 &&
-            f.RequiredTags.Contains(nation.Tag,StringComparer.OrdinalIgnoreCase) &&
-            f.RequiredTags.Contains(owner.Tag,StringComparer.OrdinalIgnoreCase) &&
-            FormableNations.Eligible(c,nation,f) && FormableNations.CompatibleProclamation(nation,f));
+        if (region.Population <= 0) return false;
+        var owner = c.NationByMapIndex(region.NationMapIndex);
+        if (owner is null || owner.Id == nation.Id) return false;
+        if (PrimaryPopulation(nation.Tag, region) <= region.Population / 2) return false;
+        foreach (var f in FormableNations.All)
+        {
+            if (f.AiFoundation && f.RequiredTags.Length is >= 2 and <= 3 &&
+                ContainsTagIgnoreCase(f.RequiredTags, nation.Tag) &&
+                ContainsTagIgnoreCase(f.RequiredTags, owner.Tag) &&
+                FormableNations.Eligible(c, nation, f) &&
+                FormableNations.CompatibleProclamation(nation, f))
+                return true;
+        }
+        return false;
     }
 
     internal static bool ShouldPressWarAim(Campaign c, Nation nation, StrategicWar war, PeaceDemand draft = null)
@@ -69,13 +108,26 @@ public static partial class AiStatecraft
             if (duration >= c.Defines.AiStalemateDays || war.Stalled || nation.WarSupport < 0.65f)
                 return false;
         }
-        var enemies = war.EnemiesOf(nation.Id).Select(c.NationById).Where(n => n is not null)
-            .Select(n => n.MapIndex).ToHashSet();
-        var aims = c.States.Where(s => enemies.Contains(s.NationMapIndex) && StrategicWarAim(c, nation, war, s))
-            .Select(s => s.MapIndex).ToHashSet();
+        var enemies = _warAimEnemies ??= new HashSet<int>();
+        enemies.Clear();
+        var aims = _warAimStates ??= new HashSet<int>();
+        aims.Clear();
+        foreach (var eid in war.EnemiesOf(nation.Id))
+        {
+            var enemy = c.NationById(eid);
+            if (enemy is null) continue;
+            enemies.Add(enemy.MapIndex);
+            var enemyStates = c.StatesOf(enemy);
+            for (var si = 0; si < enemyStates.Length; si++)
+            {
+                var st = enemyStates[si];
+                if (StrategicWarAim(c, nation, war, st)) aims.Add(st.MapIndex);
+            }
+        }
         if (aims.Count == 0) return false;
         // Read only the local front and reconnaissance, not hidden enemy strength.
-        var approaches = new HashSet<int>();
+        var approaches = _warAimApproaches ??= new HashSet<int>();
+        approaches.Clear();
         foreach (var post in war.FriendlyFront(nation.Id))
         {
             if (post <= 0 || post > map.ProvinceCount ||
@@ -85,8 +137,13 @@ public static partial class AiStatecraft
                     (draft is null || !draft.Provinces.Contains(next))) approaches.Add(post);
         }
         if (approaches.Count == 0) return false;
-        var local = new HashSet<int>(approaches);
-        foreach (var post in approaches) foreach (var next in map.Neighbors[post]) local.Add(next);
+        var local = _warAimLocal ??= new HashSet<int>();
+        local.Clear();
+        foreach (var post in approaches)
+        {
+            local.Add(post);
+            foreach (var next in map.Neighbors[post]) local.Add(next);
+        }
         var ready = 0f; var resistance = 0f;
         foreach (var army in c.Armies)
         {

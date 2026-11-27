@@ -1,0 +1,4 @@
+{
+  "studio.map.example_custom_map.name": "Пример: Региональный архипелаг",
+  "studio.map.example_custom_map.desc": "Пример подключаемого пакета карты в maps/<id>/map.json с настройкой размера провинций и наследованием базовой гидрологии."
+}

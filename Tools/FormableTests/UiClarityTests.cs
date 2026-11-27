@@ -164,6 +164,21 @@ static class UiClarityTests
         var snapSecond = ShellAlerts.BuildSnapshot(campaign, campaign.Player, outlinerOpen: false, nextHintsEnabled: false, observer: true);
         Check(snapSecond is not null, "ShellAlerts builds snapshot cleanly for newly observed country while paused");
 
+        // Speed-8 Observer render snapshot exposes non-empty public RankingRows lock-free
+        campaign.Speed = 8;
+        var expectedRankings = CountryRankings.Read(campaign, CountryRankings.Weights.Default);
+        var obsSnap = CampaignRenderSnapshot.Capture(campaign, CampaignRenderSnapshot.Empty, CountryRankings.Weights.Default, 1);
+        Check(obsSnap.RankingRows.Count > 0 && obsSnap.RankingRows.Count == expectedRankings.Count &&
+              obsSnap.RankingRows[0].NationId == expectedRankings[0].NationId,
+            "CampaignRenderSnapshot exposes full non-empty RankingRows for lock-free Observer rankings at Speed 8");
+
+        var rankUiPath = Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts", "ui", "CountryRankingsUI.cs");
+        var rankUiSrc = File.ReadAllText(rankUiPath);
+        Check(rankUiSrc.Contains("TryEnterPriorityRead", StringComparison.Ordinal) &&
+              rankUiSrc.Contains("TryAdoptLockFreeRankingSnapshot", StringComparison.Ordinal) &&
+              rankUiSrc.Contains("HandleMidStepRankings", StringComparison.Ordinal),
+            "CountryRankingsUI uses priority reads and lock-free snapshot adoption without wiping mid-step observer rows");
+
         // Return to original seat and leave observer mode
         campaign.ViewAs(first.Id);
         campaign.ObserverMode = false;

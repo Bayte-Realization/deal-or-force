@@ -135,7 +135,7 @@ public static class StrategicDoctrineCatalog
 /// changed only at a political price and never in the middle of a war. This layer says how the
 /// country means to win; the tactical layer says how its divisions fight.
 /// </summary>
-public static class StrategicDoctrines
+public static partial class StrategicDoctrines
 {
     /// <summary>Which strategy each character of government reaches for (AiStrategyCatalog).</summary>
     private static readonly Dictionary<string, string> CharacterStrategies = new(StringComparer.OrdinalIgnoreCase)
@@ -184,7 +184,7 @@ public static class StrategicDoctrines
         if (doctrine is null) return Loc.Get("No such strategy is written.");
         if (string.Equals(nation.StrategicDoctrine.Id, id, StringComparison.Ordinal))
             return Loc.Get("This is already the country's strategy.");
-        if (nation.StrategicDoctrine.Id.Length == 0) return "";      // the first choice is free
+        if (IsFirstChoiceFree(nation)) return "";                    // the first choice is free
         if (nation.PoliticalPoints + 0.001f < doctrine.PoliticalCost)
             return Loc.Format("Changing the grand strategy costs {0} political points.", doctrine.PoliticalCost);
         return "";
@@ -195,16 +195,16 @@ public static class StrategicDoctrines
     {
         var doctrine = StrategicDoctrineCatalog.Find(id);
         if (doctrine is null || Refusal(campaign, nation, id).Length > 0) return false;
-        var changing = nation.StrategicDoctrine.Id.Length > 0;
+        var hadPrevious = nation.StrategicDoctrine.Id.Length > 0; var paid = !IsFirstChoiceFree(nation);
         // Paid only after every refusal has passed: a course the country cannot afford to change
         // must not spend the credit and keep the old course anyway.
-        if (changing) nation.PoliticalPoints = MathF.Max(0f, nation.PoliticalPoints - doctrine.PoliticalCost);
+        if (paid) nation.PoliticalPoints = MathF.Max(0f, nation.PoliticalPoints - doctrine.PoliticalCost);
         nation.StrategicDoctrine.Id = doctrine.Id;
         nation.StrategicDoctrine.LastChangeDay = campaign.ElapsedDays;
         NationalModifiers.Invalidate(nation);
-        campaign.Chronicle.Record(campaign, changing ? "strategy_changed" : "strategy_adopted",
+        campaign.Chronicle.Record(campaign, hadPrevious ? "strategy_changed" : "strategy_adopted",
             nation.Id, subject: doctrine.Name, isPublic: true);
-        if (Delegation.RunByAi(nation)) Count(changing ? "strategy_changed" : "strategy_adopted");
+        if (Delegation.RunByAi(nation)) Count(hadPrevious ? "strategy_changed" : "strategy_adopted");
         campaign.MarkStrategicChange();
         return true;
     }

@@ -152,7 +152,7 @@ public partial class DealOrForceGame
         var nextId = _campaign.NextRecruitmentId;
         var command = new RaiseArmyCommand { IssuerId = player.Id, StateMapIndex = pick.State.MapIndex,
             TemplateId = _placingRecruitmentTemplate, Divisions = _placingRecruitmentCount, Mode = _placingRecruitmentMode };
-        _campaign.Commands.Enqueue(command); _campaign.Commands.ApplyAll(_campaign);
+        CommitImmediateCampaignCommand(command, refreshHud: true, wakeGlobe: true);
         var queued = _campaign.Recruitment.FirstOrDefault(order => order.Id >= nextId && order.NationId == player.Id &&
             order.StateMapIndex == pick.State.MapIndex && order.TemplateId == _placingRecruitmentTemplate);
         _recruitmentPlacementFeedback.Text = queued is not null

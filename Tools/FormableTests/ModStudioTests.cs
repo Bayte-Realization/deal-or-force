@@ -15,7 +15,7 @@ static class ModStudioTests
     }
 
     [TestSuite("--mod-studio-only", Order = 2720, IncludeInDefaultRun = true,
-        Description = "Wave 6I+ Mod Content Studio Pro & Scenario Editor: all 14 guided templates across 4 sections, prestige/income_share/gdp_share schemas, ContentWorkbench domain validation, CountryEditor prestige/stability/war_support round-trip, HotReloadCatalogs, source hygiene, and EN/RU parity.")]
+        Description = "Wave 6I+ Mod Content Studio Pro & Scenario Editor: all 17 guided templates across 5 sections, prestige/income_share/gdp_share schemas, ContentWorkbench domain validation, CountryEditor prestige/stability/war_support round-trip, HotReloadCatalogs, source hygiene, and EN/RU parity.")]
     public static void Run()
     {
         TestAllTemplatesValidateAndRoundTrip();
@@ -28,7 +28,7 @@ static class ModStudioTests
     private static void TestAllTemplatesValidateAndRoundTrip()
     {
         var templates = ModStudioDocument.AllTemplates;
-        Check(templates.Count == 14, $"ModStudioDocument exposes all 14 authoring templates (got {templates.Count})");
+        Check(templates.Count == 17, $"ModStudioDocument exposes all 17 authoring templates (got {templates.Count})");
         foreach (ModStudioSection sec in Enum.GetValues(typeof(ModStudioSection)))
             Check(templates.Any(t => t.Section == sec), $"section {sec} has at least one studio category");
 
@@ -81,6 +81,17 @@ static class ModStudioTests
               defJson.Contains("\"PrestigeEnabled\"", StringComparison.Ordinal) &&
               defJson.Contains("\"PrestigeWeeklyDriftRate\"", StringComparison.Ordinal),
             "DefinesOverride template exposes growth, tax, notoriety, weariness, aggression, reclamation, and prestige drift");
+
+        var formDoc = ModStudioDocument.CreateFromTemplate(ModStudioCategory.FormableNation, "test_nordic_union", "Nordic Union");
+        Check(formDoc.Validate().Valid && formDoc.RenderJson().Contains("\"required_regions\"", StringComparison.Ordinal),
+            "FormableNation template validates cleanly and emits required_regions");
+        var ctryDoc = ModStudioDocument.CreateFromTemplate(ModStudioCategory.Country, "test_albion", "Albion");
+        Check(ctryDoc.Validate().Valid && ctryDoc.RenderJson().Contains("\"starting_treasury\"", StringComparison.Ordinal),
+            "Country template validates cleanly and emits starting_treasury");
+        var mapDoc = ModStudioDocument.CreateFromTemplate(ModStudioCategory.MapPack, "test_archipelago", "Archipelago Map");
+        Check(mapDoc.Validate().Valid && mapDoc.RenderJson().Contains("\"siberia_multiplier\"", StringComparison.Ordinal) &&
+              ContentWorkbench.IsEditable(mapDoc.Validate().SuggestedPath),
+            "MapPack template validates cleanly, emits siberia_multiplier, and is editable via ContentWorkbench maps/");
     }
 
     private static void TestValidationRejectsBrokenDrafts()

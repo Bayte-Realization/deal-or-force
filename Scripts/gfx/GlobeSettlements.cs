@@ -28,7 +28,9 @@ public sealed partial class GlobePresentation
     {
         MultiMeshInstance3D Layer(string name, Color color) => new()
         {
-            Name = name, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Name = name,
+            CustomAabb = new Aabb(new Vector3(-120f, -120f, -120f), new Vector3(240f, 240f, 240f)),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             Multimesh = new MultiMesh
             {
                 TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true,

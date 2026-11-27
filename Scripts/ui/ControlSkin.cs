@@ -236,7 +236,7 @@ internal static class ControlSkin
     /// <summary>One icon, drawn by distance so its edges are smooth at any scale.</summary>
     private static ImageTexture Box(Color edge, Color fill, bool on, bool round, Color mark, float alpha)
     {
-        var image = Image.CreateEmpty(Size, Size, false, Image.Format.Rgba8);
+        using var image = Image.CreateEmpty(Size, Size, false, Image.Format.Rgba8);
         var half = (Size - 4) / 2f;
         var centre = new Vector2(Size / 2f, Size / 2f);
         for (var y = 0; y < Size; y++)

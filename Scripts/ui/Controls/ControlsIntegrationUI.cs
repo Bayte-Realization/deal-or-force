@@ -493,7 +493,7 @@ public partial class DealOrForceGame
             divLbl.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             _compactProvinceRows.AddChild(divLbl);
         }
-
+        ShellRegionAuditCardsView.AppendCompactProvinceBadges(_campaign, state, pick.ProvinceId, _compactProvinceRows);
         _compactProvincePopover.CustomMinimumSize = new Vector2(cardW, 0f);
         _compactProvincePopover.Size = new Vector2(cardW, 0f);
         _compactProvincePopover.Visible = true;
@@ -506,14 +506,11 @@ public partial class DealOrForceGame
         var h = Math.Clamp(_compactProvincePopover.GetCombinedMinimumSize().Y, minH, maxH);
         _compactProvincePopover.Size = new Vector2(cardW, h);
 
-        var leftEdge = _armyPanel is { Visible: true }
-            ? _armyPanel.GetGlobalRect().End.X + 12f
-            : (IsNewShellActive ? 76f : 28f);
+        var leftEdge = _armyPanel is { Visible: true } ? _armyPanel.GetGlobalRect().End.X + 12f : (IsNewShellActive ? 76f : 28f);
         var maxX = MathF.Max(16f, vp.X - cardW - 16f);
-        var maxY = MathF.Max(80f, vp.Y - h - 16f);
-        _compactProvincePopover.Position = new Vector2(
-            Math.Clamp(leftEdge, 16f, maxX),
-            Math.Clamp(vp.Y - h - 116f, 80f, maxY));
+        var bottomEdge = _planningBar is { Visible: true } ? _planningBar.GetGlobalRect().Position.Y - 10f : vp.Y - 116f;
+        var maxY = MathF.Max(80f, MathF.Min(vp.Y - h - 16f, bottomEdge - h));
+        _compactProvincePopover.Position = new Vector2(Math.Clamp(leftEdge, 16f, maxX), Math.Clamp(bottomEdge - h, 80f, maxY));
     }
 
     // --------------------------------------------------------- Alt+RMB Split-Move (AoH #8)
@@ -800,8 +797,8 @@ public partial class DealOrForceGame
     private bool ExecutePendingBatchUndo()
     {
         if (_campaign?.Player is null) return false;
-        var hadCashBefore = _campaign.Player.Treasury;
-        if (!BatchActionUndo.TryUndo(_campaign, _campaign.Player.Id, out var executed))
+        UndoBatchActionCommand executed = null;
+        if (!CommitImmediateCampaignWrite(c => BatchActionUndo.TryUndo(c, c.Player.Id, out executed), false, true))
         {
             SetArmyFeedback(Tr("Nothing unstarted left to undo"));
             _undoToast?.RefreshFromCampaign(_campaign);
@@ -812,6 +809,7 @@ public partial class DealOrForceGame
         PlayStrategicCue("ui_select");
         _undoToast?.RefreshFromCampaign(_campaign);
         Refresh();
+        if (IsNewShellActive) RefreshNewShell(force: true);
         return true;
     }
 
@@ -844,7 +842,10 @@ public partial class DealOrForceGame
         IReadOnlyList<ScenarioState> scopeRegions = null)
     {
         if (_campaign?.Player is null) return;
-        var plan = BatchActionUndo.ExecuteEverywhereConstruction(_campaign, _campaign.Player, scopeRegions, kind, countPerRegion);
+        var plan = CommitImmediateCampaignWrite(
+            c => BatchActionUndo.ExecuteEverywhereConstruction(c, c.Player, scopeRegions, kind, countPerRegion),
+            refreshHud: false,
+            wakeGlobe: true);
         if (plan.Items.Count == 0)
         {
             SetArmyFeedback(plan.Refusal);
@@ -855,6 +856,7 @@ public partial class DealOrForceGame
             plan.Items.Count, Loc.Format("{0} × {1}", plan.TotalBuildings, Tr(BuildingCatalog.Get(kind).Name))));
         PlayStrategicCue("ui_select");
         Refresh();
+        if (IsNewShellActive) RefreshNewShell(force: true);
     }
 
     private void ExecuteZeroBudgetAction(bool adjustTaxes)
@@ -1017,32 +1019,19 @@ public partial class DealOrForceGame
             {
                 if (state is null) return;
                 var count = Math.Clamp((int)MathF.Round(val), 1, quote.MaxDivisions);
-                _campaign.Commands.Enqueue(new RaiseArmyCommand
-                {
-                    IssuerId = player.Id,
-                    StateMapIndex = state.MapIndex,
-                    TemplateId = templateId,
-                    Divisions = count,
-                    Mode = mode
-                });
-                _campaign.Commands.ApplyAll(_campaign);
+                CommitImmediateCampaignCommand(new RaiseArmyCommand { IssuerId = player.Id, StateMapIndex = state.MapIndex, TemplateId = templateId, Divisions = count, Mode = mode }, true, true);
                 CloseQuickRecruitPopup();
                 PlayStrategicCue("ui_select");
-                Refresh();
             },
             onEverywhere: val =>
             {
                 var count = Math.Max(1, (int)MathF.Round(val));
-                var plan = BatchActionUndo.ExecuteEverywhereRecruitment(_campaign, player, null, templateId, mode, count, isQuarter: false);
-                if (plan.Items.Count == 0)
-                {
-                    SetArmyFeedback(plan.Refusal);
-                    PlayStrategicCue("ui_error");
-                    return;
-                }
+                var plan = CommitImmediateCampaignWrite(c => BatchActionUndo.ExecuteEverywhereRecruitment(c, c.Player, null, templateId, mode, count, isQuarter: false), false, true);
+                if (plan.Items.Count == 0) { SetArmyFeedback(plan.Refusal); PlayStrategicCue("ui_error"); return; }
                 CloseQuickRecruitPopup();
                 PlayStrategicCue("ui_select");
                 Refresh();
+                if (IsNewShellActive) RefreshNewShell(force: true);
             },
             everywhereCaption: Loc.Format("Everywhere ({0} reg.)", everyPlan.Items.Count),
             everywhereTooltip: () =>

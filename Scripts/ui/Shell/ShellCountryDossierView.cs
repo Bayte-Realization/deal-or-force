@@ -113,7 +113,8 @@ internal static class ShellCountryDossierView
             if (!string.IsNullOrWhiteSpace(identityBrief))
                 AddKvRow(ctx, stateCard, Loc.Get("shell.clarity.state_identity"), identityBrief, "shell.paper_muted");
 
-            if (isOwn || observing || CampaignIntel.PlayerCanInspect(world, nation.Id))
+            var canInspect = isOwn || observing || CampaignIntel.PlayerCanInspect(world, nation.Id);
+            if (canInspect)
             {
                 ShellCountryOutlookView.AddOverviewStabilityDragRow(ctx, stateCard, world, nation, true);
                 var tech = !string.IsNullOrEmpty(nation.CurrentResearch) ? TechnologyCatalog.Of(nation.CurrentResearch) : null;
@@ -127,7 +128,6 @@ internal static class ShellCountryDossierView
                     AddProgressBar(stateCard, frac, "shell.state.info");
             }
 
-            // At-a-Glance Diplomatic Pulse Strip (Wars, Allies, Subjects, Blocs)
             var warCount = Warfare.OpenWars(world).Count(w => !w.Ended && w.Involves(nation.Id));
             var allyCount = AllianceSystem.AlliesOf(world, nation).Count;
             var subjCount = SubjectSystem.SubjectsOf(world, nation).Count;
@@ -144,16 +144,15 @@ internal static class ShellCountryDossierView
             AddMiniKpi(ctx, pulseGrid, Loc.Get("shell.dip.blocs"), blocCount.ToString(CultureInfo.InvariantCulture), blocCount > 0 ? "shell.state.info" : "shell.paper_muted");
             DealOrForceGame.AddShellOverviewDynamismPills(ctx, dipStrip, world, nation, isOwn);
 
-            // Standing KPIs Card
             var kpiCard = MakeSectionCard(ctx, root, "ShellOverviewKpis", "icon_economy",
                 Loc.Get("shell.standing_kpis"), null, "shell.brass_hi");
-            AddStandingGrid(ctx, kpiCard, world, nation, isOwn || observing || CampaignIntel.PlayerCanInspect(world, nation.Id));
+            AddStandingGrid(ctx, kpiCard, world, nation, canInspect);
             ShellCountryTelemetryView.AddTerritoryIndustryCard(ctx, root, world, nation);
+            ShellCountryAuditCardsView.AppendOverviewAuditCards(ctx, root, world, nation, canInspect);
 
             if (isOwn && !observing && openStaffTab is not null)
                 AddStaffQuickLink(ctx, root, nation, openStaffTab);
 
-            // Neighbours Card
             var nbCard = MakeSectionCard(ctx, root, "ShellOverviewNeighbours", "icon_world",
                 Loc.Get("Neighbours"), Loc.Get("GDP"), "shell.paper_muted");
             var neighbors = world.Nations
@@ -171,10 +170,7 @@ internal static class ShellCountryDossierView
                     () => openCountry(captured));
             }
         }
-        finally
-        {
-            world.ExitRead();
-        }
+        finally { world.ExitRead(); }
     }
 
     public static void PopulateSociety(
@@ -203,6 +199,7 @@ internal static class ShellCountryDossierView
             AddSocietyMeter(ctx, socCard, "icon_welfare", Loc.Get("War support"), nation.WarSupport, Fmt.Percent(nation.WarSupport), GoodHighColor(nation.WarSupport));
 
             ShellCountryOutlookView.AddStabilityOutlookCard(ctx, root, world, nation);
+            ShellCountryAuditCardsView.AppendSocietyAuditCards(ctx, root, world, nation);
 
             var cabCard = MakeSectionCard(ctx, root, "ShellSocietyCabinetCard", "icon_government",
                 Loc.Get("shell.leader_cabinet"), null, "shell.paper_muted");
@@ -687,16 +684,8 @@ internal static class ShellCountryDossierView
         row.AddChild(MakeLabel(ctx, relText, "shell.sans", 11, relColorTok, tabular: true));
     }
 
-    internal static void AddKvRow(ShellContext ctx, VBoxContainer bodyRows, string key, string value, string valueTok)
-    {
-        var row = new HBoxContainer { CustomMinimumSize = new Vector2(0, 20), ClipContents = true };
-        row.AddThemeConstantOverride("separation", 6);
-        row.AddChild(MakeLabel(ctx, key, "shell.sans", 11, "shell.paper_muted", clip: true, expand: true));
-        var v = MakeLabel(ctx, value, "shell.sans", 11, valueTok, clip: true, tabular: true);
-        v.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(v);
-        bodyRows.AddChild(row);
-    }
+    internal static void AddKvRow(ShellContext ctx, VBoxContainer bodyRows, string key, string value, string valueTok) =>
+        ShellCountryAuditCardsView.AddSafeKvRow(ctx, bodyRows, key, value, valueTok);
 
     internal static Label MakeLabel(
         ShellContext ctx, string text, string fontKey, int size, string colorTok,

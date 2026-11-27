@@ -185,13 +185,12 @@ internal static class ShellRegionBuildTabView
             {
                 var running = world.Construction.Count(p => p.NationId == owner.Id);
                 if (running >= slots || owner.Treasury < MathF.Min(0.05f, unitCost)) break;
-                world.Commands.Enqueue(new QueueConstructionCommand
+                ImmediateCampaignCommands.Commit(world, new QueueConstructionCommand
                 {
                     IssuerId = owner.Id,
                     StateMapIndex = st.MapIndex,
                     Building = kind
                 });
-                world.Commands.ApplyAll(world);
                 queued++;
             }
         }

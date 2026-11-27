@@ -71,7 +71,7 @@ public partial class DealOrForceGame
             SetArmyFeedback(Simulation.Loc.Format(
                                 Simulation.Plural.Key("{0:N0} division selected.", _selectedArmies.Count),
                                 _selectedArmies.Count) + " " +
-                            Simulation.Loc.Get("Shift-click adds, Ctrl-click removes."));
+                            Simulation.Loc.Get(IsTouchPrimaryUi ? "mobile.override.army_orders" : "Shift-click adds, Ctrl-click removes."));
             return;
         }
         _selectedArmy = army;
@@ -229,7 +229,7 @@ public partial class DealOrForceGame
             ? _selectedArmies : new List<Army> { _selectedArmy })
         .Where(army => ArmyInteraction.CanSelect(_campaign, army)).Distinct().ToArray();
 
-    private void AddReinforcementPriorityButton(HBoxContainer row, string caption, ReinforcementPriority priority,
+    private void AddReinforcementPriorityButton(Container row, string caption, ReinforcementPriority priority,
         string tooltip, bool primary = false)
     {
         var button = ActionButton(caption, () => IssueReinforcementPriority(priority), 96, 30, primary);
@@ -623,7 +623,7 @@ public partial class DealOrForceGame
                     targets.Length), targets.Length)
             : Simulation.Loc.Format(
                 Simulation.Plural.Key("{0:N0} division stopped where they stand.", stopped), stopped) + " " +
-              Simulation.Loc.Get("They are still on their plan - Ctrl+H takes them off it."));
+              Simulation.Loc.Get(IsTouchPrimaryUi ? "mobile.plan.still_on_plan" : "They are still on their plan - Ctrl+H takes them off it."));
     }
 
     private void DetachSelectedDivisions()
@@ -645,7 +645,7 @@ public partial class DealOrForceGame
                 targets.Length)
             : Simulation.Loc.Format(
                 Simulation.Plural.Key("{0:N0} division taken off their plan.", taken), taken) + " " +
-              Simulation.Loc.Get("Nothing will move them but you, and the front no longer counts them - Shift+H hands them back."));
+              Simulation.Loc.Get(IsTouchPrimaryUi ? "mobile.plan.off_plan" : "Nothing will move them but you, and the front no longer counts them - Shift+H hands them back."));
     }
 
     private void ReturnSelectedDivisionsToPlan()
@@ -715,9 +715,8 @@ public partial class DealOrForceGame
     {
         _redeploymentArmed = !_redeploymentArmed;
         SetArmyFeedback(_redeploymentArmed
-            ? "Strategic redeployment armed: the next right-click rails the selection there through your own " +
-              "territory - about three times a marching pace, paid for in organisation. Ctrl+B again to cancel."
-            : "Strategic redeployment cancelled. The next right-click is an ordinary march.");
+            ? Tr(IsTouchPrimaryUi ? "mobile.plan.rail_armed" : "Strategic redeployment armed: the next right-click rails the selection there through your own territory - about three times a marching pace, paid for in organisation. Ctrl+B again to cancel.")
+            : Tr(IsTouchPrimaryUi ? "mobile.plan.rail_cancelled" : "Strategic redeployment cancelled. The next right-click is an ordinary march."));
     }
 
     /// <summary>

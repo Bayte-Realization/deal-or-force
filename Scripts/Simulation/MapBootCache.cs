@@ -190,6 +190,39 @@ public static class MapBootCache
         return null;
     }
 
+    private static bool IsStandardMapActive =>
+        string.Equals(MapCatalog.ActiveMapId, MapCatalog.StandardId, StringComparison.Ordinal);
+
+    private static string ScopeDirectoryForActiveMap(string directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || IsStandardMapActive) return directory;
+        var id = MapCatalog.ActiveMapId ?? MapCatalog.StandardId;
+        var safeChars = new char[id.Length];
+        for (var i = 0; i < id.Length; i++)
+            safeChars[i] = char.IsLetterOrDigit(id[i]) || id[i] is '_' or '-' ? id[i] : '_';
+        var safeId = new string(safeChars);
+        var packCount = MapCatalog.ActiveEntry?.CompiledProvinceCount ?? 0;
+        var folderName = packCount > 0 ? $"{safeId}_{packCount}" : safeId;
+        return Path.Combine(directory, "maps", folderName);
+    }
+
+    private static bool CanUseShippedFallback(string fileName, string shippedFallbackPath)
+    {
+        if (string.IsNullOrWhiteSpace(shippedFallbackPath) || !File.Exists(shippedFallbackPath)) return false;
+        if (IsStandardMapActive) return true;
+        if (string.Equals(fileName, FileName, StringComparison.Ordinal) ||
+            string.Equals(fileName, PoliticalRasterFileName, StringComparison.Ordinal))
+            return false;
+        if (string.Equals(fileName, HydrologyFileName, StringComparison.Ordinal))
+            return MapCatalog.ActiveEntry?.InheritsBaseHydrology ?? true;
+        var resolvedStates = MapCatalog.ResolveMapFile("source_states.png");
+        var resolvedControl = MapCatalog.ResolveMapFile("source_control.png");
+        var baseStates = GameDataLoader.FindDataFile("map_data", "source_states.png");
+        var baseControl = GameDataLoader.FindDataFile("map_data", "source_control.png");
+        return string.Equals(resolvedStates, baseStates, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(resolvedControl, baseControl, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Resolve the best readable cache file path across writable user cache and shipped fallback.</summary>
     public static string ResolveReadableCachePath(string writableCacheDirectory, string shippedFallbackPath = null) =>
         ResolveReadablePath(FileName, writableCacheDirectory, shippedFallbackPath);
@@ -198,7 +231,7 @@ public static class MapBootCache
     public static string ResolveWritableCachePath(string writableCacheDirectory) =>
         ModOverlayPolicy.IsActive || string.IsNullOrWhiteSpace(writableCacheDirectory)
             ? null
-            : Path.Combine(writableCacheDirectory, FileName);
+            : Path.Combine(ScopeDirectoryForActiveMap(writableCacheDirectory), FileName);
 
     /// <summary>Atomically write <paramref name="data"/> to <c>map_boot_v2.bin</c> under <paramref name="cacheDirectory"/>.</summary>
     public static bool TryWrite(
@@ -267,7 +300,7 @@ public static class MapBootCache
         if (TryResolveReadableWritable(writableCacheDirectory, FileName, out var writable) &&
             TryReadFile(writable, expectedFingerprint, expectedWidth, expectedHeight, out data, out reason, attachCrossings))
             return true;
-        if (!string.IsNullOrWhiteSpace(shippedFallbackPath) && File.Exists(shippedFallbackPath))
+        if (CanUseShippedFallback(FileName, shippedFallbackPath))
             return TryReadFile(shippedFallbackPath, expectedFingerprint, expectedWidth, expectedHeight, out data, out reason, attachCrossings);
 
         reason = "cache file not found";
@@ -336,7 +369,7 @@ public static class MapBootCache
         if (TryResolveReadableWritable(writableCacheDirectory, FileName, out var writable) &&
             TryReadTopologyProvinceStatesFile(writable, expectedWidth, expectedHeight, out provinceToState, out regionFingerprint))
             return true;
-        if (!string.IsNullOrWhiteSpace(shippedFallbackPath) && File.Exists(shippedFallbackPath))
+        if (CanUseShippedFallback(FileName, shippedFallbackPath))
             return TryReadTopologyProvinceStatesFile(shippedFallbackPath, expectedWidth, expectedHeight, out provinceToState, out regionFingerprint);
         return false;
     }
@@ -1077,7 +1110,7 @@ public static class MapBootCache
         if (TryResolveReadableWritable(writableCacheDirectory, HydrologyFileName, out var writable) &&
             TryReadHydrologyFile(writable, expectedFingerprint, expectedWidth, expectedHeight, out data, out reason))
             return true;
-        if (!string.IsNullOrWhiteSpace(shippedFallbackPath) && File.Exists(shippedFallbackPath))
+        if (CanUseShippedFallback(HydrologyFileName, shippedFallbackPath))
             return TryReadHydrologyFile(shippedFallbackPath, expectedFingerprint, expectedWidth, expectedHeight, out data, out reason);
 
         reason = "hydrology cache file not found";
@@ -1290,7 +1323,7 @@ public static class MapBootCache
         if (TryResolveReadableWritable(writableCacheDirectory, PoliticalRasterFileName, out var writable) &&
             TryReadPoliticalRastersFile(writable, expectedFingerprint, expectedWidth, expectedHeight, expectedPoliticalScale, out data, out reason))
             return true;
-        if (!string.IsNullOrWhiteSpace(shippedFallbackPath) && File.Exists(shippedFallbackPath))
+        if (CanUseShippedFallback(PoliticalRasterFileName, shippedFallbackPath))
             return TryReadPoliticalRastersFile(shippedFallbackPath, expectedFingerprint, expectedWidth, expectedHeight, expectedPoliticalScale, out data, out reason);
 
         reason = "political raster cache file not found";
@@ -1650,7 +1683,7 @@ public static class MapBootCache
             TryReadBootRasterLayerFile(writable, expectedContentKey, expectedSourcePngKey, expectedWidth, expectedHeight,
                 loadControl, out raster, out lakes))
             return true;
-        if (!string.IsNullOrWhiteSpace(shippedFallbackPath) && File.Exists(shippedFallbackPath))
+        if (CanUseShippedFallback(BootRasterFileName, shippedFallbackPath))
             return TryReadBootRasterLayerFile(shippedFallbackPath, expectedContentKey, expectedSourcePngKey, expectedWidth, expectedHeight,
                 loadControl, out raster, out lakes);
         return false;
@@ -1873,14 +1906,15 @@ public static class MapBootCache
     {
         if (ModOverlayPolicy.IsActive) return null;
         if (TryResolveReadableWritable(writableCacheDirectory, fileName, out var writable)) return writable;
-        return !string.IsNullOrWhiteSpace(shippedFallbackPath) && File.Exists(shippedFallbackPath) ? shippedFallbackPath : null;
+        return CanUseShippedFallback(fileName, shippedFallbackPath) ? shippedFallbackPath : null;
     }
 
     private static bool TryResolveReadableWritable(string writableCacheDirectory, string fileName, out string writable)
     {
         writable = null;
         if (string.IsNullOrWhiteSpace(writableCacheDirectory)) return false;
-        var candidate = Path.Combine(writableCacheDirectory, fileName);
+        var scopedDirectory = ScopeDirectoryForActiveMap(writableCacheDirectory);
+        var candidate = Path.Combine(scopedDirectory, fileName);
         if (!File.Exists(candidate)) return false;
         writable = candidate;
         return true;
@@ -1897,7 +1931,7 @@ public static class MapBootCache
         if (ModOverlayPolicy.IsActive) { error = "bypassed: mod overlay active"; return false; }
         if (string.IsNullOrWhiteSpace(cacheDirectory)) { error = "no cache directory"; return false; }
         if (!string.IsNullOrEmpty(extraError)) { error = extraError; return false; }
-        targetPath = Path.Combine(cacheDirectory, fileName);
+        targetPath = Path.Combine(ScopeDirectoryForActiveMap(cacheDirectory), fileName);
         error = "";
         return true;
     }

@@ -63,6 +63,17 @@ public static partial class TerrainCatalog
         var errors = new List<string>();
         if (root is not null) ApplyDirectory(root, errors);
         else errors.Add("Game data directory was not found.");
+        if (!string.Equals(MapCatalog.ActiveMapId, MapCatalog.StandardId, StringComparison.Ordinal))
+        {
+            var packTerrain = MapCatalog.ResolveMapFile("terrain.png");
+            if (!string.IsNullOrEmpty(packTerrain)) TerrainPath = packTerrain;
+            var packHeight = MapCatalog.ResolveMapFile("heightmap.png");
+            if (!string.IsNullOrEmpty(packHeight)) HeightPath = packHeight;
+            var packRelief = MapCatalog.ResolveMapFile("relief_color.png");
+            if (!string.IsNullOrEmpty(packRelief)) ReliefColorPath = packRelief;
+            var packBathymetry = MapCatalog.ResolveMapFile("bathymetry.png");
+            if (!string.IsNullOrEmpty(packBathymetry)) BathymetryPath = packBathymetry;
+        }
         LoadError = string.Join("\n", errors);
     }
 

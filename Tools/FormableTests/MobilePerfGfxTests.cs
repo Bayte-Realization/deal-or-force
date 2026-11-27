@@ -119,12 +119,12 @@ public static class MobilePerfGfxTests
 
         var perfGovSrc = File.ReadAllText(Path.Combine(root, "Scripts", "ui", "PerformanceGovernor.cs"));
         Check(perfGovSrc.Contains("_globe.IsTurboSimThrottling", StringComparison.Ordinal),
-            "PerformanceGovernor.cs pauses quality step sampling during 18 Hz Turbo Sim throttling");
+            "PerformanceGovernor.cs pauses quality step sampling during Turbo Sim throttling");
 
         var setupSrc = File.ReadAllText(Path.Combine(gfxDir, "GlobePresentation.Setup.cs"));
         Check(setupSrc.Contains("MobileRenderScaleFloor = 0.50f", StringComparison.Ordinal) &&
-              setupSrc.Contains("MobileMediumDefaultHighDpiScale = 0.85f", StringComparison.Ordinal),
-            "GlobePresentation.Setup.cs sets mobile floor 0.50f and MobileMedium high-DPI default 0.85f");
+              setupSrc.Contains("MobileMediumDefaultHighDpiScale = 1.0f", StringComparison.Ordinal),
+            "GlobePresentation.Setup.cs sets mobile floor 0.50f and MobileMedium high-DPI default native 1.0f");
         Check(!setupSrc.Contains("ResolvePreferredGpuHdrFormat", StringComparison.Ordinal),
             "GlobePresentation.Setup.cs keeps 0 dead HDR format helpers");
 
@@ -155,22 +155,23 @@ public static class MobilePerfGfxTests
         float Call(float req, float tier, int width, bool custom) =>
             (float)method!.Invoke(null, new object[] { req, tier, width, custom })!;
 
-        // 1. High-DPI phone (>= 2000px, e.g. S22 2340px capped at 2048px long edge) in MobileMedium defaults to 0.85f
-        Check(Approx(Call(1.0f, 1.0f, 2340, false), 0.85f), "MobileMedium default on 2340px phone tunes to 0.85f");
-        Check(Approx(Call(0.85f, 1.0f, 2340, false), 0.85f), "ComputeMobileEffectiveRenderScale is idempotent at 0.85f");
-        Check(Approx(Call(1.0f, 1.0f, 2000, false), 0.85f), "MobileMedium threshold includes exact 2000px width");
+        // 1. High-DPI phone (>= 2000px, e.g. S22 2340px capped at 2400px long edge) in MobileMedium uses native 1.0f clarity
+        Check(Approx(Call(1.0f, 1.0f, 2340, false), 1.0f), "MobileMedium default on 2340px phone tunes to native 1.0f clarity");
+        Check(Approx(Call(0.85f, 1.0f, 2340, false), 0.85f), "ComputeMobileEffectiveRenderScale preserves lower requested scale 0.85f");
+        Check(Approx(Call(1.0f, 1.0f, 2000, false), 1.0f), "MobileMedium threshold includes exact 2000px width at 1.0f");
 
-        // 2. Standard sub-2000px device in MobileMedium keeps 0.95f ceiling
-        Check(Approx(Call(1.0f, 1.0f, 1600, false), 0.95f), "MobileMedium sub-2000px keeps 0.95f ceiling");
+        // 2. Standard sub-2000px device in MobileMedium keeps 1.0f ceiling
+        Check(Approx(Call(1.0f, 1.0f, 1600, false), 1.0f), "MobileMedium sub-2000px keeps 1.0f ceiling");
 
         // 3. Player custom render_scale 0.50 works on phones (lowered floor 0.65 -> 0.50)
         Check(Approx(Call(0.5f, 1.0f, 2340, true), 0.50f), "custom render_scale 0.50 honored on MobileMedium S22");
         Check(Approx(Call(0.5f, 2.0f, 1280, true), 0.50f), "custom render_scale 0.50 honored on MobileLow");
         Check(Approx(Call(0.25f, 1.0f, 2340, true), 0.50f), "scale clamps safely at 0.50f floor");
 
-        // 4. Custom 0.75 and 1.0 still work within 0.95f MobileMedium / 0.82f MobileLow ceilings
+        // 4. Custom 0.75, 0.85, and 1.0 work within 1.0f MobileMedium / 0.82f MobileLow ceilings
         Check(Approx(Call(0.75f, 1.0f, 2340, true), 0.75f), "custom 0.75 works on MobileMedium high-DPI");
-        Check(Approx(Call(1.0f, 1.0f, 2340, true), 0.95f), "custom 1.0 capped at 0.95f MobileMedium ceiling");
+        Check(Approx(Call(0.85f, 1.0f, 2340, true), 0.85f), "custom 0.85 works on MobileMedium high-DPI");
+        Check(Approx(Call(1.0f, 1.0f, 2340, true), 1.0f), "custom 1.0 preserves full native MobileMedium ceiling");
         Check(Approx(Call(0.85f, 2.0f, 2340, true), 0.82f), "MobileLow capped at 0.82f ceiling");
     }
 
@@ -212,8 +213,8 @@ public static class MobilePerfGfxTests
         var stepMethod = globeType.GetMethod("StepTurboSimCadence", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)!;
         var ctor = inputsType.GetConstructors()[0];
         var interval = (double)globeType.GetField("TurboSimRedrawIntervalSeconds", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)!.GetValue(null)!;
-        Check(interval >= 1.0 / 20.5 && interval <= 1.0 / 14.5,
-            $"Turbo Sim redraw interval ({1.0 / interval:0.0} Hz) sits inside 15-20 Hz target band");
+        Check(interval <= 1.0 / 30.0 + 1e-6 && interval >= 1.0 / 60.5,
+            $"Turbo Sim redraw interval ({1.0 / interval:0.0} Hz) meets >=30 Hz smoothness floor");
 
         object MakeInput(bool extPaused = false, bool eligible = true, bool mapApplied = true, bool fastSim = true,
             bool touch = false, bool camMotion = false, bool camDirty = false, bool box = false) =>
@@ -235,18 +236,18 @@ public static class MobilePerfGfxTests
         Check(Step(ref accum, ref wake, 0.016, MakeInput(eligible: false)) == "Always",
             "Desktop non-opt-in stays Always (60 Hz unaffected)");
 
-        // Mobile Speed 1-3 (fastSim = false) -> Always
+        // Mobile Speed 1-6 (fastSim = false) -> Always
         Check(Step(ref accum, ref wake, 0.016, MakeInput(fastSim: false)) == "Always",
-            "Mobile Speed 1-3 / Paused stays Always");
+            "Mobile Speed 1-6 / Paused stays Always");
 
-        // Mobile Speed 4-5 idle -> throttles to ~18 Hz (Disabled between ticks, Once when interval reached)
+        // Mobile Speed 7-8 idle -> throttles to >=30 Hz floor (Disabled between ticks, Once when interval reached)
         var idle = MakeInput();
         var renders = 0;
         for (var frame = 0; frame < 60; frame++)
         {
             if (Step(ref accum, ref wake, 1.0 / 60.0, idle) == "Once") renders++;
         }
-        Check(renders is >= 15 and <= 20, $"60 idle Speed 4-5 frames render {renders} times (~15-20 Hz)");
+        Check(renders is >= 28 and <= 31, $"60 idle fast-sim frames render {renders} times (~30 Hz smoothness floor)");
 
         // Frame-0 immediate wake while throttled
         accum = 0.0;

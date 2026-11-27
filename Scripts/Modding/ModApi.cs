@@ -68,7 +68,8 @@ public partial class ModApi : RefCounted
         "get_day", "get_date", "log", "feature_enabled", "set_feature",
         "get_province_terrain", "get_nation", "set_nation_number", "get_politics",
         "enact_policy", "manage_debt", "add_course_shock", "study_doctrine", "propose_diplomatic_act",
-        "get_define", "set_define"
+        "get_define", "set_define",
+        "get_all_tags", "get_map_id", "get_region", "get_wars", "get_relation", "add_modifier", "trigger_event"
     };
 
     /// <summary>
@@ -221,5 +222,111 @@ public partial class ModApi : RefCounted
         ModScalarAccess.SetDefine(_campaign?.Defines, name, value);
 
     public bool set_define(string name, double value) => SetDefine(name, value);
+
+    /// <summary>Return all currently active country tags in the bound campaign.</summary>
+    public string[] get_all_tags()
+    {
+        var active = _campaign?.ActiveNations;
+        if (active is null || active.Count == 0) return Array.Empty<string>();
+        var tags = new System.Collections.Generic.List<string>(active.Count);
+        for (var i = 0; i < active.Count; i++)
+        {
+            var tag = active[i].Tag;
+            if (!string.IsNullOrWhiteSpace(tag)) tags.Add(tag);
+        }
+        return tags.ToArray();
+    }
+
+    /// <summary>Identifier of the active map pack (defaults to <c>world_standard</c>).</summary>
+    public string get_map_id() =>
+        string.IsNullOrWhiteSpace(_campaign?.MapId) ? "world_standard" : _campaign.MapId;
+
+    /// <summary>
+    /// Read-only demographic and economic summary for one region/state identified by its <c>MapIndex</c>.
+    /// Returns an empty dictionary when no state exists for <paramref name="regionId"/>.
+    /// </summary>
+    public Godot.Collections.Dictionary get_region(int regionId)
+    {
+        var result = new Godot.Collections.Dictionary();
+        var state = _campaign?.StateByMapIndex(regionId);
+        if (state is null) return result;
+        var owner = _campaign.NationByMapIndex(state.NationMapIndex);
+        var provinceCount = _campaign.ProvinceMap?.ProvincesOfState(state.MapIndex).Length ?? 0;
+        result["id"] = state.MapIndex;
+        result["region_key"] = state.Id;
+        result["name"] = string.IsNullOrWhiteSpace(state.DisplayName) ? state.Name : state.DisplayName;
+        result["owner_tag"] = owner?.Tag ?? "";
+        result["population"] = state.Population;
+        result["gdp"] = RegionalStatistics.EstimatedGdp(_campaign, state);
+        result["stability"] = state.Stability;
+        result["unrest"] = state.Radicalism;
+        result["province_count"] = provinceCount;
+        return result;
+    }
+
+    /// <summary>
+    /// Read-only list of ongoing wars in the bound campaign, optionally filtered to wars involving <paramref name="tag"/>.
+    /// </summary>
+    public Godot.Collections.Array get_wars(string tag = "")
+    {
+        var list = new Godot.Collections.Array();
+        if (_campaign is null) return list;
+        Nation filter = null;
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            filter = _campaign.NationByTag(tag);
+            if (filter is null) return list;
+        }
+        foreach (var war in _campaign.ActiveWars)
+        {
+            if (war.Ended) continue;
+            if (filter is not null && !war.Involves(filter.Id)) continue;
+            var attackers = new Godot.Collections.Array();
+            foreach (var id in war.Side(true))
+            {
+                var sideTag = _campaign.NationById(id)?.Tag;
+                if (!string.IsNullOrWhiteSpace(sideTag)) attackers.Add(sideTag);
+            }
+            var defenders = new Godot.Collections.Array();
+            foreach (var id in war.Side(false))
+            {
+                var sideTag = _campaign.NationById(id)?.Tag;
+                if (!string.IsNullOrWhiteSpace(sideTag)) defenders.Add(sideTag);
+            }
+            list.Add(new Godot.Collections.Dictionary
+            {
+                ["id"] = war.Id,
+                ["name"] = WarNames.Of(_campaign, war),
+                ["attackers"] = attackers,
+                ["defenders"] = defenders,
+                ["start_day"] = war.StartedDay,
+                ["war_score"] = war.WarScore
+            });
+        }
+        return list;
+    }
+
+    /// <summary>Read-only bilateral diplomatic opinion score between two country tags (0 when unknown or same country).</summary>
+    public double get_relation(string tagA, string tagB)
+    {
+        var a = _campaign?.NationByTag(tagA);
+        var b = _campaign?.NationByTag(tagB);
+        if (a is null || b is null || a.Id == b.Id) return 0.0;
+        return CampaignDiplomacy.Peek(_campaign, a.Id, b.Id)?.Opinion ?? 0.0;
+    }
+
+    /// <summary>
+    /// Queue an existing national modifier from <c>common/modifiers</c> for <paramref name="tag"/>.
+    /// Returns true if accepted into the command queue.
+    /// </summary>
+    public bool add_modifier(string tag, string modifierId, int durationDays = 365) =>
+        ModOperations.QueueAddModifier(_campaign, tag, modifierId, durationDays);
+
+    /// <summary>
+    /// Queue an existing campaign event from <c>events/</c> for <paramref name="tag"/>, respecting
+    /// human player choices and deterministic replay. Returns true if accepted into the command queue.
+    /// </summary>
+    public bool trigger_event(string tag, string eventId) =>
+        ModOperations.QueueTriggerEvent(_campaign, tag, eventId);
 
 }

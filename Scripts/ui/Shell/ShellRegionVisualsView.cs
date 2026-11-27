@@ -48,6 +48,7 @@ internal static class ShellRegionVisualsView
 
         AddSectionHeader(ctx, bodyRows, Loc.Get("shell.reg_terrain_ground"));
         ShellRegionKpiCardsView.AddTerrainCard(ctx, bodyRows, world, owner, state, provinceId, provCount);
+        ShellRegionAuditCardsView.AppendOverviewAuditSections(ctx, bodyRows, world, owner, state, provinceId);
 
         AddSectionHeader(ctx, bodyRows, Loc.Get("Region"), Fmt.PeopleExact(state.Population));
         AddMeterRow(ctx, bodyRows, "icon_economy", Loc.Get("Standard of living"), state.StandardOfLiving,
@@ -111,6 +112,7 @@ internal static class ShellRegionVisualsView
 
         var foreign = EconomySystem.ForeignShare(state, owner?.Tag ?? "");
         AddMeterRow(ctx, bodyRows, "icon_diplomacy", Loc.Get("Minorities"), foreign, Fmt.Percent(foreign), DangerHighColor(foreign), Loc.Get("Minorities"));
+        ShellRegionAuditCardsView.AppendPopulationCohortsAudit(ctx, bodyRows, world, owner, state);
 
         AddDemographicsBars(ctx, bodyRows, state, owner, maxChips: 6, includeItemRows: true);
     }
@@ -140,6 +142,7 @@ internal static class ShellRegionVisualsView
 
         AddSectionHeader(ctx, bodyRows, Loc.Get("shell.reg_garrison"));
         ShellRegionKpiCardsView.AddGarrisonList(ctx, bodyRows, world, state);
+        ShellRegionAuditCardsView.AppendRecruitReadinessAudit(ctx, bodyRows, world, owner, state, provinceId);
 
         if (isOwn && owner is not null)
         {
@@ -155,7 +158,7 @@ internal static class ShellRegionVisualsView
     {
         var h = new HBoxContainer { ClipContents = true };
         h.AddThemeConstantOverride("separation", 6);
-        h.AddChild(MakeLabel(ctx, title, "shell.serif_semibold", 13, "shell.paper_muted", clip: true));
+        h.AddChild(MakeLabel(ctx, title, "shell.serif_semibold", 13, "shell.paper_muted", clip: false));
         h.AddChild(new ColorRect
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
@@ -448,16 +451,8 @@ internal static class ShellRegionVisualsView
         bodyRows.AddChild(row);
     }
 
-    private static void AddKvRow(ShellContext ctx, VBoxContainer bodyRows, string key, string value, string valueTok = "shell.paper")
-    {
-        var row = new HBoxContainer { CustomMinimumSize = new Vector2(0, 20), ClipContents = true };
-        row.AddThemeConstantOverride("separation", 6);
-        row.AddChild(MakeLabel(ctx, key, "shell.sans", 11, "shell.paper_muted", clip: true, expand: true));
-        var v = MakeLabel(ctx, value, "shell.sans", 11, valueTok, tabular: true);
-        v.HorizontalAlignment = HorizontalAlignment.Right;
-        row.AddChild(v);
-        bodyRows.AddChild(row);
-    }
+    private static void AddKvRow(ShellContext ctx, VBoxContainer bodyRows, string key, string value, string valueTok = "shell.paper") =>
+        ShellCountryAuditCardsView.AddSafeKvRow(ctx, bodyRows, key, value, valueTok);
 
     internal static Label MakeLabel(
         ShellContext ctx, string text, string fontKey, int size, string colorTok,

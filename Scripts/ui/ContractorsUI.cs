@@ -24,8 +24,7 @@ public partial class DealOrForceGame
         _contractorSubmit = ActionButton("Sign the contract", () =>
         {
             var command = new HireContractorsCommand { IssuerId = _campaign.Player.Id, Formations = (int)_contractorCount.Value };
-            _campaign.Commands.Enqueue(command);
-            _campaign.Commands.ApplyAll(_campaign);
+            CommitImmediateCampaignCommand(command, refreshHud: true, wakeGlobe: true);
             RefreshContractors();
         }, 180, 38);
         body.AddChild(_contractorSubmit);

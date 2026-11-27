@@ -134,6 +134,13 @@ public sealed partial class NativeTradeArena
         }
     }
 
+    /// <summary>
+    /// Computes buyer x seller affinity scores in C# IEEE-754 parity mode.
+    /// <paramref name="pairFlags"/>: bit 0 = has_relation, bit 1 = blocked (writes -1),
+    /// bit 2 = shared_customs_union, bit 3 = buyer_has_customs_union, bit 4 = shares_land_border,
+    /// bit 5 = self pair (writes 0).
+    /// Missing distance entries default to 12000 km.
+    /// </summary>
     public unsafe bool TryComputeAffinity(
         ReadOnlySpan<int> buyerIds,
         ReadOnlySpan<ushort> buyerMapIdx,

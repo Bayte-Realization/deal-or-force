@@ -116,27 +116,23 @@ public partial class DealOrForceGame
     private void BuildSupportScreen()
     {
         // No shade: the map stays live behind the panel, and clicks on it reach the globe.
-        _supportLayer = FullLayer("Support");
-        _supportLayer.Visible = false;
-        _supportLayer.MouseFilter = MouseFilterEnum.Ignore;
-        _hudLayer.AddChild(_supportLayer);
+        _supportLayer = FullLayer("Support"); _supportLayer.Visible = false; _supportLayer.MouseFilter = MouseFilterEnum.Ignore;
+        _hudLayer.AddChild(_supportLayer); TouchScrollController.EnsureInstalled(this);
         Resized += () => { if (_supportLayer.Visible) RefreshSupportScreen(); };
 
         var panel = TexturedPanel(_supportLayer, PanelSurface.Command); panel.Name = "SupportForcesPanel";
         Ui.Place(panel, "hud.support_panel");
         var rows = PanelRows(panel, 16, 12, 7);
 
-        ScreenHeader(rows, "LONG-RANGE FORCES",
-            "Aircraft, drones, long-range artillery and air-defence squadrons.",
+        ScreenHeader(rows, "LONG-RANGE FORCES", "Aircraft, drones, long-range artillery and air-defence squadrons.",
             false, HandbookButton("long_range"), ActionButton("×", CloseSupportScreen, 34, 30));
 
-        _supportSummary = Title("", 12, Ui.Colour("text.body_soft"));
-        _supportSummary.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _supportSummary.CustomMinimumSize = new Vector2(1, 18);
+        _supportSummary = Title("", 12, Ui.Colour("text.body_soft")); _supportSummary.AutowrapMode = TextServer.AutowrapMode.WordSmart; _supportSummary.CustomMinimumSize = new Vector2(1, 18);
         rows.AddChild(_supportSummary);
-        var help = Title("On the map: click selects · Shift adds · drag a box · right-click moves them there · Shift+right-click adds a waypoint · Esc lets go", 11, Ui.Colour("text.caption"));
-        help.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        help.CustomMinimumSize = new Vector2(1, 0);
+        var help = Title(Platform.PlatformProfile.Current?.IsTouchPrimary == true
+            ? "On the map: tap a formation to select · long-press or use Order mode to move"
+            : "On the map: click selects · Shift adds · drag a box · right-click moves them there · Shift+right-click adds a waypoint · Esc lets go", 11, Ui.Colour("text.caption"));
+        help.AutowrapMode = TextServer.AutowrapMode.WordSmart; help.CustomMinimumSize = new Vector2(1, 0);
         rows.AddChild(help);
 
         // What arm of the forces the list shows.
@@ -164,6 +160,7 @@ public partial class DealOrForceGame
         var supportFrame = new PanelContainer
         {
             Name = "SupportRosterFrame",
+            CustomMinimumSize = new Vector2(0, 180),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
@@ -207,7 +204,7 @@ public partial class DealOrForceGame
         _supportSelectionMissions.AddThemeConstantOverride("separation", 4);
         selection.AddChild(_supportSelectionMissions);
         BuildSupportTargetBar(selection);
-        rows.MoveChild(selection, _supportScroll.GetIndex());
+        rows.MoveChild(selection, supportFrame.GetIndex());
 
         _supportFeedback = Title("", 11, Ui.Colour("state.negative"));
         _supportFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -306,7 +303,10 @@ public partial class DealOrForceGame
         Tip(panel, Tr("Open the long-range forces panel: the whole roster, raising, and strike targets."));
         header.AddChild(panel);
         header.AddChild(ActionButton("×", ClearSupportMapSelection, 34, 26));
-        var help = Title("Right-click: move there · Shift+right-click: add a waypoint · Shift+click: add · Esc: let go", 11, Ui.Colour("text.caption"));
+        var help = Title(Platform.PlatformProfile.Current?.IsTouchPrimary == true
+            ? "Long-press or Order mode: move there · tap ground: clear"
+            : "Right-click: move there · Shift+right-click: add a waypoint · Shift+click: add · Esc: let go",
+            11, Ui.Colour("text.caption"));
         help.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         help.CustomMinimumSize = new Vector2(1, 0);
         shell.AddChild(help);
@@ -454,42 +454,29 @@ public partial class DealOrForceGame
         RefreshFormationBar();
     }
 
-    /// <summary>
-    /// A formation's card clicked on the map: selected the way a division is - alone, or with
-    /// Shift added to what is selected, or with Ctrl taken away from it - and the panel neither
-    /// opens nor closes for it.
-    /// </summary>
     private void OnSupportPicked(SupportFormation formation)
     {
         if (_campaign?.Player is null || formation.NationId != _campaign.Player.Id || !_hudLayer.Visible) return;
-        CancelConstructionPlacement();
-        CloseFleetPanel();
-        // The divisions' rule, from the same helper (MapSelection): one rule on the map.
-        if (!AddingToSelection && !RemovingFromSelection) DropArmySelection();
-        MapSelection.Apply(_supportSelected, new[] { formation.Id }, AddingToSelection, RemovingFromSelection);
-        if (!RemovingFromSelection) _supportSelectionAnchor = formation.Id;
-        SupportSelectionChanged();
-        if (_supportLayer is { Visible: true } && _supportRowMap.TryGetValue(formation.Id, out var row))
-            _supportScroll.EnsureControlVisible(row.Row);
+        CancelConstructionPlacement(); CloseFleetPanel();
+        var (adding, removing) = (AddingToSelection, RemovingFromSelection);
+        if (!adding && !removing) DropArmySelection();
+        MapSelection.Apply(_supportSelected, new[] { formation.Id }, adding, removing);
+        if (!removing) _supportSelectionAnchor = formation.Id;
+        var openPanel = _supportSelected.Count > 0 && !(adding && (_selectedArmies.Count > 0 || _selectedArmy is not null));
+        if (openPanel && _supportLayer is not { Visible: true }) OpenSupportScreen();
+        else { if (_supportSelected.Count > 0 && _formationBar is null) EnsureScreen("support", BuildSupportScreen); SupportSelectionChanged(); }
+        if (_supportLayer is { Visible: true } && _supportRowMap.TryGetValue(formation.Id, out var row)) _supportScroll.EnsureControlVisible(row.Row);
     }
 
-    /// <summary>The divisions let go of, without the screens a full clear also closes.</summary>
     private void DropArmySelection()
     {
         if (_selectedArmy is null && _selectedArmies.Count == 0) return;
-        _selectedArmy = null;
-        _selectedArmies.Clear();
-        _globe.SelectArmy(-1);
-        SetArmyPanelVisible(false);
-        _redeploymentArmed = false;
+        _selectedArmy = null; _selectedArmies.Clear(); _globe.SelectArmy(-1); SetArmyPanelVisible(false); _redeploymentArmed = false;
     }
 
-    /// <summary>Esc, a click on empty ground, or the bar's ×: no formation selected, panel or no panel.</summary>
     private void ClearSupportMapSelection()
     {
-        _supportSelected.Clear();
-        _supportTargetArmed = false;
-        _globe.SupportRebaseArmed = false;
+        _supportSelected.Clear(); _supportTargetArmed = false; _globe.SupportRebaseArmed = false;
         _globe.SelectSupportFormations(_supportSelected);
         if (_supportFeedback is not null) _supportFeedback.Text = "";
         if (_supportLayer is { Visible: true }) RefreshSupportScreen();
@@ -724,7 +711,7 @@ public partial class DealOrForceGame
             CustomMinimumSize = new Vector2(0, Ui.Metric("support.roster_row_height", 58)),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             FocusMode = FocusModeEnum.None,
-            ActionMode = BaseButton.ActionModeEnum.Press
+            ActionMode = BaseButton.ActionModeEnum.Release
         };
         button.Pressed += () => SelectSupportRow(row.Formation.Id, true);
         row.Row = button;
@@ -1198,10 +1185,16 @@ public partial class DealOrForceGame
     private void CancelSupportOrder(int orderId)
     {
         if (_campaign?.Player is null) return;
-        _campaign.Commands.Enqueue(new CancelSupportOrderCommand { IssuerId = _campaign.Player.Id, OrderId = orderId });
-        _campaign.Commands.ApplyAll(_campaign);
+        var playerId = _campaign.Player.Id;
+        _simRunner.RunWrite(world =>
+        {
+            world.Commands.Enqueue(new CancelSupportOrderCommand { IssuerId = playerId, OrderId = orderId });
+            world.Commands.ApplyAll(world);
+        }, refreshSnapshot: true);
         _supportFeedback.Text = "";
+        Refresh();
         RefreshSupportScreen();
+        RefreshNewShell(force: true);
     }
 
     // ------------------------------------------------------------------ raising
@@ -1329,10 +1322,15 @@ public partial class DealOrForceGame
         _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour("state.negative"));
         _supportFeedback.Text = refusal.Length > 0 ? Tr(refusal) : "";
         if (refusal.Length > 0) return;
-        _campaign.Commands.Enqueue(command);
-        _campaign.Commands.ApplyAll(_campaign);
+        _simRunner.RunWrite(world =>
+        {
+            world.Commands.Enqueue(command);
+            world.Commands.ApplyAll(world);
+        }, refreshSnapshot: true);
         PlayStrategicCue("support_order");
+        Refresh();
         RefreshSupportScreen();
+        RefreshNewShell(force: true);
     }
     // ------------------------------------------------------------------ deep strike
 

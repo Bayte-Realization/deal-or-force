@@ -35,49 +35,66 @@ public partial class DealOrForceGame
         Ui.Metric("rankings.weight.field_power", 12), Ui.Metric("rankings.weight.technology", 17),
         Ui.Metric("rankings.weight.prestige", 15));
 
-    // One detached projection is shared by all badges. No per-badge world/army scans.
-    // Force a fresh read when opening; while a sliced tick is incomplete retain the last
-    // coherent document instead of comparing countries at different points in that tick.
+    private bool TryAdoptLockFreeRankingSnapshot(Campaign c)
+    {
+        if (c is null) return false;
+        var snap = c.RenderSnapshot;
+        if (snap is null || snap.Version <= 0 || snap.RankingRows is not { Count: > 0 } rows) return false;
+        if (ReferenceEquals(c, _countryRankingCampaign) && _countryRankingHour == snap.ElapsedHours &&
+            _countryRankingLanguage == Loc.Language && _countryRankingSnapshot.Count > 0 &&
+            ReferenceEquals(_countryRankingSnapshot, rows))
+            return false;
+        StoreRankingSnapshot(c, rows, snap.ElapsedHours, c.Player?.Id ?? -1);
+        _countryRankingSnapshotRevision++;
+        return true;
+    }
+
+    private void StoreRankingSnapshot(Campaign c, IReadOnlyList<CountryRankings.Row> rows, long hour, int viewer)
+    {
+        _countryRankingSnapshot = rows; _countryRankingCampaign = c; _countryRankingHour = hour;
+        _countryRankingNextRead = Time.GetTicksMsec() + 1000; _countryRankingLanguage = Loc.Language;
+        _countryRankingPlayer = viewer; _countryRankingObserver = _observerMode;
+    }
+
+    private bool HandleMidStepRankings(Campaign c, int viewer)
+    {
+        if (TryAdoptLockFreeRankingSnapshot(c)) return true;
+        if (!ReferenceEquals(c, _countryRankingCampaign) && _countryRankingSnapshot.Count > 0)
+        {
+            _countryRankingSnapshot = Array.Empty<CountryRankings.Row>();
+            _countryRankingSnapshotRevision++;
+        }
+        _countryRankingCampaign = c; _countryRankingHour = -1; _countryRankingPlayer = viewer; _countryRankingObserver = _observerMode;
+        return false;
+    }
+
     private bool ReadCountryRankings(bool force = false)
     {
         var c = _campaign;
-        if (c is not null && !c.TryEnterRead(force ? 50 : 0, requestWindowOnMiss: force))
-            return false;
+        var entered = c is null || (force ? c.AccessGate.TryEnterPriorityRead(80) : c.TryEnterRead(0, requestWindowOnMiss: false));
+        if (!entered)
+            return (force || _countryRankingSnapshot.Count == 0 || !ReferenceEquals(c, _countryRankingCampaign)) && TryAdoptLockFreeRankingSnapshot(c);
         try
         {
-            var sameViewer = ReferenceEquals(c, _countryRankingCampaign) && _countryRankingPlayer == (c?.Player?.Id ?? -1) &&
-                _countryRankingObserver == _observerMode;
-            if (c is null || c.MidStep)
+            var viewer = c?.Player?.Id ?? -1;
+            var sameViewer = ReferenceEquals(c, _countryRankingCampaign) && _countryRankingPlayer == viewer && _countryRankingObserver == _observerMode;
+            if (c is null)
             {
-                if (sameViewer) return false;
-                // A seat/world switch may happen between slices. Never retain somebody
-                // else's private statistics while waiting for the new coherent document.
-                _countryRankingSnapshot = Array.Empty<CountryRankings.Row>();
-                _countryRankingCampaign = c; _countryRankingHour = -1;
-                _countryRankingPlayer = c?.Player?.Id ?? -1; _countryRankingObserver = _observerMode;
-                _countryRankingSnapshotRevision++;
-                return true;
+                if (sameViewer && _countryRankingSnapshot.Count == 0) return false;
+                StoreRankingSnapshot(null, Array.Empty<CountryRankings.Row>(), -1, -1);
+                _countryRankingSnapshotRevision++; return true;
             }
-            if (!force && Time.GetTicksMsec() < _countryRankingNextRead && ReferenceEquals(c, _countryRankingCampaign) && _countryRankingHour == c.ElapsedHours &&
-                _countryRankingLanguage == Loc.Language && _countryRankingPlayer == (c.Player?.Id ?? -1) &&
-                _countryRankingObserver == _observerMode) return false;
-            // This is a public world leaderboard, not an intelligence report. Restricting
-            // membership to inspectable armies reduced a normal player's list to themselves.
-            // Only national aggregates are published here; positions and orders stay private.
+            if (c.MidStep) return HandleMidStepRankings(c, viewer);
+            if (!force && Time.GetTicksMsec() < _countryRankingNextRead && sameViewer &&
+                _countryRankingHour == c.ElapsedHours && _countryRankingLanguage == Loc.Language && _countryRankingSnapshot.Count > 0)
+                return false;
             var snapshot = CountryRankings.Read(c, RankingWeights);
             var changed = !sameViewer || _countryRankingLanguage != Loc.Language || !snapshot.SequenceEqual(_countryRankingSnapshot);
             if (changed) _countryRankingSnapshotRevision++;
-            _countryRankingSnapshot = snapshot;
-            _countryRankingCampaign = c; _countryRankingHour = c.ElapsedHours;
-            _countryRankingNextRead = Time.GetTicksMsec() + 1000;
-            _countryRankingLanguage = Loc.Language; _countryRankingPlayer = c.Player?.Id ?? -1;
-            _countryRankingObserver = _observerMode;
+            StoreRankingSnapshot(c, snapshot, c.ElapsedHours, viewer);
             return changed;
         }
-        finally
-        {
-            c?.ExitRead();
-        }
+        finally { c?.ExitRead(); }
     }
 
     private VBoxContainer RankedFlag(Control flag, string name, Func<Nation> nation)
@@ -88,16 +105,12 @@ public partial class DealOrForceGame
         {
             var targetId = -1;
             var c = _campaign;
-            if (c is not null && c.TryEnterRead(50, true))
+            if (c is not null && c.AccessGate.TryEnterPriorityRead(80))
             {
-                try { targetId = nation()?.Id ?? -1; }
-                finally { c.ExitRead(); }
+                try { targetId = nation()?.Id ?? -1; } finally { c.ExitRead(); }
             }
             OpenCountryRankings(targetId);
         }, 48, 24);
-        // Never clipped: a 48-pixel badge cut "#156" to "#1", and a player of Albania read that
-        // his country led the world. It grows with the number instead; three digits get a
-        // slightly smaller face so the badge stays under the flag.
         badge.Name = name; badge.ClipText = false;
         badge.AddThemeFontSizeOverride("font_size", 16);
         column.AddChild(badge); _countryRankBadges.Add((badge, nation));
@@ -107,10 +120,10 @@ public partial class DealOrForceGame
     private void RefreshCountryRankBadges()
     {
         var c = _campaign;
-        if (c is not null && !c.TryEnterRead(0, requestWindowOnMiss: false)) return;
+        var entered = c is null || c.TryEnterRead(0, requestWindowOnMiss: false);
         try
         {
-            ReadCountryRankings();
+            if (entered) ReadCountryRankings(); else TryAdoptLockFreeRankingSnapshot(c);
             foreach (var (button, nation) in _countryRankBadges)
             {
                 var n = nation();
@@ -122,10 +135,7 @@ public partial class DealOrForceGame
                         "\n" + Tr("Open the full country rankings");
             }
         }
-        finally
-        {
-            c?.ExitRead();
-        }
+        finally { if (entered) c?.ExitRead(); }
     }
 
     private void BuildCountryRankings()
@@ -141,84 +151,63 @@ public partial class DealOrForceGame
         close.AddThemeFontSizeOverride("font_size", isTouch ? 20 : 18);
         ScreenHeader(rows, "Country rankings", "Compare all territorial countries. National ranking statistics are public; unit positions and orders remain hidden.", false, close);
         var tools = new HBoxContainer(); tools.AddThemeConstantOverride("separation", 8); rows.AddChild(tools);
-        _countryRankingSearch = Placeholder(new LineEdit { Name = "CountryRankingSearch", ClearButtonEnabled = true,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill }, "Find a country or tag...");
-        _countryRankingSearch.TextChanged += _ => { _countryRankingPage = 0; RefreshCountryRankingPage(); };
-        tools.AddChild(_countryRankingSearch);
+        _countryRankingSearch = Placeholder(new LineEdit { Name = "CountryRankingSearch", ClearButtonEnabled = true, SizeFlagsHorizontal = SizeFlags.ExpandFill }, "Find a country or tag...");
+        _countryRankingSearch.TextChanged += _ => { _countryRankingPage = 0; RefreshCountryRankingPage(); }; tools.AddChild(_countryRankingSearch);
         _countryRankingMetric = new OptionButton { Name = "CountryRankingMetric", CustomMinimumSize = new(220, 0) };
-        foreach (var metric in Enum.GetValues<CountryRankings.Metric>())
-            _countryRankingMetric.AddItem(Tr(RankingMetricName(metric)), (int)metric);
-        _countryRankingMetric.ItemSelected += _ => { _countryRankingPage = 0; RefreshCountryRankingPage(); };
-        tools.AddChild(_countryRankingMetric);
-        _countryRankingOrder = ActionButton("Descending", () =>
-        { _countryRankingDescending = !_countryRankingDescending; _countryRankingPage = 0; RefreshCountryRankingPage(); }, 0, 34);
+        foreach (var metric in Enum.GetValues<CountryRankings.Metric>()) _countryRankingMetric.AddItem(Tr(RankingMetricName(metric)), (int)metric);
+        _countryRankingMetric.ItemSelected += _ => { _countryRankingPage = 0; RefreshCountryRankingPage(); }; tools.AddChild(_countryRankingMetric);
+        _countryRankingOrder = ActionButton("Descending", () => { _countryRankingDescending = !_countryRankingDescending; _countryRankingPage = 0; RefreshCountryRankingPage(); }, 0, 34);
         _countryRankingOrder.Name = "CountryRankingOrder"; tools.AddChild(_countryRankingOrder);
         var refresh = ActionButton("Refresh rankings", () =>
         {
             var c = _campaign;
-            if (c is not null && c.TryEnterRead(50, true))
+            if (c is not null && c.AccessGate.TryEnterPriorityRead(80))
             {
-                try { ReadCountryRankings(true); RefreshCountryRankBadges(); }
-                finally { c.ExitRead(); }
+                try { ReadCountryRankings(true); RefreshCountryRankBadges(); } finally { c.ExitRead(); }
             }
+            else { TryAdoptLockFreeRankingSnapshot(c); RefreshCountryRankBadges(); }
             RefreshCountryRankingPage();
         }, 0, 34);
         refresh.Name = "RefreshCountryRankings"; tools.AddChild(refresh);
         var heading = new HBoxContainer { Name = "CountryRankingColumns" }; heading.AddThemeConstantOverride("separation", 8);
-        AddRankingCell(heading, "#", 50); AddRankingCell(heading, "", 42);
-        AddRankingCell(heading, "Country", 185, true);
+        AddRankingCell(heading, "#", 50); AddRankingCell(heading, "", 42); AddRankingCell(heading, "Country", 185, true);
         var titles = new[] { "Ranking index", "GDP", "Population", "Ground power", "Tech.", "Prestige", "Living std." };
-        for (var i = 0; i < titles.Length; i++)
-        {
-            var label = AddRankingCell(heading, titles[i], RankingColumnWidths[i]);
-            label.Name = "RankingColumn_" + i; label.HorizontalAlignment = HorizontalAlignment.Right;
-        }
+        for (var i = 0; i < titles.Length; i++) { var l = AddRankingCell(heading, titles[i], RankingColumnWidths[i]); l.Name = "RankingColumn_" + i; l.HorizontalAlignment = HorizontalAlignment.Right; }
         rows.AddChild(heading);
-        var scroll = new ScrollContainer { Name = "CountryRankingScroll", SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
+        var scroll = new ScrollContainer { Name = "CountryRankingScroll", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
         rows.AddChild(scroll);
-        _countryRankingRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _countryRankingRows.AddThemeConstantOverride("separation", 3); scroll.AddChild(_countryRankingRows);
-        _countryRankingDetails = WrappedUltimatumText("", 14); _countryRankingDetails.Name = "CountryRankingDetails";
-        rows.AddChild(_countryRankingDetails);
+        _countryRankingRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; _countryRankingRows.AddThemeConstantOverride("separation", 3); scroll.AddChild(_countryRankingRows);
+        _countryRankingDetails = WrappedUltimatumText("", 14); _countryRankingDetails.Name = "CountryRankingDetails"; rows.AddChild(_countryRankingDetails);
         var footer = new HBoxContainer(); footer.AddThemeConstantOverride("separation", 10); rows.AddChild(footer);
-        _countryRankingPrevious = ActionButton("←", () => { _countryRankingPage--; RefreshCountryRankingPage(); }, 48, 34);
-        _countryRankingPrevious.Name = "CountryRankingPrevious"; footer.AddChild(_countryRankingPrevious);
-        _countryRankingCount = Title("", 14, Ui.Colour("text.body_soft"));
-        _countryRankingCount.Name = "CountryRankingCount"; _countryRankingCount.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        footer.AddChild(_countryRankingCount);
-        _countryRankingNext = ActionButton("→", () => { _countryRankingPage++; RefreshCountryRankingPage(); }, 48, 34);
-        _countryRankingNext.Name = "CountryRankingNext"; footer.AddChild(_countryRankingNext);
+        _countryRankingPrevious = ActionButton("←", () => { _countryRankingPage--; RefreshCountryRankingPage(); }, 48, 34); _countryRankingPrevious.Name = "CountryRankingPrevious"; footer.AddChild(_countryRankingPrevious);
+        _countryRankingCount = Title("", 14, Ui.Colour("text.body_soft")); _countryRankingCount.Name = "CountryRankingCount"; _countryRankingCount.SizeFlagsHorizontal = SizeFlags.ExpandFill; footer.AddChild(_countryRankingCount);
+        _countryRankingNext = ActionButton("→", () => { _countryRankingPage++; RefreshCountryRankingPage(); }, 48, 34); _countryRankingNext.Name = "CountryRankingNext"; footer.AddChild(_countryRankingNext);
         AddCountryRankingFooterActions(footer);
         _countryRankingFormula = WrappedUltimatumText("", 14); rows.AddChild(_countryRankingFormula);
         ApplyAtlasHeading(_countryRankingsPanel);
         _countryRankingLayout = new DecisionDialogLayout { Panel = _countryRankingsPanel, LayoutKey = "modal.rankings" };
         _countryRankingsLayer.AddChild(_countryRankingLayout);
-        _countryRankingsLayer.AddChild(new CountryRankingPulse { Refresh = () =>
-        {
-            if (!_countryRankingsLayer.Visible) return;
-            var campaign = _campaign;
-            if (campaign is null) return;
-            if (_simRunner.IsActive && ReferenceEquals(_simRunner.Campaign, campaign))
-            {
-                if (!campaign.TryEnterRead(0, requestWindowOnMiss: false)) return;
-                try
-                {
-                    ReadCountryRankings();
-                    if (_countryRankingRenderedRevision != _countryRankingSnapshotRevision)
-                    { RefreshCountryRankBadges(); RefreshCountryRankingPage(); }
-                }
-                finally
-                {
-                    campaign.ExitRead();
-                }
-                return;
-            }
-            ReadCountryRankings();
-            if (_countryRankingRenderedRevision != _countryRankingSnapshotRevision)
-            { RefreshCountryRankBadges(); RefreshCountryRankingPage(); }
-        }});
+        _countryRankingsLayer.AddChild(new CountryRankingPulse { Refresh = TickCountryRankingsPulse });
         _countryRankingsLayer.Hide();
+    }
+
+    private void TickCountryRankingsPulse()
+    {
+        if (!_countryRankingsLayer.Visible) return;
+        var campaign = _campaign;
+        if (campaign is null) return;
+        if (_simRunner.IsActive && ReferenceEquals(_simRunner.Campaign, campaign))
+        {
+            TryAdoptLockFreeRankingSnapshot(campaign);
+            if (_countryRankingSnapshot.Count == 0 && campaign.AccessGate.TryEnterPriorityRead(40))
+            {
+                try { ReadCountryRankings(true); } finally { campaign.ExitRead(); }
+            }
+            if (_countryRankingRenderedRevision != _countryRankingSnapshotRevision) { RefreshCountryRankBadges(); RefreshCountryRankingPage(); }
+            return;
+        }
+        ReadCountryRankings();
+        if (_countryRankingRenderedRevision != _countryRankingSnapshotRevision) { RefreshCountryRankBadges(); RefreshCountryRankingPage(); }
     }
 
     private void OpenCountryRankings(int nationId = -1)
@@ -227,21 +216,16 @@ public partial class DealOrForceGame
         if (_countryRankingsLayer is null) BuildCountryRankings();
         _countryRankingReturnFocus = GetViewport().GuiGetFocusOwner();
         var campaign = _campaign;
-        if (campaign.TryEnterRead(50, true))
+        var entered = campaign.AccessGate.TryEnterPriorityRead(80);
+        if (entered)
         {
-            try
-            {
-                ReadCountryRankings(true); RefreshCountryRankBadges();
-                _countryRankingSelected = nationId >= 0 ? nationId : campaign.Player?.Id ?? -1;
-            }
-            finally
-            {
-                campaign.ExitRead();
-            }
+            try { ReadCountryRankings(true); RefreshCountryRankBadges(); _countryRankingSelected = nationId >= 0 ? nationId : campaign.Player?.Id ?? -1; }
+            finally { campaign.ExitRead(); }
         }
-        else
+        if (!entered || _countryRankingSnapshot.Count == 0)
         {
-            _countryRankingSelected = nationId >= 0 ? nationId : _countryRankingPlayer;
+            TryAdoptLockFreeRankingSnapshot(campaign);
+            if (!entered) _countryRankingSelected = nationId >= 0 ? nationId : _countryRankingPlayer;
         }
         _countryRankingSearch.Text = ""; LocateRankingSelection();
         _countryRankingsLayer.Show(); _countryRankingsLayer.MoveToFront();
@@ -260,20 +244,10 @@ public partial class DealOrForceGame
     private void FocusAndHighlightRankingNation(int nationId)
     {
         var campaign = _campaign;
-        if (campaign is null || !campaign.TryEnterRead(50, true)) return;
-        Nation nation;
-        int mapIndex;
-        try
-        {
-            nation = campaign.Nations.FirstOrDefault(n => n.Id == nationId);
-            if (nation is null) return;
-            mapIndex = nation.MapIndex;
-            FocusNationCapital(nation);
-        }
-        finally
-        {
-            campaign.ExitRead();
-        }
+        if (campaign is null || !campaign.AccessGate.TryEnterPriorityRead(80)) return;
+        Nation nation; int mapIndex;
+        try { nation = campaign.Nations.FirstOrDefault(n => n.Id == nationId); if (nation is null) return; mapIndex = nation.MapIndex; FocusNationCapital(nation); }
+        finally { campaign.ExitRead(); }
         _globe?.HighlightNation(mapIndex);
     }
 
@@ -282,42 +256,25 @@ public partial class DealOrForceGame
         _countryRankingMyCountry = ActionButton("My country", () =>
         {
             var campaign = _campaign;
-            if (campaign is null || !campaign.TryEnterRead(50, true)) return;
+            if (campaign is null || !campaign.AccessGate.TryEnterPriorityRead(80)) return;
             int playerId;
-            try
-            {
-                playerId = campaign.Player?.Id ?? -1;
-            }
-            finally
-            {
-                campaign.ExitRead();
-            }
+            try { playerId = campaign.Player?.Id ?? -1; } finally { campaign.ExitRead(); }
             if (playerId <= 0) return;
-            _countryRankingSearch.Text = "";
-            _countryRankingSelected = playerId;
-            LocateRankingSelection();
-            RefreshCountryRankingPage();
-            FocusAndHighlightRankingNation(_countryRankingSelected);
+            _countryRankingSearch.Text = ""; _countryRankingSelected = playerId; LocateRankingSelection(); RefreshCountryRankingPage(); FocusAndHighlightRankingNation(_countryRankingSelected);
         }, 0, 34);
         footer.AddChild(_countryRankingMyCountry);
         footer.AddChild(ActionButton("Ranking country dossier", () =>
         {
             var campaign = _campaign;
-            if (campaign is null || !campaign.TryEnterRead(50, true)) return;
+            if (campaign is null || !campaign.AccessGate.TryEnterPriorityRead(80)) return;
             try
             {
                 var nation = campaign.Nations.FirstOrDefault(n => n.Id == _countryRankingSelected);
                 if (nation is null) return;
-                var lat = nation.CapitalLatitude;
-                var lon = nation.CapitalLongitude;
-                CloseCountryRankings();
-                FocusNationCapital(nation);
-                ShowMapSelection(new GlobePick(nation, null, -1, lat, lon));
+                var lat = nation.CapitalLatitude; var lon = nation.CapitalLongitude;
+                CloseCountryRankings(); FocusNationCapital(nation); ShowMapSelection(new GlobePick(nation, null, -1, lat, lon));
             }
-            finally
-            {
-                campaign.ExitRead();
-            }
+            finally { campaign.ExitRead(); }
         }, 0, 34));
     }
 
@@ -327,17 +284,9 @@ public partial class DealOrForceGame
         if (IsNewShellActive && _shell?.WorkPanel is { IsVisible: true, Mode: ShellWorkPanelView.DossierMode.Country } wp)
         {
             var campaign = _campaign;
-            if (campaign is null || !campaign.TryEnterRead(50, true)) return;
+            if (campaign is null || !campaign.AccessGate.TryEnterPriorityRead(80)) return;
             int activeMapIndex;
-            try
-            {
-                var active = campaign.Nations.FirstOrDefault(n => n.Id == wp.TargetNationId);
-                activeMapIndex = active?.MapIndex ?? -1;
-            }
-            finally
-            {
-                campaign.ExitRead();
-            }
+            try { activeMapIndex = campaign.Nations.FirstOrDefault(n => n.Id == wp.TargetNationId)?.MapIndex ?? -1; } finally { campaign.ExitRead(); }
             _globe.HighlightNation(activeMapIndex);
             return;
         }

@@ -11,7 +11,7 @@ namespace DealOrForce.Simulation;
 /// <summary>Copy-on-write data authoring. Never writes into the source game or runs mod code.</summary>
 public static class ContentWorkbench
 {
-    public static readonly string[] Roots = { "common", "events", "gui", "interface", "localization", "fonts", "sound", "music", "scenarios", "history", "map_data", "gfx" };
+    public static readonly string[] Roots = { "common", "events", "gui", "interface", "localization", "fonts", "sound", "music", "scenarios", "history", "map_data", "gfx", "maps" };
     /// <summary>
     /// Whether the editor may write this file: a structured document (JSON, or the YAML the
     /// loaders read just the same) in a declared content folder, or a province-ownership table in
@@ -121,6 +121,40 @@ public static class ContentWorkbench
             else ProductionProgramme.Validate(doc.RootElement, errors);
             if (errors.Count > 0) throw new InvalidDataException(string.Join("\n", errors));
             return "Production rules valid. The live catalogue has not been changed.";
+        }
+        if (contentPath.StartsWith("maps/", StringComparison.OrdinalIgnoreCase))
+        {
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                throw new InvalidDataException("A map pack manifest must be a JSON object.");
+            var r = doc.RootElement;
+            if (!r.TryGetProperty("id", out var idEl) || idEl.ValueKind != JsonValueKind.String ||
+                !System.Text.RegularExpressions.Regex.IsMatch((idEl.GetString() ?? "").Trim(), "^[a-z0-9_]{2,48}$"))
+                throw new InvalidDataException("Map pack 'id' must be 2-48 lowercase letters, digits, or underscores.");
+            if (!r.TryGetProperty("name", out var nameEl) || nameEl.ValueKind != JsonValueKind.String ||
+                string.IsNullOrWhiteSpace(nameEl.GetString()))
+                throw new InvalidDataException("Map pack requires a non-empty 'name'.");
+            var errors = new List<string>();
+            CheckInt(r, "map_pack", "cells_per_province", 12, 10000, errors);
+            CheckInt(r, "map_pack", "disputed_cells_per_province", 12, 10000, errors);
+            CheckFloat(r, "map_pack", "siberia_multiplier", 0.25f, 16f, errors);
+            CheckFloat(r, "map_pack", "polar_multiplier", 0.25f, 16f, errors);
+            if (errors.Count > 0) throw new InvalidDataException(string.Join("\n", errors));
+            return "Map pack manifest valid. Restart or start a new campaign to generate the world.";
+        }
+        if (contentPath.StartsWith("common/countries/", StringComparison.OrdinalIgnoreCase))
+        {
+            var errors = new List<string>();
+            foreach (var (id, body) in EnumerateDefinitions(doc.RootElement, "common/countries", errors))
+            {
+                if ((body.TryGetProperty("color", out var col) || body.TryGetProperty("colour", out col)) &&
+                    col.ValueKind == JsonValueKind.String &&
+                    !System.Text.RegularExpressions.Regex.IsMatch((col.GetString() ?? "").Trim(), "^#[0-9A-Fa-f]{6}$"))
+                    errors.Add($"country '{id}': colour must be a 6-digit hex literal such as #3A7CA5.");
+                CheckFloat(body, $"country '{id}'", "starting_treasury", -100000f, 1000000f, errors);
+                CheckFloat(body, $"country '{id}'", "treasury", -100000f, 1000000f, errors);
+            }
+            if (errors.Count > 0) throw new InvalidDataException(string.Join("\n", errors));
+            return "Country definitions valid. The live catalogue has not been changed.";
         }
         if (TryValidateCatalogDocument(contentPath, doc.RootElement, out var domainMessage))
             return domainMessage;

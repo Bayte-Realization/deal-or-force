@@ -41,6 +41,7 @@ public sealed class SaveMetadata
     public DateTime SavedUtc { get; set; }
     public string GameVersion { get; set; } = SaveSystem.GameVersion;
     public string MapDataVersion { get; set; } = SaveSystem.MapDataVersion;
+    public string MapId { get; set; } = "";
     public int ProvinceCount { get; set; }
     public string ModFingerprint { get; set; } = "";
     public string Checksum { get; set; } = "";
@@ -316,6 +317,7 @@ public static partial class SaveSystem
         Seed = campaign.Seed,
         SavedUtc = DateTime.UtcNow,
         MapDataVersion = MapDataVersion,
+        MapId = string.IsNullOrWhiteSpace(campaign.MapId) ? MapCatalog.StandardId : campaign.MapId,
         ProvinceCount = provinceCount,
         ModFingerprint = modFingerprint ?? "",
         IsAutosave = autosave
@@ -595,6 +597,15 @@ public static partial class SaveSystem
                 payload.ProvinceCount <= 0 || payload.ProvinceController.Length != payload.ProvinceCount + 1 ||
                 payload.ProvinceOccupation.Length != payload.ProvinceCount + 1)
                 return new SaveLoadResult(null, null, "Host campaign uses incompatible save or map data.");
+            var requestedMapId = MapCatalog.ResolveSaveMapId(payload.MapId, payload.ProvinceCount, MapCatalog.ActiveMapId);
+            if (!string.IsNullOrWhiteSpace(requestedMapId))
+            {
+                if (!MapCatalog.IsAvailable(requestedMapId))
+                    return new SaveLoadResult(null, null,
+                        Loc.Format("This save requires map pack '{0}', which is not available.", requestedMapId));
+                MapCatalog.SetActiveMap(requestedMapId);
+                payload.MapId = requestedMapId;
+            }
             var campaign = payload.Restore();
             var warning = string.Equals(payload.ModFingerprint ?? "", activeModFingerprint ?? "", StringComparison.Ordinal)
                 ? "" : "Host and client mod fingerprints differ; the session may desynchronise.";
@@ -625,18 +636,17 @@ public static partial class SaveSystem
         metadata = payload.EmbeddedMetadata ?? metadata;
         if (metadata is not null)
         {
+            metadata.MapId = MapCatalog.ResolveSaveMapId(
+                !string.IsNullOrWhiteSpace(metadata.MapId) ? metadata.MapId : payload.MapId,
+                metadata.ProvinceCount > 0 ? metadata.ProvinceCount : payload.ProvinceCount);
             metadata.CompressedBytes = storedLength;
             metadata.FormatLabel = detectedFormat;
         }
         return FinalizeLoadedCampaign(payload, metadata, activeModFingerprint);
     }
 
-    private static bool TryReadValidatedPayload(
-        FileStream file,
-        string dataPath,
-        SaveMetadata metadata,
-        out CampaignSave payload,
-        out SaveLoadResult failureResult)
+    private static bool TryReadValidatedPayload(FileStream file, string dataPath, SaveMetadata metadata,
+        out CampaignSave payload, out SaveLoadResult failureResult)
     {
         payload = null;
         failureResult = default;
@@ -699,11 +709,30 @@ public static partial class SaveSystem
             error = $"This save uses map data '{payload.MapDataVersion}', but the active map is '{MapDataVersion}'.";
             return false;
         }
-        if (activeProvinceCount > 0 && payload.ProvinceCount > 0 && payload.ProvinceCount != activeProvinceCount)
+        var rawMapId = !string.IsNullOrWhiteSpace(payload.MapId) ? payload.MapId : (payload.EmbeddedMetadata?.MapId ?? metadata?.MapId);
+        var countHint = payload.ProvinceCount > 0 ? payload.ProvinceCount : (metadata?.ProvinceCount ?? 0);
+        var requestedMapId = MapCatalog.ResolveSaveMapId(rawMapId, countHint, MapCatalog.ActiveMapId);
+        var mapSwitched = false;
+        if (!string.IsNullOrWhiteSpace(requestedMapId))
+        {
+            if (!MapCatalog.IsAvailable(requestedMapId))
+            {
+                error = Loc.Format("This save requires map pack '{0}', which is not available.", requestedMapId);
+                return false;
+            }
+            var previousMapId = MapCatalog.ActiveMapId;
+            MapCatalog.SetActiveMap(requestedMapId);
+            mapSwitched = !string.Equals(previousMapId, MapCatalog.ActiveMapId, StringComparison.Ordinal);
+            payload.MapId = requestedMapId;
+        }
+        var expectedCount = mapSwitched
+            ? (MapCatalog.TryGet(MapCatalog.ActiveMapId, out var switchedPack) ? switchedPack.CompiledProvinceCount : 0)
+            : activeProvinceCount;
+        if (expectedCount > 0 && payload.ProvinceCount > 0 && payload.ProvinceCount != expectedCount)
         {
             error = Loc.Format(
                 "This save was made on another map ({0:N0} provinces; this map has {1:N0}). Start a new campaign.",
-                payload.ProvinceCount, activeProvinceCount);
+                payload.ProvinceCount, expectedCount);
             return false;
         }
         if (payload.ProvinceCount <= 0 ||
@@ -767,6 +796,7 @@ public static partial class SaveSystem
                            ReadEmbeddedMetadataAnywhere(info.Path);
             if (metadata is null) continue;
             metadata.Slot = slot;
+            metadata.MapId = MapCatalog.ResolveSaveMapId(metadata.MapId, metadata.ProvinceCount);
             metadata.CompressedBytes = new FileInfo(info.Path).Length;
             metadata.FormatLabel = DetectContainerFormat(info.Path);
             entries.Add(metadata);
@@ -1193,6 +1223,7 @@ public static partial class SaveSystem
         public bool ProductionUnitsSaved;
         public bool PrestigeSaved;
         public string ScenarioId = "2024";
+        public string MapId = "";
         public string SkinOverlay = "";
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public CalendarProfile Calendar;
@@ -1316,6 +1347,7 @@ public static partial class SaveSystem
             ProductionUnitsSaved = true,
             PrestigeSaved = true,
             ScenarioId = campaign.ScenarioId,
+            MapId = string.IsNullOrWhiteSpace(campaign.MapId) ? MapCatalog.StandardId : campaign.MapId,
             SkinOverlay = campaign.SkinOverlay ?? "",
             Calendar = campaign.Calendar is not null && !campaign.Calendar.IsDefault ? campaign.Calendar.Clone() : null,
             ScenarioMeta = campaign.ScenarioMeta is not null && !campaign.ScenarioMeta.IsEmpty ? campaign.ScenarioMeta.Clone() : null,
@@ -1565,6 +1597,7 @@ public static partial class SaveSystem
             var campaign = new Campaign(Seed, ScenarioRules)
             {
                 ScenarioId = ScenarioId,
+                MapId = MapCatalog.ResolveSaveMapId(MapId, ProvinceCount, MapCatalog.ActiveMapId),
                 SkinOverlay = SkinOverlay ?? "",
                 Calendar = Calendar is not null && !Calendar.IsDefault ? Calendar.Clone() : null,
                 ScenarioMeta = ScenarioMeta is not null && !ScenarioMeta.IsEmpty ? ScenarioMeta.Clone() : null,

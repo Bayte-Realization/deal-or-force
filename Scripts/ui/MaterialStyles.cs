@@ -83,7 +83,8 @@ internal static class MaterialStyles
             return Flat(material, content);
 
         var pixels = InterfaceMaterials.Bake(material, state, out var size, out var pad);
-        var texture = ImageTexture.CreateFromImage(Image.CreateFromData(size, size, false, Image.Format.Rgba8, pixels));
+        using var bakedImage = Image.CreateFromData(size, size, false, Image.Format.Rgba8, pixels);
+        var texture = ImageTexture.CreateFromImage(bakedImage);
         Textures[key] = texture;
         _bytes += bytes;
         var margin = InterfaceMaterials.BakedMargin(material);

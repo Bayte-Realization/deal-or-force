@@ -32,23 +32,10 @@ public static class ShellDockRules
         ShellLayoutProfile profile,
         bool anyLeftPanelVisible,
         bool fullWorkspaceVisible = false,
-        float planningBarDesiredWidth = 520f)
-    {
-        var left = profile.LeftPanel;
-        var stripX = anyLeftPanelVisible ? left.Right + 10f : profile.Strip.X;
-        var maxRight = profile.MapBar.X - 12f;
-        var stripW = Math.Max(120f, maxRight - stripX);
-        var strip = new ShellRect(stripX, profile.Strip.Y, stripW, profile.Strip.H);
-
-        var pbarH = profile.Compact ? 42f : 52f;
-        var pbarX = anyLeftPanelVisible ? left.Right + 10f : strip.X;
-        var pbarMaxW = Math.Max(180f, maxRight - pbarX);
-        var pbarW = Math.Min(Math.Max(220f, planningBarDesiredWidth), pbarMaxW);
-        var pbarBottom = strip.Y - 6f;
-        var pbar = new ShellRect(pbarX, pbarBottom - pbarH, pbarW, pbarH);
-
-        return new ShellDockGeometry(left, strip, pbar, CompactStripTokens: anyLeftPanelVisible || fullWorkspaceVisible);
-    }
+        float planningBarDesiredWidth = 520f,
+        float planningBarDesiredHeight = 0f) =>
+        ShellPlanningDock.ComputeDock(
+            profile, anyLeftPanelVisible, fullWorkspaceVisible, planningBarDesiredWidth, planningBarDesiredHeight);
 
     public static (IReadOnlyDictionary<string, ShellRect> Rects, IReadOnlyList<string> Overlaps, IReadOnlyList<string> Offscreen)
         AuditDockScenario(float width, float height, bool leftPanelOpen, bool planningBarOpen, bool atWar = false, bool fullWorkspaceOpen = false)

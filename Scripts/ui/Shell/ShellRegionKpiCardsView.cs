@@ -324,7 +324,7 @@ internal static class ShellRegionKpiCardsView
         var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center, ClipContents = true };
         row.AddThemeConstantOverride("separation", 3);
         pill.AddChild(row);
-        row.AddChild(ShellRegionVisualsView.MakeLabel(ctx, shortTag, "shell.sans", 9, "shell.paper_faint", clip: true));
+        row.AddChild(ShellRegionVisualsView.MakeLabel(ctx, shortTag, "shell.sans", 9, "shell.paper_faint", clip: false));
         var valCol = mult > 1.04f ? "shell.state.positive" : mult < 0.85f ? "shell.state.warning_text" : "shell.paper";
         row.AddChild(ShellRegionVisualsView.MakeLabel(ctx, $"{mult:0.00}×", "shell.sans", 11, valCol, tabular: true));
     }

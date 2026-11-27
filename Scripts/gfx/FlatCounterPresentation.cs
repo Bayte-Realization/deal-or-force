@@ -82,6 +82,7 @@ public sealed partial class GlobePresentation
     /// </summary>
     private static bool HasMovingArmy(ArmyStackMarker marker)
     {
+        if (marker.IsLockFreeSynced) return marker.CachedIsMoving;
         for (var i = 0; i < marker.Stack.Count; i++)
             if (marker.Stack[i].IsMoving && marker.Stack[i].Route.Count > 0) return true;
         return false;
@@ -161,18 +162,19 @@ public sealed partial class GlobePresentation
         }
         // Velocity-adaptive damping: stretch glide smoothly across the measured step interval
         // so divisions glide silkily rather than sprinting and freezing on each tick.
-        var rate = speed >= 5
+        var rate = speed >= 8
             ? Math.Clamp(2.8f / MathF.Max(0.06f, _simStepIntervalEma), 8.0f, 18.0f)
-            : speed == 4 ? 14.0f : 6.5f;
+            : speed == 7 ? 14.0f : 6.5f;
         var blend = Mathf.Clamp(1f - MathF.Exp(-delta * rate), 0f, 1f);
         var isMobileOrTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
                               Platform.PlatformProfile.Current?.IsMobile == true;
         var flatWrapDue = _flatMap && (!float.IsFinite(_motionScanFlatX) ||
             MathF.Abs(_flatX - _motionScanFlatX) >= (_isActivelyPanning ? 0.25f : 0.001f));
-        if (_armyStacks.Count != _motionScanCount || _armyStructureFingerprint != _motionScanFp ||
+        var structureFp = HashCode.Combine(_armyStructureFingerprint, _lockFreeArmyStructureFingerprint);
+        if (_armyStacks.Count != _motionScanCount || structureFp != _motionScanFp ||
             _motionScanFlat != _flatMap || hours != _motionScanHours || flatWrapDue || now >= _nextMotionScanMs)
         {
-            _motionScanCount = _armyStacks.Count; _motionScanFp = _armyStructureFingerprint;
+            _motionScanCount = _armyStacks.Count; _motionScanFp = structureFp;
             _motionScanFlat = _flatMap; _motionScanHours = hours; _motionScanFlatX = _flatX;
             _nextMotionScanMs = now + (_isActivelyPanning ? 250UL : (isMobileOrTouch ? 160UL : 50UL));
             _motionActiveStacks.Clear();
@@ -232,8 +234,8 @@ public sealed partial class GlobePresentation
 
         foreach (var marker in _armyStacks.Values)
         {
-            if (marker.Stack.Count == 0 || marker.Stack[0].ProvinceId <= 0) continue;
-            var provinceId = marker.Stack[0].ProvinceId;
+            var provinceId = marker.EffectiveProvinceId;
+            if (provinceId <= 0) continue;
             if (!_provinceStackScratch.TryGetValue(provinceId, out var list))
             {
                 list = poolIndex < _provinceStackPool.Count ? _provinceStackPool[poolIndex++] : null;
@@ -250,7 +252,7 @@ public sealed partial class GlobePresentation
             markers.Sort(static (a, b) =>
             {
                 var c = a.NationId.CompareTo(b.NationId);
-                return c != 0 ? c : a.Stack[0].Id.CompareTo(b.Stack[0].Id);
+                return c != 0 ? c : a.EffectiveLeadArmyId.CompareTo(b.EffectiveLeadArmyId);
             });
             var columns = markers.Count <= 2 ? markers.Count : 2;
             var rows = (markers.Count + columns - 1) / columns;
@@ -373,13 +375,13 @@ public sealed partial class GlobePresentation
             // Kharkiv to Kherson. Close in, every division is its own counter again.
             var operational = !_flatStrategicCounters && _flatZoom > Ui.Metric("map.flat_counter_group_zoom", 1.15f);
             var groupRadius = half.X * 2f * Ui.Metric("map.flat_counter_group_radius", 4.5f);
-            var group = marker.Stack.Count > 0 ? marker.Stack[0].ArmyGroupId : -1;
+            var group = marker.EffectiveArmyGroupId;
             ArmyStackMarker host = null;
             foreach (var (candidate, taken) in _strategicHosts)
             {
                 if (candidate.NationId != marker.NationId) continue;
                 if (taken.Grow(reach).Intersects(room)) { host = candidate; break; }
-                if (operational && group >= 0 && candidate.Stack.Count > 0 && candidate.Stack[0].ArmyGroupId == group &&
+                if (operational && group >= 0 && candidate.EffectiveArmyGroupId == group &&
                     taken.GetCenter().DistanceTo(room.GetCenter()) <= groupRadius) { host = candidate; break; }
             }
             if (host is not null)
@@ -418,6 +420,54 @@ public sealed partial class GlobePresentation
     private void RefreshProvinceCounterDisplay(ArmyStackMarker marker, bool compact, List<ArmyStackMarker> merged = null)
     {
         marker.DisplayStack.Clear();
+        marker.LockFreeDisplayArmyIds.Clear();
+        if (marker.IsLockFreeSynced && marker.LockFreeArmyIds.Count > 0)
+        {
+            marker.LockFreeDisplayArmyIds.AddRange(marker.LockFreeArmyIds);
+            if (merged is not null)
+            {
+                foreach (var taken in merged)
+                {
+                    if (taken.LockFreeArmyIds.Count > 0) marker.LockFreeDisplayArmyIds.AddRange(taken.LockFreeArmyIds);
+                    else for (var i = 0; i < taken.Stack.Count; i++) marker.LockFreeDisplayArmyIds.Add(taken.Stack[i].Id);
+                }
+            }
+            if (marker.Stack.Count > 0) marker.DisplayStack.AddRange(marker.Stack);
+            if (merged is not null)
+                foreach (var taken in merged)
+                    if (taken.Stack.Count > 0) marker.DisplayStack.AddRange(taken.Stack);
+            marker.DisplayProvinces = 1;
+            marker.Compact = compact;
+            marker.Plate.Visible = true;
+            marker.Plate.Scale = Vector3.One;
+            marker.Count.Visible = true;
+            var lfDivs = marker.LockFreeDivisions;
+            var lfPers = marker.LockFreePersonnel;
+            if (merged is not null)
+                foreach (var taken in merged) { lfDivs += taken.LockFreeDivisions; lfPers += taken.LockFreePersonnel; }
+            var lfDivCount = Mathf.CeilToInt(lfDivs);
+            var lfMenTenths = (int)MathF.Round(lfPers / 100f);
+            if (marker.ShownDivisions != lfDivCount || (!compact && marker.ShownMenTenths != lfMenTenths) || marker.ShownCompact != compact)
+            {
+                marker.ShownDivisions = lfDivCount; marker.ShownMenTenths = lfMenTenths; marker.ShownCompact = compact;
+                var text = compact ? lfDivCount.ToString() : $"{lfDivCount}\n{lfMenTenths / 10f:0.#}k";
+                marker.CountText = text;
+                if (!string.Equals(marker.Count.Text, text, StringComparison.Ordinal)) marker.Count.Text = text;
+            }
+            var lfFp = new HashCode();
+            for (var i = 0; i < marker.LockFreeDisplayArmyIds.Count; i++) lfFp.Add(marker.LockFreeDisplayArmyIds[i]);
+            var lfSig = lfFp.ToHashCode();
+            if (lfSig != marker.DisplayFingerprint)
+            {
+                marker.DisplayFingerprint = lfSig;
+                var ids = new Godot.Collections.Array<int>();
+                for (var i = 0; i < marker.LockFreeDisplayArmyIds.Count; i++) ids.Add(marker.LockFreeDisplayArmyIds[i]);
+                marker.Node.SetMeta("display_army_ids", ids);
+                marker.Node.SetMeta("display_provinces", 1);
+            }
+            ApplyLockFreeArmyConditionBars(marker);
+            return;
+        }
         marker.DisplayStack.AddRange(marker.Stack);
         if (merged is not null)
             foreach (var taken in merged) marker.DisplayStack.AddRange(taken.Stack);

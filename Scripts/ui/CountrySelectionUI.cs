@@ -30,8 +30,13 @@ public partial class DealOrForceGame
     private LineEdit _pickerSeed = null!;
     private Button _pickerSeedApply = null!;
     private Label _pickerSeedNote = null!;
+    private OptionButton _pickerMapSelect = null!;
+    private OptionButton _pickerTempoSelect = null!;
+    private bool _syncingPickerSelectors;
     private PanelContainer _pickerActionsPanel;
     private VBoxContainer _pickerActionsStack;
+    private VBoxContainer _pickerAdvanced;
+    private Button _pickerAdvancedFold;
     private bool _pickerActionsLayoutQueued;
 
     private GridContainer _pickerMovements;
@@ -233,55 +238,51 @@ public partial class DealOrForceGame
         actions.Name = "CountryPickerActions"; _pickerActionsPanel = actions;
         Ui.Place(actions, "picker.actions");
         MenuChromeTheme.StyleArchitecturalPlate(actions, brassCorners: true, padX: 0, padY: 0);
-        var actionMargin = Margin(actions, 10, 8);
+        var actionMargin = Margin(actions, 8, 5);
         // A MarginContainer gives its one child the whole rectangle, so the rows stack in a
-        // box of their own inside it: the buttons, and the seed row underneath them.
+        // box of their own inside it: the 1-row action bar, the collapsed format bar, and drawers.
         var actionStack = new VBoxContainer();
         _pickerActionsStack = actionStack;
         actionStack.MinimumSizeChanged += QueuePickerActionsLayout;
         actions.Resized += QueuePickerActionsLayout;
-        actionStack.AddThemeConstantOverride("separation", 8);
+        actionStack.AddThemeConstantOverride("separation", 4);
         actionMargin.AddChild(actionStack);
-        var actionRow = new HFlowContainer { Name = "PickerActionsFlow", ClipContents = true };
-        actionRow.AddThemeConstantOverride("h_separation", 8);
-        actionRow.AddThemeConstantOverride("v_separation", 6);
+        var actionRow = new HBoxContainer { Name = "PickerActionsFlow", ClipContents = true, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        actionRow.AddThemeConstantOverride("separation", 5);
         actionStack.AddChild(actionRow);
-        actionRow.AddChild(PickerActionChip("Back", ShowMainMenu, 96));
-        actionRow.AddChild(PickerActionChip("Random nation", PickRandomNation, 150));
+        actionRow.AddChild(PickerActionChip("Back", ShowMainMenu, touchBtn ? 86 : 80));
+        var random = PickerActionChip("picker.action.random", PickRandomNation, touchBtn ? 92 : 86);
+        random.TooltipText = Ui.Tip(Tr("Random nation"));
+        actionRow.AddChild(random);
         // Watching without a country: players asked for it, and before it the only way in was
         // to start as somebody and press F7, which still left that country the player's.
-        var watch = PickerActionChip("Watch the world", BeginObserving, 174);
+        var watch = PickerActionChip("Observe", BeginObserving, touchBtn ? 96 : 88);
         watch.TooltipText = Ui.Tip(Tr("Start without a country: the computer runs every nation and nothing stops the clock. F7 shows the controls."));
         actionRow.AddChild(watch);
-        actionRow.AddChild(PickerActionChip("Scenarios / editor", OpenScenarioLibrary, 180));
         // The language, the step length and the sound are all decisions a player makes
         // BEFORE they pick a country, and until now the only door to them was the pause
         // menu, which does not exist until a campaign is running.
-        actionRow.AddChild(PickerActionChip("Settings", ShowSettings, 116));
-        // Everything below is for the player who came back for it: the two weather switches and
-        // the seed of the world. Shown by default they made the first screen of a first game
-        // ask about clouds, fog and a ten-digit number before it asked which country.
-        var advanced = new VBoxContainer { Name = "PickerAdvanced", Visible = false };
-        advanced.AddThemeConstantOverride("separation", 8);
-        Button advancedFold = null;
-        advancedFold = ActionButton("Advanced", () =>
-        {
-            advanced.Visible = !advanced.Visible;
-            MenuChromeTheme.StylePlateButton(advancedFold, advanced.Visible, touchBtn ? 14 : 13);
-            QueuePickerActionsLayout();
-        }, 120, touchBtn ? 46 : 36);
-        advancedFold.Name = "PickerAdvancedFold";
-        MenuChromeTheme.StylePlateButton(advancedFold, false, 13);
-        advancedFold.TooltipText = Tr("Clouds, mist and the seed the world is built from.");
-        actionRow.AddChild(advancedFold);
-        actionStack.AddChild(advanced);
-        var weatherRow = new HBoxContainer();
-        weatherRow.AddThemeConstantOverride("separation", 8);
-        advanced.AddChild(weatherRow);
+        actionRow.AddChild(PickerActionChip("Settings", ShowSettings, touchBtn ? 112 : 104));
+        _pickerAdvanced = new VBoxContainer { Name = "PickerAdvanced", Visible = false };
+        _pickerAdvanced.AddThemeConstantOverride("separation", 6);
+        _pickerAdvancedFold = ActionButton("picker.action.more", TogglePickerAdvanced, touchBtn ? 78 : 72, touchBtn ? 36 : 32);
+        _pickerAdvancedFold.Name = "PickerAdvancedFold";
+        _pickerAdvancedFold.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _pickerAdvancedFold.ClipText = true;
+        _pickerAdvancedFold.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        MenuChromeTheme.StylePlateButton(_pickerAdvancedFold, false, touchBtn ? 13 : 12);
+        _pickerAdvancedFold.TooltipText = Ui.Tip(Tr("picker.action.more_tip"));
+        actionRow.AddChild(_pickerAdvancedFold);
+        BuildPickerWorldFormatCard(actionStack, touchBtn);
+        actionStack.AddChild(_pickerAdvanced);
+        var weatherRow = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        weatherRow.AddThemeConstantOverride("separation", 6);
+        _pickerAdvanced.AddChild(weatherRow);
+        weatherRow.AddChild(PickerActionChip("Scenarios / editor", OpenScenarioLibrary, touchBtn ? 168 : 156));
         // The globe here is a map being studied for its borders, and clouds are in the way of it.
-        var pickerClouds = PickerWeatherToggle("map_clouds", "Clouds", "Clouds over the world. Press to hide or show them - the same option as in the settings.", 96);
+        var pickerClouds = PickerWeatherToggle("map_clouds", "Clouds", "Clouds over the world. Press to hide or show them - the same option as in the settings.", 90);
         weatherRow.AddChild(pickerClouds);
-        var pickerFog = PickerWeatherToggle("map_mist", "FOG", "Hide or show the visual mist. Unseen provinces remain unseen.", 70);
+        var pickerFog = PickerWeatherToggle("map_mist", "FOG", "Hide or show the visual mist. Unseen provinces remain unseen.", 76);
         pickerFog.Name = "PickerFog";
         weatherRow.AddChild(pickerFog);
 
@@ -290,13 +291,13 @@ public partial class DealOrForceGame
         // different one out of the same scenario. Changing it asks for a rebuild rather
         // than doing one behind the field: a world is not a small thing to replace.
         var seedRow = new HBoxContainer();
-        seedRow.AddThemeConstantOverride("separation", 8);
-        advanced.AddChild(seedRow);
+        seedRow.AddThemeConstantOverride("separation", 6);
+        _pickerAdvanced.AddChild(seedRow);
         var seedCaption = Title("WORLD SEED", 11, MenuChromeTheme.PaperFaint);
         seedCaption.AutowrapMode = TextServer.AutowrapMode.Off;
-        seedCaption.CustomMinimumSize = new Vector2(92, 0);
+        seedCaption.CustomMinimumSize = new Vector2(88, 0);
         seedRow.AddChild(seedCaption);
-        _pickerSeed = new LineEdit { Name = "WorldSeedInput", CustomMinimumSize = new Vector2(146, 34) };
+        _pickerSeed = new LineEdit { Name = "WorldSeedInput", CustomMinimumSize = new Vector2(132, 32) };
         _pickerSeed.MaxLength = 10;
         _pickerSeed.Text = _campaignSeed.ToString();
         Placeholder(_pickerSeed, "Any number");
@@ -304,11 +305,11 @@ public partial class DealOrForceGame
         _pickerSeed.TextChanged += _ => OnPickerSeedChanged();
         _pickerSeed.TextSubmitted += _ => ApplyPickerSeed();
         seedRow.AddChild(_pickerSeed);
-        var randomSeed = ActionButton("Random seed", RollPickerSeed, 126, 34);
-        MenuChromeTheme.StyleWellButton(randomSeed, false, 13);
+        var randomSeed = ActionButton("Random seed", RollPickerSeed, 118, 32);
+        MenuChromeTheme.StyleWellButton(randomSeed, false, 12);
         seedRow.AddChild(randomSeed);
-        _pickerSeedApply = ActionButton("Rebuild the world", ApplyPickerSeed, 156, 34, true);
-        MenuChromeTheme.StylePrimaryCta(_pickerSeedApply, 13, serif: false);
+        _pickerSeedApply = ActionButton("Rebuild the world", ApplyPickerSeed, 146, 32, true);
+        MenuChromeTheme.StylePrimaryCta(_pickerSeedApply, 12, serif: false);
         _pickerSeedApply.Visible = false;
         seedRow.AddChild(_pickerSeedApply);
         _pickerSeedNote = Title("", 11, MenuChromeTheme.BrassHi);
@@ -320,11 +321,41 @@ public partial class DealOrForceGame
         QueuePickerActionsLayout();
     }
 
+    private void TogglePickerAdvanced()
+    {
+        if (_pickerAdvanced is null || !IsInstanceValid(_pickerAdvanced)) return;
+        var next = !_pickerAdvanced.Visible;
+        if (next) CollapsePickerWorldFormat();
+        SetPickerAdvancedExpanded(next);
+    }
+
+    private void CollapsePickerAdvanced() => SetPickerAdvancedExpanded(false);
+
+    private void SetPickerAdvancedExpanded(bool expanded)
+    {
+        if (_pickerAdvanced is null || !IsInstanceValid(_pickerAdvanced)) return;
+        _pickerAdvanced.Visible = expanded;
+        if (_pickerAdvancedFold is not null && IsInstanceValid(_pickerAdvancedFold))
+        {
+            var touch = DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+            var key = expanded ? "picker.action.more_open" : "picker.action.more";
+            var caption = Tr(key);
+            _pickerAdvancedFold.Text = caption;
+            _pickerAdvancedFold.SetMeta(LocSourceMeta, key);
+            _pickerAdvancedFold.SetMeta(LocAppliedMeta, caption);
+            MenuChromeTheme.StylePlateButton(_pickerAdvancedFold, expanded, touch ? 13 : 12);
+        }
+        QueuePickerActionsLayout();
+    }
+
     private Button PickerActionChip(string text, Action onPressed, float width)
     {
         var touch = DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
-        var button = ActionButton(text, onPressed, touch ? MathF.Max(width, 108f) : width, touch ? 46 : 36);
-        MenuChromeTheme.StyleWellButton(button, selected: false, fontSize: touch ? 14 : 13);
+        var button = ActionButton(text, onPressed, width, touch ? 36 : 32);
+        button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        button.ClipText = true;
+        button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        MenuChromeTheme.StyleWellButton(button, selected: false, fontSize: touch ? 13 : 12);
         return button;
     }
 
@@ -422,8 +453,8 @@ public partial class DealOrForceGame
                     rightEdge = Mathf.Min(rightEdge, _pickerCountryPanel.OffsetLeft - 18f);
                 var bottom = Mathf.Min(authored.AnchorBottom * view.Y + authored.OffsetBottom,
                     view.Y - Mathf.Clamp(Ui.Metric("picker.actions_bottom_inset", 36), 18, 120));
-                var height = Mathf.Max(92, Mathf.Max(_pickerActionsPanel.GetCombinedMinimumSize().Y,
-                    _pickerActionsStack.GetCombinedMinimumSize().Y + 16));
+                var height = Mathf.Max(78, Mathf.Max(_pickerActionsPanel.GetCombinedMinimumSize().Y,
+                    _pickerActionsStack.GetCombinedMinimumSize().Y + 10));
                 var bounds = ResponsiveHudLayout.Fit(new(left, bottom - height, Mathf.Max(180, rightEdge - left), height), view.X, view.Y);
                 PlaceHudBounds(_pickerActionsPanel, bounds);
                 if (!_pickerActionsLayoutDirty) break;
@@ -524,6 +555,10 @@ public partial class DealOrForceGame
         _pickerSeats.Visible = false;
         _pickerSeatToggle.Visible = false;
         CollapsePickerMovements();
+        CollapsePickerWorldFormat();
+        CollapsePickerAdvanced();
+        SyncPickerMapSelection();
+        SyncPickerTempoSelection();
         SetPickerNation(_pickerNation ?? _campaign.Player, true);
         RefreshPickerSeedNote();
         Ui.FocusInputIfDesktop(_pickerSearch);
@@ -855,6 +890,10 @@ public partial class DealOrForceGame
         _pickerSeats.Visible = true;
         _pickerSeatToggle.Visible = true;
         CollapsePickerMovements();
+        CollapsePickerWorldFormat();
+        CollapsePickerAdvanced();
+        SyncPickerMapSelection();
+        SyncPickerTempoSelection();
         SetPickerNation(_pickerNation ?? _campaign.Player, true);
         Ui.FocusInputIfDesktop(_pickerSearch);
     }

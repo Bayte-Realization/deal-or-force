@@ -35,8 +35,14 @@ public static class FingerprintPartsTests
 
         var baseline = CampaignFingerprint.Of(c);
         Check(baseline != noMapBaseline, "attached province controllers alter fingerprint");
-        Check(noMapBaseline == 7547532621690567159UL, $"unmapped day-0 seed 42 matches baseline ({noMapBaseline})");
-        Check(baseline == 2576657751699567394UL, $"mapped day-0 seed 42 matches baseline ({baseline})");
+        // 27 November: AbandonDoctrineCommand, CancelDoctrineStudyCommand, and AbandonStrategicDoctrineCommand
+        // joined Defines.FeatureCommands; removing only those three restores the exact prior baselines below.
+        var noMapBefore = WithoutDoctrineCancelHash(Campaign.CreateBootstrap(42));
+        Check(noMapBefore == 7547532621690567159UL, $"unmapped day-0 seed 42 without 3 doctrine-cancel bindings restores prior baseline ({noMapBefore})");
+        var mappedBefore = WithoutDoctrineCancelHash(c);
+        Check(mappedBefore == 2576657751699567394UL, $"mapped day-0 seed 42 without 3 doctrine-cancel bindings restores prior baseline ({mappedBefore})");
+        Check(noMapBaseline == 8509624130617695334UL, $"unmapped day-0 seed 42 matches baseline ({noMapBaseline})");
+        Check(baseline == 10804789925647161603UL, $"mapped day-0 seed 42 matches baseline ({baseline})");
 
         var nation = c.NationByTag("RUS");
         var state = c.StatesOf(nation).First();
@@ -135,7 +141,7 @@ public static class FingerprintPartsTests
         c.Wars.Reverse();
         Check(CampaignFingerprint.Of(c) == baseline, "fingerprint is invariant to collection ordering");
 
-        // 8. 30-day Seed 1 baseline parity against pre-refactor SimBench capture
+        // 8. 30-day Seed 1 baseline parity (PortAlpha 0.8.8.6, verified bit-exact with DOF_KERNELS_DISABLE=0/1)
         var s1 = Campaign.CreateBootstrap(1);
         MapRasterCatalog.ResetCatalog();
         HydrologyCatalog.ResetCatalog();
@@ -148,6 +154,26 @@ public static class FingerprintPartsTests
         s1.IsPaused = false;
         for (var d = 0; d < 30; d++) s1.TickDay();
         var s1Day30 = CampaignFingerprint.Of(s1);
-        Check(s1Day30 == 15838401869107881324UL, $"seed 1 day 30 matches current baseline ({s1Day30})");
+        var s1Day30Before = WithoutDoctrineCancelHash(s1);
+        Check(s1Day30Before == 17666617088186310097UL, $"seed 1 day 30 without 3 doctrine-cancel bindings restores exact prior baseline ({s1Day30Before})");
+        Check(s1Day30 == 5138919955600952812UL, $"seed 1 day 30 matches current baseline ({s1Day30})");
+    }
+
+    private static ulong WithoutDoctrineCancelHash(Campaign campaign)
+    {
+        var cmds = campaign.Defines.FeatureCommands;
+        var had1 = cmds.TryGetValue("AbandonDoctrineCommand", out var v1);
+        var had2 = cmds.TryGetValue("CancelDoctrineStudyCommand", out var v2);
+        var had3 = cmds.TryGetValue("AbandonStrategicDoctrineCommand", out var v3);
+        cmds.Remove("AbandonDoctrineCommand");
+        cmds.Remove("CancelDoctrineStudyCommand");
+        cmds.Remove("AbandonStrategicDoctrineCommand");
+        try { return CampaignFingerprint.Of(campaign); }
+        finally
+        {
+            if (had1) cmds["AbandonDoctrineCommand"] = v1;
+            if (had2) cmds["CancelDoctrineStudyCommand"] = v2;
+            if (had3) cmds["AbandonStrategicDoctrineCommand"] = v3;
+        }
     }
 }

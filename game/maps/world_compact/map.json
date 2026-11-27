@@ -1,0 +1,21 @@
+{
+  "id": "world_compact",
+  "name": "Compact World",
+  "name_en": "Compact World",
+  "name_ru": "Компактный мир",
+  "description": "Fast grand-strategy layout tuned for rapid pace and mobile play.",
+  "description_en": "Fast grand-strategy layout tuned for rapid pace and mobile play.",
+  "description_ru": "Компактная карта для высокого темпа и мобильной игры.",
+  "author": "Bayte Realization",
+  "cells_per_province": 520,
+  "disputed_cells_per_province": 520,
+  "polar_from_latitude": 58,
+  "populated_share": 0.72,
+  "siberia_multiplier": 4,
+  "polar_multiplier": 6,
+  "minimum_province_cells": 48,
+  "inherit_base_hydrology": true,
+  "provinces": "provinces.png",
+  "definition": "definition.csv",
+  "ownership": "ownership.csv"
+}

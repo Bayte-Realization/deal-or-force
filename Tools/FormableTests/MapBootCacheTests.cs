@@ -580,19 +580,19 @@ static class MapBootCacheTests
 
         var setupSrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "GlobePresentation.Setup.cs"));
         Check(setupSrc.Contains("longEdge > 1600", StringComparison.Ordinal) &&
-              setupSrc.Contains("longEdge > 2048", StringComparison.Ordinal) &&
+              setupSrc.Contains("longEdge > 2400", StringComparison.Ordinal) &&
               !setupSrc.Contains("longEdge > 1280 || shortEdge > 720", StringComparison.Ordinal) &&
               setupSrc.Contains("MobileAntialiasing()", StringComparison.Ordinal) &&
               setupSrc.Contains("Viewport.Msaa.Msaa2X", StringComparison.Ordinal) &&
               setupSrc.Contains("Viewport.Msaa.Disabled", StringComparison.Ordinal) &&
               setupSrc.Contains("MobileEffectiveRenderScale(", StringComparison.Ordinal) &&
               setupSrc.Contains("0.82f", StringComparison.Ordinal) &&
-              setupSrc.Contains("0.85f", StringComparison.Ordinal) &&
-              setupSrc.Contains("0.95f", StringComparison.Ordinal) &&
+              setupSrc.Contains("MobileMediumRenderScaleCeiling = 1.0f", StringComparison.Ordinal) &&
+              setupSrc.Contains("MobileMediumDefaultHighDpiScale = 1.0f", StringComparison.Ordinal) &&
               setupSrc.Contains("0.50f", StringComparison.Ordinal) &&
               !setupSrc.Contains("0.68f", StringComparison.Ordinal) &&
               !setupSrc.Contains("0.78f", StringComparison.Ordinal),
-            "GlobePresentation.Setup caps mobile SubViewport long edge at 1600/2048, uses Msaa2X on High and 0.82f/0.85f/0.95f/0.50f MobileEffectiveRenderScale bounds");
+            "GlobePresentation.Setup caps mobile SubViewport long edge at 1600/2400, uses Msaa2X on High and native 1.0f MobileMedium / 0.82f / 0.50f MobileEffectiveRenderScale bounds");
 
         var globeSrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "GlobePresentation.cs"));
         Check(globeSrc.Contains("TryReadHydrology(", StringComparison.Ordinal) &&
@@ -765,7 +765,7 @@ static class MapBootCacheTests
             ModOverlayPolicy.Reset();
         }
 
-        // Static Wave M3A crisp Android rendering, Speed 4/5 throttle, MapBootCache purity, and Desktop relief preservation.
+        // Static Wave M3A crisp Android rendering, 8-speed lock-free reconcile cadence, MapBootCache purity, and Desktop relief preservation.
         var root = FindRepoRoot();
         var scriptsDir = Path.Combine(root, "Scripts");
 
@@ -777,13 +777,13 @@ static class MapBootCacheTests
         var setupSrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "GlobePresentation.Setup.cs"));
         Check(setupSrc.Contains("Anisotropy4X", StringComparison.Ordinal) &&
               setupSrc.Contains("Anisotropy8X", StringComparison.Ordinal) &&
-              setupSrc.Contains("-0.35f", StringComparison.Ordinal) &&
+              setupSrc.Contains("-0.50f", StringComparison.Ordinal) &&
               setupSrc.Contains("-0.20f", StringComparison.Ordinal) &&
               setupSrc.Contains("ScreenSpaceAAEnum.Disabled", StringComparison.Ordinal) &&
               setupSrc.Contains("CloudsEnabled = false", StringComparison.Ordinal) &&
               setupSrc.Contains("Scaling3DModeEnum.Bilinear", StringComparison.Ordinal) &&
               setupSrc.Contains("PoliticalRasterFileName", StringComparison.Ordinal),
-            "GlobePresentation.Setup wires M3A mobile crispness (4X aniso, -0.35 bias, no ScreenSpaceAA, Bilinear, default clouds off, raster cache)");
+            "GlobePresentation.Setup wires M3A mobile crispness (4X aniso, -0.50 bias, no ScreenSpaceAA, Bilinear, default clouds off, raster cache)");
 
         var weatherSrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "GlobeWeather.cs"));
         Check(weatherSrc.Contains("!(Platform.PlatformProfile.Current?.IsTouchPrimary == true)", StringComparison.Ordinal) &&
@@ -795,8 +795,10 @@ static class MapBootCacheTests
               globeSrc.Contains("TryWritePoliticalRasters(", StringComparison.Ordinal) &&
               globeSrc.Contains("UnpackLittleEndianUShorts(", StringComparison.Ordinal) &&
               globeSrc.Contains("_routeVisualAccumulator", StringComparison.Ordinal) &&
-              globeSrc.Contains("Speed: >= 4", StringComparison.Ordinal),
-            "GlobePresentation integrates political_rasters_v1.bin skip/write paths and Speed 4/5 visual reconcile throttle");
+              globeSrc.Contains("Speed: >= 7", StringComparison.Ordinal) &&
+              globeSrc.Contains("Speed: >= 8", StringComparison.Ordinal) &&
+              globeSrc.Contains("armySyncInterval", StringComparison.Ordinal),
+            "GlobePresentation integrates political_rasters_v1.bin skip/write paths and 8-speed visual reconcile throttle");
 
         var militarySrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "MilitaryPresentation.cs"));
         var labelsSrc = File.ReadAllText(Path.Combine(scriptsDir, "gfx", "GlobePresentation.Labels.cs"));
@@ -816,7 +818,7 @@ static class MapBootCacheTests
               movementSrc.Contains("LinearWithMipmapsAnisotropic", StringComparison.Ordinal) &&
               citiesSrc.Contains("GenerateMipmaps()", StringComparison.Ordinal) &&
               militarySrc.Contains("GenerateMipmaps()", StringComparison.Ordinal) &&
-              militarySrc.Contains("Speed: >= 4", StringComparison.Ordinal) &&
+              militarySrc.Contains("Speed: >= 7", StringComparison.Ordinal) &&
               fleetsSrc.Contains("GenerateMipmaps()", StringComparison.Ordinal) &&
               supportSrc.Contains("GenerateMipmaps()", StringComparison.Ordinal) &&
               movementSrc.Contains("GenerateMipmaps()", StringComparison.Ordinal) &&

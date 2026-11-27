@@ -1,0 +1,12 @@
+{
+  "id": "example_custom_map_pack",
+  "name": "Example: Custom Map Pack",
+  "version": "1.0.0",
+  "supported_game_version": "0.8.*",
+  "author": "Deal or Force Mod Studio",
+  "enabled": false,
+  "load_order": 120,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

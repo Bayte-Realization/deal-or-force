@@ -52,10 +52,15 @@ public static class AiBuilder
     /// <summary>What each kind of building has been chosen for, for the bench.</summary>
     public static readonly Dictionary<BuildingKind, int> Chosen = new();
 
-    private static readonly List<Commodity> Makes = new();
-    private static readonly List<Commodity> Uses = new();
-    private static readonly List<(Commodity Good, float Weight)> Shortages = new();
-    private static readonly List<(BuildingKind Kind, int Goods)> Candidates = new();
+    [ThreadStatic] private static List<Commodity> _makes;
+    [ThreadStatic] private static List<Commodity> _uses;
+    [ThreadStatic] private static List<(Commodity Good, float Weight)> _shortages;
+    [ThreadStatic] private static List<(BuildingKind Kind, int Goods)> _candidates;
+
+    private static List<Commodity> Makes => _makes ??= new();
+    private static List<Commodity> Uses => _uses ??= new();
+    private static List<(Commodity Good, float Weight)> Shortages => _shortages ??= new();
+    private static List<(BuildingKind Kind, int Goods)> Candidates => _candidates ??= new();
 
     public static bool Choose(Campaign campaign, Nation nation, ScenarioState[] states,
         out BuildingKind kind, out ScenarioState where)
@@ -128,11 +133,13 @@ public static class AiBuilder
     /// <summary>What the world makes of a good for each unit it wants.</summary>
     internal static float WorldRatio(Campaign campaign, Commodity good)
     {
+        if (AiStatecraft.TryGetWorldRatio(campaign, good, out var cached)) return cached;
         var production = 0f;
         var demand = 0f;
-        foreach (var nation in campaign.Nations)
+        var nations = campaign.Nations;
+        for (var i = 0; i < nations.Count; i++)
         {
-            if (!nation.Market.TryGetValue(good, out var quote)) continue;
+            if (!nations[i].Market.TryGetValue(good, out var quote)) continue;
             production += quote.Production;
             demand += quote.Demand;
         }

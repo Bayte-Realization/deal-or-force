@@ -1,0 +1,4 @@
+{
+  "studio.map.example_custom_map.name": "Example Regional Archipelago",
+  "studio.map.example_custom_map.desc": "Demonstrates a custom playable map pack under maps/<id>/map.json with custom province sizing and inherited base hydrology."
+}

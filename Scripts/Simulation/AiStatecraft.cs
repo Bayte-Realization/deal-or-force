@@ -94,10 +94,267 @@ public static partial class AiStatecraft
         internal readonly object SpatialGate = new();
         internal readonly List<StrategicWar> WarmakingOpenScratch = new();
         internal bool InStatecraftTick;
+        internal bool InStatecraftParallel;
         internal List<(Nation Nation, float Spare)>[] ExportersByGood;
         internal int ExportersDay = int.MinValue;
         internal int ExportersNationCount = -1;
         internal readonly DiplomaticOutreach.OfferScan MissionScan = new();
+
+        internal bool[] ActiveNationDense = Array.Empty<bool>();
+        internal int ActiveNationCap;
+
+        internal Campaign WarSummaryCampaign;
+        internal int WarSummaryDay = int.MinValue;
+        internal int WarSummaryRev = int.MinValue;
+        internal int WarSummaryLen;
+        internal bool[] AtWarDense = Array.Empty<bool>();
+        internal bool[] InCivilWarDense = Array.Empty<bool>();
+        internal bool[] TargetOnlyCivilDense = Array.Empty<bool>();
+        internal float[] TargetStretchDense = Array.Empty<float>();
+        internal bool[] PendingPeaceDense = Array.Empty<bool>();
+        internal int[] WarFrontsScratch = Array.Empty<int>();
+        internal float[] WarWorstScratch = Array.Empty<float>();
+
+        internal bool[] PendingUltimatumDense = Array.Empty<bool>();
+        internal int PendingUltimatumLen;
+
+        internal int[] FleetHullsDense = Array.Empty<int>();
+        internal float[] FleetLatDense = Array.Empty<float>();
+        internal float[] FleetLonDense = Array.Empty<float>();
+        internal int FleetHullsLen;
+
+        internal bool[] HasLandLeaseDense = Array.Empty<bool>();
+        internal int LandLeaseLen;
+        internal int LandLeaseDay = int.MinValue;
+        internal int LandLeaseCount = -1;
+        internal int LandLeaseWarRev = int.MinValue;
+
+        internal List<ConstructionProject>[] ConstructionByNationDense = Array.Empty<List<ConstructionProject>>();
+        internal readonly Stack<List<ConstructionProject>> ConstructionListPool = new();
+        internal int ConstructionIndexLen;
+        internal int ConstructionIndexDay = int.MinValue;
+        internal int ConstructionIndexCount = -1;
+
+        internal readonly Dictionary<Commodity, float> WorldRatios = new();
+        internal readonly Dictionary<Commodity, (float Prod, float Dem)> WorldRatioProdScratch = new();
+        internal int WorldRatioDay = int.MinValue;
+        internal int WorldRatioNations = -1;
+        internal int WorldRatioOwnershipRev = int.MinValue;
+        internal int WorldRatioWarRev = int.MinValue;
+
+        internal void EnsureWarSummary(Campaign campaign)
+        {
+            if (ReferenceEquals(WarSummaryCampaign, campaign) &&
+                WarSummaryDay == campaign.ElapsedDays &&
+                WarSummaryRev == campaign.WarRevision)
+                return;
+
+            var nations = campaign.Nations;
+            var maxId = nations.Count;
+            for (var i = 0; i < nations.Count; i++)
+                if (nations[i].Id >= maxId) maxId = nations[i].Id + 1;
+
+            var live = Warfare.LiveWars(campaign);
+            for (var wi = 0; wi < live.Count; wi++)
+            {
+                var w = live[wi];
+                if (w.Ended) continue;
+                if (w.AttackerId >= maxId) maxId = w.AttackerId + 1;
+                if (w.DefenderId >= maxId) maxId = w.DefenderId + 1;
+                foreach (var aid in w.AttackerAllies)
+                    if (aid >= maxId) maxId = aid + 1;
+                foreach (var did in w.DefenderAllies)
+                    if (did >= maxId) maxId = did + 1;
+            }
+
+            var len = Math.Min(Math.Max(maxId, 256), MaxDenseCap);
+            if (AtWarDense.Length < len)
+            {
+                AtWarDense = new bool[len];
+                InCivilWarDense = new bool[len];
+                TargetOnlyCivilDense = new bool[len];
+                TargetStretchDense = new float[len];
+                PendingPeaceDense = new bool[len];
+                WarFrontsScratch = new int[len];
+                WarWorstScratch = new float[len];
+            }
+            else
+            {
+                Array.Clear(AtWarDense, 0, len);
+                Array.Clear(InCivilWarDense, 0, len);
+                Array.Clear(TargetStretchDense, 0, len);
+                Array.Clear(PendingPeaceDense, 0, len);
+                Array.Clear(WarFrontsScratch, 0, len);
+                Array.Clear(WarWorstScratch, 0, len);
+            }
+            Array.Fill(TargetOnlyCivilDense, true, 0, len);
+            WarSummaryLen = len;
+
+            for (var wi = 0; wi < live.Count; wi++)
+            {
+                var war = live[wi];
+                if (war.Ended) continue;
+                var civil = war.CivilConflict;
+                var pending = war.PendingOfferFromId >= 0;
+                var attAgainst = -war.WarScore;
+                var defAgainst = war.WarScore;
+                RecordWarSide(war.AttackerId, war.AttackerAllies, civil, pending, attAgainst);
+                RecordWarSide(war.DefenderId, war.DefenderAllies, civil, pending, defAgainst);
+            }
+
+            for (var id = 0; id < len; id++)
+            {
+                var fronts = WarFrontsScratch[id];
+                if (fronts > 0)
+                    TargetStretchDense[id] = M.Clamp((fronts - 1) * 0.5f + M.Clamp01(WarWorstScratch[id] / 100f), 0f, 2f);
+            }
+
+            WarSummaryCampaign = campaign;
+            WarSummaryDay = campaign.ElapsedDays;
+            WarSummaryRev = campaign.WarRevision;
+
+            void RecordWarSide(int leader, HashSet<int> allies, bool civil, bool pending, float against)
+            {
+                MarkParticipant(leader, civil, pending, against);
+                foreach (var allyId in allies)
+                    MarkParticipant(allyId, civil, pending, against);
+            }
+
+            void MarkParticipant(int id, bool civil, bool pending, float against)
+            {
+                if ((uint)id >= (uint)len) return;
+                AtWarDense[id] = true;
+                if (pending) PendingPeaceDense[id] = true;
+                if (civil)
+                {
+                    InCivilWarDense[id] = true;
+                    return;
+                }
+                TargetOnlyCivilDense[id] = false;
+                WarFrontsScratch[id]++;
+                if (against > WarWorstScratch[id]) WarWorstScratch[id] = against;
+            }
+        }
+
+        internal bool IsAtWarFast(int nationId) =>
+            (uint)nationId < (uint)WarSummaryLen && AtWarDense[nationId];
+
+        internal bool HasPendingPeaceFast(int nationId) =>
+            (uint)nationId < (uint)WarSummaryLen && PendingPeaceDense[nationId];
+
+        internal void EnsurePendingUltimatums(Campaign campaign, int maxId)
+        {
+            var len = Math.Min(Math.Max(maxId, 256), MaxDenseCap);
+            if (PendingUltimatumDense.Length < len) PendingUltimatumDense = new bool[len];
+            else Array.Clear(PendingUltimatumDense, 0, len);
+            PendingUltimatumLen = len;
+            var papers = campaign.UltimatumPapers;
+            for (var i = 0; i < papers.Count; i++)
+            {
+                var p = papers[i];
+                if (!p.Pending) continue;
+                if ((uint)p.FromId < (uint)len) PendingUltimatumDense[p.FromId] = true;
+                if ((uint)p.ToId < (uint)len) PendingUltimatumDense[p.ToId] = true;
+            }
+        }
+
+        internal bool HasPendingUltimatumFast(int nationId) =>
+            (uint)nationId < (uint)PendingUltimatumLen && PendingUltimatumDense[nationId];
+
+        internal void EnsureFleetHulls(Campaign campaign, int maxId)
+        {
+            var len = Math.Min(Math.Max(maxId, 256), MaxDenseCap);
+            if (FleetHullsDense.Length < len)
+            {
+                FleetHullsDense = new int[len];
+                FleetLatDense = new float[len];
+                FleetLonDense = new float[len];
+            }
+            else
+            {
+                Array.Clear(FleetHullsDense, 0, len);
+            }
+            FleetHullsLen = len;
+            var fleets = campaign.Fleets;
+            for (var fi = 0; fi < fleets.Count; fi++)
+            {
+                var fleet = fleets[fi];
+                if (fleet.Hulls <= 0 || (uint)fleet.NationId >= (uint)len) continue;
+                var nid = fleet.NationId;
+                if (FleetHullsDense[nid] == 0)
+                {
+                    FleetLatDense[nid] = fleet.HomeLatitude;
+                    FleetLonDense[nid] = fleet.HomeLongitude;
+                }
+                FleetHullsDense[nid] += fleet.Hulls;
+            }
+        }
+
+        internal int GetFleetHulls(int nationId, out float lat, out float lon)
+        {
+            if ((uint)nationId < (uint)FleetHullsLen)
+            {
+                lat = FleetLatDense[nationId];
+                lon = FleetLonDense[nationId];
+                return FleetHullsDense[nationId];
+            }
+            lat = 0f;
+            lon = 0f;
+            return 0;
+        }
+
+        internal void EnsureLandLeases(Campaign campaign, int maxId)
+        {
+            var count = campaign.LandArrangements.Count;
+            if (LandLeaseDay == campaign.ElapsedDays && LandLeaseCount == count && LandLeaseWarRev == campaign.WarRevision)
+                return;
+            var len = Math.Min(Math.Max(maxId, 256), MaxDenseCap);
+            if (HasLandLeaseDense.Length < len) HasLandLeaseDense = new bool[len];
+            else Array.Clear(HasLandLeaseDense, 0, len);
+            LandLeaseLen = len;
+            var arrangements = campaign.LandArrangements;
+            for (var i = 0; i < count; i++)
+            {
+                var a = arrangements[i];
+                if (a.Kind != LandArrangementSystem.Lease) continue;
+                if ((uint)a.HolderId < (uint)len) HasLandLeaseDense[a.HolderId] = true;
+                if ((uint)a.OwnerId < (uint)len) HasLandLeaseDense[a.OwnerId] = true;
+            }
+            LandLeaseDay = campaign.ElapsedDays;
+            LandLeaseCount = count;
+            LandLeaseWarRev = campaign.WarRevision;
+        }
+
+        internal void EnsureConstructionIndex(Campaign campaign, int maxId)
+        {
+            var count = campaign.Construction.Count;
+            if (ConstructionIndexDay == campaign.ElapsedDays && ConstructionIndexCount == count) return;
+            var len = Math.Min(Math.Max(maxId, 256), MaxDenseCap);
+            if (ConstructionByNationDense.Length < len) ConstructionByNationDense = new List<ConstructionProject>[len];
+            for (var i = 0; i < ConstructionByNationDense.Length; i++)
+            {
+                var list = ConstructionByNationDense[i];
+                if (list is null) continue;
+                list.Clear();
+                ConstructionListPool.Push(list);
+                ConstructionByNationDense[i] = null;
+            }
+            ConstructionIndexLen = len;
+            var projects = campaign.Construction;
+            for (var i = 0; i < count; i++)
+            {
+                var p = projects[i];
+                if ((uint)p.NationId >= (uint)len) continue;
+                var list = ConstructionByNationDense[p.NationId];
+                if (list is null)
+                    ConstructionByNationDense[p.NationId] = list = ConstructionListPool.Count > 0
+                        ? ConstructionListPool.Pop()
+                        : new List<ConstructionProject>(4);
+                list.Add(p);
+            }
+            ConstructionIndexDay = campaign.ElapsedDays;
+            ConstructionIndexCount = count;
+        }
 
         internal void ResetNationTables(int maxId, int maxMapIndex)
         {
@@ -106,11 +363,14 @@ public static partial class AiStatecraft
             {
                 StrengthDense = new float[idCap];
                 HasStrengthDense = new bool[idCap];
+                ActiveNationDense = new bool[idCap];
             }
             else
             {
                 Array.Clear(HasStrengthDense, 0, idCap);
+                Array.Clear(ActiveNationDense, 0, idCap);
             }
+            ActiveNationCap = idCap;
             StrengthOverflow?.Clear();
 
             var mapCap = Math.Min(Math.Max(maxMapIndex + 1, 256), MaxDenseCap);
@@ -133,6 +393,7 @@ public static partial class AiStatecraft
             if ((uint)id < (uint)HasStrengthDense.Length)
             {
                 HasStrengthDense[id] = true;
+                ActiveNationDense[id] = true;
                 StrengthDense[id] = strength;
             }
             else
@@ -244,6 +505,126 @@ public static partial class AiStatecraft
 
     private static DailyTables TablesOf(Campaign campaign) =>
         campaign.AiStatecraftTables ??= new DailyTables();
+
+    internal static bool TryGetAtWarFast(Campaign campaign, int nationId, out bool atWar)
+    {
+        var tables = campaign?.AiStatecraftTables;
+        if (tables is not null && ReferenceEquals(tables.WarSummaryCampaign, campaign) &&
+            tables.WarSummaryDay == campaign.ElapsedDays && tables.WarSummaryRev == campaign.WarRevision &&
+            (uint)nationId < (uint)tables.WarSummaryLen)
+        {
+            atWar = tables.AtWarDense[nationId];
+            return true;
+        }
+        atWar = false;
+        return false;
+    }
+
+    internal static bool TryGetTargetWarSummaryFast(Campaign campaign, int nationId,
+        out bool atWar, out bool onlyCivil, out float stretch)
+    {
+        var tables = campaign?.AiStatecraftTables;
+        if (tables is not null && ReferenceEquals(tables.WarSummaryCampaign, campaign) &&
+            tables.WarSummaryDay == campaign.ElapsedDays && tables.WarSummaryRev == campaign.WarRevision &&
+            (uint)nationId < (uint)tables.WarSummaryLen)
+        {
+            atWar = tables.AtWarDense[nationId];
+            onlyCivil = tables.TargetOnlyCivilDense[nationId];
+            stretch = tables.TargetStretchDense[nationId];
+            return true;
+        }
+        atWar = false;
+        onlyCivil = true;
+        stretch = 0f;
+        return false;
+    }
+
+    internal static bool TryGetInCivilWarFast(Campaign campaign, int nationId, out bool inCivilWar)
+    {
+        var tables = campaign?.AiStatecraftTables;
+        if (tables is not null && ReferenceEquals(tables.WarSummaryCampaign, campaign) &&
+            tables.WarSummaryDay == campaign.ElapsedDays && tables.WarSummaryRev == campaign.WarRevision &&
+            (uint)nationId < (uint)tables.WarSummaryLen)
+        {
+            inCivilWar = tables.InCivilWarDense[nationId];
+            return true;
+        }
+        inCivilWar = false;
+        return false;
+    }
+
+    internal static bool MayHaveLandLeasePair(Campaign campaign, int aId, int bId)
+    {
+        var tables = campaign?.AiStatecraftTables;
+        if (tables is null || !tables.InStatecraftTick ||
+            tables.LandLeaseDay != campaign.ElapsedDays ||
+            tables.LandLeaseCount != campaign.LandArrangements.Count ||
+            tables.LandLeaseWarRev != campaign.WarRevision)
+            return true;
+        if ((uint)aId >= (uint)tables.LandLeaseLen || (uint)bId >= (uint)tables.LandLeaseLen)
+            return true;
+        return tables.HasLandLeaseDense[aId] && tables.HasLandLeaseDense[bId];
+    }
+
+    internal static bool TryGetConstructionForNation(Campaign campaign, int nationId, out List<ConstructionProject> projects)
+    {
+        var tables = campaign?.AiStatecraftTables;
+        if (tables is not null && tables.InStatecraftTick)
+        {
+            if (!tables.InStatecraftParallel &&
+                (tables.ConstructionIndexDay != campaign.ElapsedDays ||
+                 tables.ConstructionIndexCount != campaign.Construction.Count))
+            {
+                tables.EnsureConstructionIndex(campaign, Math.Max(tables.WarSummaryLen, campaign.Nations.Count + 64));
+            }
+            if (tables.ConstructionIndexDay == campaign.ElapsedDays &&
+                tables.ConstructionIndexCount == campaign.Construction.Count &&
+                (uint)nationId < (uint)tables.ConstructionIndexLen)
+            {
+                projects = tables.ConstructionByNationDense[nationId];
+                return true;
+            }
+        }
+        projects = null;
+        return false;
+    }
+
+    internal static bool TryGetWorldRatio(Campaign campaign, Commodity good, out float ratio)
+    {
+        var tables = campaign?.AiStatecraftTables;
+        if (tables is null || !tables.InStatecraftTick || tables.InStatecraftParallel)
+        {
+            ratio = 0f;
+            return false;
+        }
+        if (tables.WorldRatioDay != campaign.ElapsedDays ||
+            tables.WorldRatioNations != campaign.Nations.Count ||
+            tables.WorldRatioOwnershipRev != campaign.OwnershipRevision ||
+            tables.WorldRatioWarRev != campaign.WarRevision)
+        {
+            var sums = tables.WorldRatioProdScratch;
+            sums.Clear();
+            var nations = campaign.Nations;
+            for (var i = 0; i < nations.Count; i++)
+            {
+                foreach (var quote in nations[i].Market.Values)
+                {
+                    ref var entry = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(sums, quote.Commodity, out _);
+                    entry.Prod += quote.Production;
+                    entry.Dem += quote.Demand;
+                }
+            }
+            tables.WorldRatios.Clear();
+            foreach (var kvp in sums)
+                tables.WorldRatios[kvp.Key] = kvp.Value.Dem <= 0.001f ? float.MaxValue : kvp.Value.Prod / kvp.Value.Dem;
+            tables.WorldRatioDay = campaign.ElapsedDays;
+            tables.WorldRatioNations = nations.Count;
+            tables.WorldRatioOwnershipRev = campaign.OwnershipRevision;
+            tables.WorldRatioWarRev = campaign.WarRevision;
+        }
+        ratio = tables.WorldRatios.GetValueOrDefault(good, float.MaxValue);
+        return true;
+    }
 
     internal static AllianceSystem.OfferScan AllianceScanFor(Campaign campaign) =>
         TablesOf(campaign).AllianceScan ??= new AllianceSystem.OfferScan(campaign);
@@ -757,14 +1138,13 @@ public static partial class AiStatecraft
     [ThreadStatic] private static List<DueSlot> _dueSlotsScratch;
     [ThreadStatic] private static HashSet<int> _mutatedNationsScratch;
     [ThreadStatic] private static HashSet<long> _mutatedPairsScratch;
-    [ThreadStatic] private static HashSet<int> _atWarNationsScratch;
-    [ThreadStatic] private static Dictionary<int, (int Hulls, float Lat, float Lon)> _fleetHullsScratch;
     [ThreadStatic] private static List<(Nation Friend, float Opinion, int CircleIdx)> _friendlyTriplesScratch;
 
     private static IEnumerable<int> ThinkAboutTheNeighbours(Campaign campaign)
     {
         var tables = TablesOf(campaign);
         tables.InStatecraftTick = true;
+        tables.InStatecraftParallel = false;
         try
         {
             var active = campaign.ActiveNations;
@@ -772,18 +1152,13 @@ public static partial class AiStatecraft
             due.Clear();
             var elapsed = campaign.ElapsedDays;
             var checkCalm = campaign.Defines.AiCalmCadenceDays > 1;
-            var atWarSet = _atWarNationsScratch ??= new HashSet<int>();
-            atWarSet.Clear();
-            var liveWars = Warfare.LiveWars(campaign);
-            for (var wi = 0; wi < liveWars.Count; wi++)
-            {
-                var w = liveWars[wi];
-                if (w.Ended) continue;
-                atWarSet.Add(w.AttackerId);
-                atWarSet.Add(w.DefenderId);
-                foreach (var p in w.AttackerAllies) atWarSet.Add(p);
-                foreach (var p in w.DefenderAllies) atWarSet.Add(p);
-            }
+            var nations = campaign.Nations;
+            var maxNationId = nations.Count;
+            for (var i = 0; i < nations.Count; i++)
+                if (nations[i].Id >= maxNationId) maxNationId = nations[i].Id + 1;
+
+            tables.EnsureWarSummary(campaign);
+            if (checkCalm) tables.EnsurePendingUltimatums(campaign, maxNationId);
 
             for (var index = 0; index < active.Count; index++)
             {
@@ -800,8 +1175,8 @@ public static partial class AiStatecraft
                 }
 
                 int diplomacyDays, warmakingDays;
-                var inWar = atWarSet.Contains(nation.Id);
-                if (checkCalm && IsCalmAiFast(campaign, nation, inWar))
+                var inWar = tables.IsAtWarFast(nation.Id);
+                if (checkCalm && IsCalmAiTableFast(tables, nation, inWar))
                 {
                     CalmCadences(campaign, nation, out diplomacyDays, out warmakingDays);
                 }
@@ -841,18 +1216,10 @@ public static partial class AiStatecraft
             }
             for (var i = 0; i < active.Count; i++) active[i].CachedSocialKey();
 
-            var fleetHulls = _fleetHullsScratch ??= new Dictionary<int, (int, float, float)>();
-            fleetHulls.Clear();
-            var fleets = campaign.Fleets;
-            for (var fi = 0; fi < fleets.Count; fi++)
-            {
-                var fleet = fleets[fi];
-                if (fleet.Hulls <= 0) continue;
-                if (fleetHulls.TryGetValue(fleet.NationId, out var cur))
-                    fleetHulls[fleet.NationId] = (cur.Hulls + fleet.Hulls, cur.Lat, cur.Lon);
-                else
-                    fleetHulls[fleet.NationId] = (fleet.Hulls, fleet.HomeLatitude, fleet.HomeLongitude);
-            }
+            tables.EnsureFleetHulls(campaign, maxNationId);
+            tables.EnsureLandLeases(campaign, maxNationId);
+            tables.EnsureConstructionIndex(campaign, maxNationId);
+            tables.EnsureWarSummary(campaign);
 
             var anyWarmaking = false;
             var checkFormables = campaign.FeatureEnabled("formable_nations");
@@ -891,129 +1258,146 @@ public static partial class AiStatecraft
             var stabilityFloor = defines.AiWarStabilityFloor;
             var treasuryFloor = defines.AiTreasuryFloor;
 
-            DeterministicParallel.ForRange(campaign, 0, dueCount, (from, to) =>
+            tables.InStatecraftParallel = true;
+            try
             {
-                for (var i = from; i < to; i++)
+                DeterministicParallel.ForRange(campaign, 0, dueCount, (from, to) =>
                 {
-                    var e = due[i];
-                    var slot = slots[i];
-                    var nation = e.Nation;
-                    if (e.DiplomacyDue)
+                    for (var i = from; i < to; i++)
                     {
-                        BuildCircleInto(campaign, tables, nation, campaign.NationById(nation.WarPlanTargetId),
-                            slot.Circle, slot.CircleSeen, slot.CircleOrgs);
-                        var circleCount = slot.Circle.Count;
-                        if (circleCount > 0)
+                        var e = due[i];
+                        var slot = slots[i];
+                        var nation = e.Nation;
+                        if (e.DiplomacyDue)
                         {
-                            var neighbours = NeighboursOf(campaign, nation.MapIndex);
-                            var borderSet = neighbours as HashSet<int>;
-                            var myStrength = M.Max(0.01f, Strength(campaign, nation));
-                            for (var ci = 0; ci < circleCount; ci++)
+                            BuildCircleInto(campaign, tables, nation, campaign.NationById(nation.WarPlanTargetId),
+                                slot.Circle, slot.CircleSeen, slot.CircleOrgs);
+                            var circleCount = slot.Circle.Count;
+                            if (circleCount > 0)
                             {
-                                var partner = slot.Circle[ci];
-                                if (partner is null || partner.Id == nation.Id)
+                                var neighbours = NeighboursOf(campaign, nation.MapIndex);
+                                var borderSet = neighbours as HashSet<int>;
+                                var myStrength = M.Max(0.01f, Strength(campaign, nation));
+                                for (var ci = 0; ci < circleCount; ci++)
                                 {
-                                    slot.Prechecks.Add(new WeeklyPairPrecheck { Unchanged = true });
-                                    slot.SkipFriendly.Add(false);
-                                    continue;
+                                    var partner = slot.Circle[ci];
+                                    if (partner is null || partner.Id == nation.Id)
+                                    {
+                                        slot.Prechecks.Add(new WeeklyPairPrecheck { Unchanged = true });
+                                        slot.SkipFriendly.Add(false);
+                                        continue;
+                                    }
+                                    var borders = borderSet is not null
+                                        ? borderSet.Contains(partner.MapIndex)
+                                        : neighbours.Contains(partner.MapIndex);
+                                    var pre = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength,
+                                        identityOn, intelligenceOn, standingMultiMask);
+                                    slot.Prechecks.Add(pre);
+                                    var skipFriendly = pre.Unchanged &&
+                                        pre.Peeked is { Stance: not DiplomaticStance.AtWar } rel &&
+                                        rel.Opinion >= defines.AiFriendshipThreshold &&
+                                        SkipUnchangedFriendly(campaign, nation, partner, borders);
+                                    slot.SkipFriendly.Add(skipFriendly);
                                 }
-                                var borders = borderSet is not null
-                                    ? borderSet.Contains(partner.MapIndex)
-                                    : neighbours.Contains(partner.MapIndex);
-                                var pre = PrecheckWeeklyPair(campaign, scanMemory, nation, partner, borders, myStrength,
-                                    identityOn, intelligenceOn, standingMultiMask);
-                                slot.Prechecks.Add(pre);
-                                var skipFriendly = pre.Unchanged &&
-                                    pre.Peeked is { Stance: not DiplomaticStance.AtWar } rel &&
-                                    rel.Opinion >= defines.AiFriendshipThreshold &&
-                                    SkipUnchangedFriendly(campaign, nation, partner, borders);
-                                slot.SkipFriendly.Add(skipFriendly);
                             }
                         }
-                    }
 
-                    if (e.WarmakingDue && !e.IsHuman && canDeclareWar &&
-                        !atWarSet.Contains(nation.Id) &&
-                        nation.WarSupport >= warSupportFloor &&
-                        nation.Stability >= stabilityFloor &&
-                        AiFiscalPolicy.Assess(campaign, nation, treasuryFloor).CanSpend)
-                    {
-                        slot.HasWarmaking = true;
-                        var targets = slot.ReachableTargets;
-                        var seenT = slot.ReachableSeen;
-                        var landNeighbours = CampaignDiplomacy.Neighbours(campaign, nation.MapIndex);
-                        if (landNeighbours is HashSet<int> landSet)
+                        if (e.WarmakingDue && !e.IsHuman && canDeclareWar &&
+                            !tables.IsAtWarFast(nation.Id) &&
+                            nation.WarSupport >= warSupportFloor &&
+                            nation.Stability >= stabilityFloor &&
+                            AiFiscalPolicy.Assess(campaign, nation, treasuryFloor).CanSpend)
                         {
-                            foreach (var mapIndex in landSet)
-                                if (seenT.Add(mapIndex)) targets.Add(mapIndex);
-                        }
-                        else
-                        {
-                            foreach (var mapIndex in landNeighbours)
-                                if (seenT.Add(mapIndex)) targets.Add(mapIndex);
-                        }
-
-                        if (fleetHulls.TryGetValue(nation.Id, out var naval) && naval.Hulls >= minHulls)
-                        {
-                            if (tables.Overseas.TryGetValue(nation.Id, out var cachedOv) && cachedOv.Hulls == naval.Hulls)
+                            slot.HasWarmaking = true;
+                            var targets = slot.ReachableTargets;
+                            var seenT = slot.ReachableSeen;
+                            var landNeighbours = CampaignDiplomacy.Neighbours(campaign, nation.MapIndex);
+                            if (landNeighbours is HashSet<int> landSet)
                             {
-                                var ovTargets = cachedOv.Targets;
-                                for (var oi = 0; oi < ovTargets.Count; oi++)
-                                    if (seenT.Add(ovTargets[oi])) targets.Add(ovTargets[oi]);
+                                foreach (var mapIndex in landSet)
+                                    if (seenT.Add(mapIndex)) targets.Add(mapIndex);
                             }
                             else
                             {
-                                var ov = cachedOv.Targets is not null ? new List<int>(cachedOv.Targets.Count) : new List<int>();
-                                var dist = slot.OverseasDistance;
-                                var tree = tables.NationSpatialTree ?? EnsureNationSpatialTree(tables, active, elapsed);
-                                CollectOverseasCandidatesRBush(tree, nation.Id, naval.Lat, naval.Lon, reach, ov, dist);
-                                ov.Sort((left, right) =>
-                                {
-                                    var order = dist.GetValueOrDefault(left, float.MaxValue)
-                                        .CompareTo(dist.GetValueOrDefault(right, float.MaxValue));
-                                    return order != 0 ? order : left.CompareTo(right);
-                                });
-                                if (ov.Count > wantedOverseas) ov.RemoveRange(wantedOverseas, ov.Count - wantedOverseas);
-                                dist.Clear();
-                                slot.ComputedNewOverseas = true;
-                                slot.NewHulls = naval.Hulls;
-                                slot.NewOverseasTargets = ov;
-                                for (var oi = 0; oi < ov.Count; oi++)
-                                    if (seenT.Add(ov[oi])) targets.Add(ov[oi]);
+                                foreach (var mapIndex in landNeighbours)
+                                    if (seenT.Add(mapIndex)) targets.Add(mapIndex);
                             }
-                        }
+                            var landCount = targets.Count;
 
-                        var tCount = targets.Count;
-                        for (var ri = 0; ri < tCount; ri++)
-                        {
-                            var other = ByMapIndex(campaign, targets[ri]);
-                            if (other is null || other.Id == nation.Id ||
-                                (campaign.IsHumanControlled(other) && !defines.AiMayAttackPlayer))
+                            var navHulls = tables.GetFleetHulls(nation.Id, out var navLat, out var navLon);
+                            if (navHulls >= minHulls)
                             {
-                                slot.Judgements.Add(float.NaN);
-                                continue;
+                                if (tables.Overseas.TryGetValue(nation.Id, out var cachedOv) && cachedOv.Hulls == navHulls)
+                                {
+                                    var ovTargets = cachedOv.Targets;
+                                    for (var oi = 0; oi < ovTargets.Count; oi++)
+                                        if (seenT.Add(ovTargets[oi])) targets.Add(ovTargets[oi]);
+                                }
+                                else
+                                {
+                                    var ov = cachedOv.Targets is not null ? new List<int>(cachedOv.Targets.Count) : new List<int>();
+                                    var dist = slot.OverseasDistance;
+                                    var tree = tables.NationSpatialTree ?? EnsureNationSpatialTree(tables, active, elapsed);
+                                    CollectOverseasCandidatesRBush(tree, nation.Id, navLat, navLon, reach, ov, dist);
+                                    ov.Sort((left, right) =>
+                                    {
+                                        var order = dist.GetValueOrDefault(left, float.MaxValue)
+                                            .CompareTo(dist.GetValueOrDefault(right, float.MaxValue));
+                                        return order != 0 ? order : left.CompareTo(right);
+                                    });
+                                    if (ov.Count > wantedOverseas) ov.RemoveRange(wantedOverseas, ov.Count - wantedOverseas);
+                                    dist.Clear();
+                                    slot.ComputedNewOverseas = true;
+                                    slot.NewHulls = navHulls;
+                                    slot.NewOverseasTargets = ov;
+                                    for (var oi = 0; oi < ov.Count; oi++)
+                                        if (seenT.Add(ov[oi])) targets.Add(ov[oi]);
+                                }
                             }
-                            var allied = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id) is { Stance: DiplomaticStance.Allied };
-                            if (!allied && !CampaignDiplomacy.CanDeclareWarQuiet(campaign, nation.Id, other.Id))
+
+                            var tCount = targets.Count;
+                            if (tCount > 0)
                             {
-                                slot.Judgements.Add(float.NegativeInfinity);
-                                continue;
+                                var warCtx = BuildWarNationContext(campaign, nation);
+                                var hasNavalHulls = navHulls > 0;
+                                for (var ri = 0; ri < tCount; ri++)
+                                {
+                                    var other = campaign.NationByMapIndex(targets[ri]);
+                                    if (other is null || other.Id == nation.Id ||
+                                        (campaign.IsHumanControlled(other) && !defines.AiMayAttackPlayer))
+                                    {
+                                        slot.Judgements.Add(float.NaN);
+                                        continue;
+                                    }
+                                    var sharesLandBorder = ri < landCount && other.MapIndex == targets[ri];
+                                    var allied = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id) is { Stance: DiplomaticStance.Allied };
+                                    if (!allied && !CampaignDiplomacy.CanDeclareWarQuietFast(campaign, nation.Id, other.Id,
+                                            checkAtWar: false, knownSharesLandBorder: sharesLandBorder, attackerHasFleets: hasNavalHulls))
+                                    {
+                                        slot.Judgements.Add(float.NegativeInfinity);
+                                        continue;
+                                    }
+                                    var judgement = JudgeWarForReadOnly(campaign, nation, other, in warCtx);
+                                    var appetite = AnnexationAmbition.Appetite(campaign, nation, other);
+                                    if (appetite > 0f) judgement += defines.AiAnnexationTargetBonus * appetite;
+                                    if (allied && judgement <= 0f)
+                                    {
+                                        slot.Judgements.Add(float.NegativeInfinity);
+                                        continue;
+                                    }
+                                    if (!sharesLandBorder)
+                                        judgement -= defines.AiOverseasCaution;
+                                    slot.Judgements.Add(judgement);
+                                }
                             }
-                            var judgement = JudgeWarForReadOnly(campaign, nation, other);
-                            var appetite = AnnexationAmbition.Appetite(campaign, nation, other);
-                            if (appetite > 0f) judgement += defines.AiAnnexationTargetBonus * appetite;
-                            if (allied && judgement <= 0f)
-                            {
-                                slot.Judgements.Add(float.NegativeInfinity);
-                                continue;
-                            }
-                            if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, other.MapIndex))
-                                judgement -= defines.AiOverseasCaution;
-                            slot.Judgements.Add(judgement);
                         }
                     }
-                }
-            }, minItems: 8);
+                }, minItems: 8);
+            }
+            finally
+            {
+                tables.InStatecraftParallel = false;
+            }
 
             // Commit any newly built Overseas target caches deterministically in ascending order.
             for (var i = 0; i < dueCount; i++)
@@ -1022,10 +1406,8 @@ public static partial class AiStatecraft
                 if (slot.ComputedNewOverseas)
                     tables.Overseas[slot.NationId] = (slot.NewHulls, slot.NewOverseasTargets);
             }
-            fleetHulls.Clear();
 
             // Phase 2: apply actions sequentially in strictly ascending Nation.Id order.
-            var initialWarRev = campaign.WarRevision;
             var mutatedNations = _mutatedNationsScratch ??= new HashSet<int>();
             mutatedNations.Clear();
             var mutatedPairs = _mutatedPairsScratch ??= new HashSet<long>();
@@ -1040,9 +1422,8 @@ public static partial class AiStatecraft
                 var allianceRev = DiplomaticRelation.AllianceStanceVersion;
                 var protectorRev = DiplomaticRelation.ProtectorMutationVersion;
                 var ownershipRev = campaign.OwnershipRevision;
-                var nationInWar = initialWarRev == warRev
-                    ? atWarSet.Contains(entry.Nation.Id)
-                    : InAnyWar(campaign, entry.Nation.Id);
+                tables.EnsureWarSummary(campaign);
+                var nationInWar = tables.IsAtWarFast(entry.Nation.Id);
                 using var steps = ThinkTodayStages(campaign, entry, slot, mutatedNations, mutatedPairs,
                     worldInvalidated, nationInWar, intelligenceOn, standingMultiMask).GetEnumerator();
                 while (true)
@@ -1062,7 +1443,6 @@ public static partial class AiStatecraft
                 // each of the day's due countries.
                 if (Campaign.StageOverdue()) yield return 0;
             }
-            atWarSet.Clear();
             mutatedNations.Clear();
             mutatedPairs.Clear();
             for (var i = 0; i < dueCount; i++) slots[i].Reset(-1);
@@ -1070,6 +1450,7 @@ public static partial class AiStatecraft
         }
         finally
         {
+            tables.InStatecraftParallel = false;
             tables.InStatecraftTick = false;
             campaign.Caches.TerritorialDisputes.EndTick();
         }
@@ -1110,6 +1491,16 @@ public static partial class AiStatecraft
 
     internal static bool IsCalmAi(Campaign campaign, Nation nation) =>
         !campaign.IsHumanControlled(nation) && IsCalmAiFast(campaign, nation, InAnyWar(campaign, nation.Id));
+
+    private static bool IsCalmAiTableFast(DailyTables tables, Nation nation, bool inWar)
+    {
+        if (inWar) return false;
+        if (nation.WarPlanTargetId > 0) return false;
+        if (nation.DomesticCrisis is { } crisis && (crisis.CoupPressure > 0.35f || crisis.DaysAboveThreshold > 0)) return false;
+        if (tables.HasPendingPeaceFast(nation.Id)) return false;
+        if (tables.HasPendingUltimatumFast(nation.Id)) return false;
+        return true;
+    }
 
     private static bool IsCalmAiFast(Campaign campaign, Nation nation, bool inWar)
     {
@@ -1690,13 +2081,16 @@ public static partial class AiStatecraft
             foreach (var ally in war.DefenderAllies) MarkCivilWarParty(inCivilWar, ally);
         }
 
+        var nationAtWar = TryGetAtWarFast(campaign, nation.Id, out var nWar);
         Nation client = null;
         var worst = float.MaxValue;
         foreach (var other in campaign.Nations)
         {
             if (other.Id == nation.Id || other.Movement is not null || other.Population <= 0 || other.IsSubject) continue;
             if (!InstitutionsFailing(campaign, other, civilWars, inCivilWar) || !StandsBehind(campaign, nation, other)) continue;
-            if (CampaignDiplomacy.AtWar(campaign, nation.Id, other.Id)) continue;
+            if ((!nationAtWar || nWar) &&
+                (!TryGetAtWarFast(campaign, other.Id, out var oWar) || oWar) &&
+                CampaignDiplomacy.AtWar(campaign, nation.Id, other.Id)) continue;
             if (nation.DecisionAvailableDay.Count > 0 &&
                 nation.DecisionAvailableDay.GetValueOrDefault(CrisisGrantKey(other.Id)) > campaign.ElapsedDays) continue;
             if (other.Stability < worst || (other.Stability == worst && client is not null && other.Id < client.Id))
@@ -2848,15 +3242,8 @@ public static partial class AiStatecraft
     private static float Strength(Campaign campaign, Nation nation) => CachedStrength(campaign, nation);
 
     /// <summary>A nation by its map index, without walking the whole list to find it.</summary>
-    private static Nation ByMapIndex(Campaign campaign, int mapIndex)
-    {
-        // Attrition asks before today's statecraft assessment. Looking up a neighbour
-        // must not also pin strength, treaties and region counts: a restored client has
-        // cold daily tables where the host still has yesterday's, so warming them here
-        // froze different military figures on the two peers. Identity has its own index,
-        // including countries founded since the last daily assessment.
-        return campaign.NationsByMapIndex().GetValueOrDefault(mapIndex);
-    }
+    private static Nation ByMapIndex(Campaign campaign, int mapIndex) =>
+        campaign?.NationByMapIndex(mapIndex);
 
     /// <summary>
     /// A deterministic value in [0, 1) for one country on one day. Same campaign, same
@@ -2917,17 +3304,24 @@ public static partial class AiStatecraft
         // when that pass is the caller and silently wrong the moment anybody else asks.
         BuildCircle(campaign, nation, rival);
 
-        var atWar = _shelterAtWarScratch ??= new HashSet<int>();
-        atWar.Clear();
-        var live = Warfare.LiveWars(campaign);
-        for (var index = 0; index < live.Count; index++)
+        var tables = campaign.AiStatecraftTables;
+        var hasWarTable = tables is not null && ReferenceEquals(tables.WarSummaryCampaign, campaign) &&
+                          tables.WarSummaryDay == campaign.ElapsedDays && tables.WarSummaryRev == campaign.WarRevision;
+        HashSet<int> atWar = null;
+        if (!hasWarTable)
         {
-            var war = live[index];
-            if (war.Ended) continue;
-            atWar.Add(war.AttackerId);
-            atWar.Add(war.DefenderId);
-            foreach (var allyId in war.AttackerAllies) atWar.Add(allyId);
-            foreach (var allyId in war.DefenderAllies) atWar.Add(allyId);
+            atWar = _shelterAtWarScratch ??= new HashSet<int>();
+            atWar.Clear();
+            var live = Warfare.LiveWars(campaign);
+            for (var index = 0; index < live.Count; index++)
+            {
+                var war = live[index];
+                if (war.Ended) continue;
+                atWar.Add(war.AttackerId);
+                atWar.Add(war.DefenderId);
+                foreach (var allyId in war.AttackerAllies) atWar.Add(allyId);
+                foreach (var allyId in war.DefenderAllies) atWar.Add(allyId);
+            }
         }
 
         Nation best = null;
@@ -2960,7 +3354,10 @@ public static partial class AiStatecraft
             var answer = (ours?.Opinion ?? 0f) / 200f + M.Clamp(other.Stability - 0.5f, -0.3f, 0.3f);
             if (theirs is not null && theirs.Opinion <= defines.AiRivalryThreshold)
                 answer += defines.AiShelterSharedRival;
-            if (atWar.Contains(other.Id))
+            var otherAtWar = hasWarTable && (uint)other.Id < (uint)tables.WarSummaryLen
+                ? tables.AtWarDense[other.Id]
+                : (atWar is not null ? atWar.Contains(other.Id) : InAnyWar(campaign, other.Id));
+            if (otherAtWar)
             {
                 // Not a refusal: a guarantee commits nothing today, and a power already
                 // fighting is if anything more interested in who else is drawn in. It
@@ -3186,13 +3583,35 @@ public static partial class AiStatecraft
 
             // And nobody outside it may stand behind the victim - an ally or a guarantor
             // turns a carve-up into a general war, which is not what was proposed.
-            for (var oi = 0; oi < nations.Count; oi++)
+            var partTables = TablesOf(campaign);
+            if (partTables.Built && partTables.Day == campaign.ElapsedDays &&
+                partTables.SignedWithTreatyVersion == DiplomaticRelation.TreatyMutationVersion &&
+                partTables.SignedWithRelationCount == campaign.Relations.Count)
             {
-                var other = nations[oi];
-                if (other is null || other.Id == candidate.Id || coalitionIds.Contains(other.Id)) continue;
-                var bond = CampaignDiplomacy.Peek(campaign, other.Id, candidate.Id);
-                if (bond is { Stance: DiplomaticStance.Allied } || (bond is not null && bond.GuaranteedBy(other.Id)))
-                { disqualified = true; break; }
+                var signed = partTables.GetSignedWith(candidate.Id);
+                if (signed is not null)
+                {
+                    for (var si = 0; si < signed.Count; si++)
+                    {
+                        var otherId = signed[si];
+                        if (otherId == candidate.Id || coalitionIds.Contains(otherId)) continue;
+                        if ((uint)otherId >= (uint)partTables.ActiveNationCap || !partTables.ActiveNationDense[otherId]) continue;
+                        var bond = CampaignDiplomacy.Peek(campaign, otherId, candidate.Id);
+                        if (bond is { Stance: DiplomaticStance.Allied } || (bond is not null && bond.GuaranteedBy(otherId)))
+                        { disqualified = true; break; }
+                    }
+                }
+            }
+            else
+            {
+                for (var oi = 0; oi < nations.Count; oi++)
+                {
+                    var other = nations[oi];
+                    if (other is null || other.Id == candidate.Id || coalitionIds.Contains(other.Id)) continue;
+                    var bond = CampaignDiplomacy.Peek(campaign, other.Id, candidate.Id);
+                    if (bond is { Stance: DiplomaticStance.Allied } || (bond is not null && bond.GuaranteedBy(other.Id)))
+                    { disqualified = true; break; }
+                }
             }
             if (disqualified) continue;
 

@@ -86,9 +86,21 @@ static class MovementPowerFingerprintTests
         // 17 November: GrantRegionalAutonomyCommand and RevokeRegionalAutonomyCommand joined the
         // domestic_crises table (RegionalAutonomy); removing exactly those two gives back the
         // 10 November pair, checked here, and every older golden below is reached without them.
+        // 27 November: AbandonDoctrineCommand, CancelDoctrineStudyCommand (tactical_doctrines) and
+        // AbandonStrategicDoctrineCommand (strategic_doctrines) joined FeatureCommands; removing
+        // only those three bindings restores the 17 November pair bit-for-bit.
+        foreach (var movement in new[] { false, true })
+        {
+            var withoutCancel = Fixture(movement);
+            WithoutDoctrineCancel(withoutCancel);
+            var before = CampaignFingerprint.Of(withoutCancel);
+            Check(before == (movement ? 0xC43FF99EBDAAA660UL : 0xA49141C29F5C7AACUL),
+                $"removing exactly the three doctrine-cancel bindings restores the 17 November golden: {movement} (got 0x{before:X16})");
+        }
         foreach (var movement in new[] { false, true })
         {
             var withoutAutonomy = Fixture(movement);
+            WithoutDoctrineCancel(withoutAutonomy);
             WithoutAutonomy(withoutAutonomy);
             var before = CampaignFingerprint.Of(withoutAutonomy);
             Check(before == (movement ? 0x568E463C8CB67FFEUL : 0xFA0A897F24B60B66UL),
@@ -97,16 +109,17 @@ static class MovementPowerFingerprintTests
         foreach (var movement in new[] { false, true })
         {
             var withoutLift = Fixture(movement);
+            WithoutDoctrineCancel(withoutLift);
             WithoutAutonomy(withoutLift);
             withoutLift.Defines.FeatureCommands.Remove("SeaLiftCommand");
             var liftless = CampaignFingerprint.Of(withoutLift);
             Check(liftless == (movement ? 0x22A558E6BC330E2EUL : 0x69654ABCA8CA3DF6UL),
                 $"removing exactly the SeaLiftCommand binding restores the 2 November golden: {movement} (got 0x{liftless:X16})");
         }
-        Check(withoutMovement == 0xA49141C29F5C7AACUL,
+        Check(withoutMovement == 0xB2C76577B98407B5UL,
             $"a world without movement state retains the current catalogue golden fingerprint (got 0x{withoutMovement:X16})");
         var withMovement = CampaignFingerprint.Of(Fixture());
-        Check(withMovement == 0xC43FF99EBDAAA660UL,
+        Check(withMovement == 0x0B4956EF17E08929UL,
             $"an empty legacy movement retains the current presence and militancy fingerprint (got 0x{withMovement:X16})");
         MechanicFeatures.BuiltIns.Remove("land_arrangements");
         try
@@ -114,6 +127,7 @@ static class MovementPowerFingerprintTests
         foreach (var movement in new[] { false, true })
         {
             var beforeLand = Fixture(movement);
+            WithoutDoctrineCancel(beforeLand);
             WithoutAutonomy(beforeLand);
             beforeLand.Defines.Features.Remove("land_arrangements");
             beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
@@ -263,6 +277,13 @@ static class MovementPowerFingerprintTests
         c.ConfigureSinglePlayer(0);
         SovereignFinance.NormalizeAccounts(c);
         return c;
+    }
+
+    private static void WithoutDoctrineCancel(Campaign campaign)
+    {
+        campaign.Defines.FeatureCommands.Remove("AbandonDoctrineCommand");
+        campaign.Defines.FeatureCommands.Remove("CancelDoctrineStudyCommand");
+        campaign.Defines.FeatureCommands.Remove("AbandonStrategicDoctrineCommand");
     }
 
     private static void WithoutAutonomy(Campaign campaign)

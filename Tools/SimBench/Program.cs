@@ -46,6 +46,18 @@ public static class Program
         if (SimBenchReportRegistry.TryDispatch(SimBenchPhase.PreCampaign, ctx, out var preExit))
             return preExit;
 
+        var mapAt = Array.IndexOf(args, "--map-pack");
+        if (mapAt >= 0 && mapAt + 1 < args.Length)
+        {
+            var requestedMap = args[mapAt + 1].Trim();
+            if (!MapCatalog.SetActiveMap(requestedMap))
+            {
+                Console.WriteLine($"  --map-pack {requestedMap}: map pack not found or incomplete");
+                return 2;
+            }
+            Console.WriteLine($"  map_pack: {MapCatalog.ActiveMapId}");
+        }
+
         var campaign = Campaign.CreateBootstrap(seed);
         var bookmarkTags = new HashSet<string>(
             campaign.Nations.Where(n => !string.IsNullOrWhiteSpace(n.Tag)).Select(n => n.Tag),

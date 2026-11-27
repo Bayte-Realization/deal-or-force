@@ -1150,14 +1150,19 @@ public static partial class AiStatecraft
         if (campaign is not null) _ = GetLodSnapshot(campaign);
     }
 
-    internal static string NormalizeDiplomaticLodMode(string value) =>
-        value?.Trim().ToLowerInvariant() switch
-        {
-            "full" => "full",
-            "world" => "world",
-            "player_focus" => "player_focus",
-            _ => "balanced"
-        };
+    internal static string NormalizeDiplomaticLodMode(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "balanced";
+        if (string.Equals(value, "balanced", StringComparison.Ordinal)) return "balanced";
+        if (string.Equals(value, "full", StringComparison.Ordinal)) return "full";
+        if (string.Equals(value, "world", StringComparison.Ordinal)) return "world";
+        if (string.Equals(value, "player_focus", StringComparison.Ordinal)) return "player_focus";
+        var trimmed = value.AsSpan().Trim();
+        if (trimmed.Equals("full", StringComparison.OrdinalIgnoreCase)) return "full";
+        if (trimmed.Equals("world", StringComparison.OrdinalIgnoreCase)) return "world";
+        if (trimmed.Equals("player_focus", StringComparison.OrdinalIgnoreCase)) return "player_focus";
+        return "balanced";
+    }
 
     private static HashSet<int> RefreshPlayerSphere(Campaign campaign, DiplomaticLodState state)
     {

@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using DealOrForce.Platform;
 using DealOrForce.Simulation;
 using Godot;
@@ -10,9 +13,9 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// Guided Sovereign Brass Mod Content Studio: lets modders create, inspect, reload, and localize
-/// 14 structured mod categories with live validation, ScriptedEffects/Trigger reference, and 1-click
-/// switching across Country Editor, Flag Designer, Map Editor, and Raw Workbench.
+/// Guided Sovereign Brass Mod Content Studio: lets modders create, inspect, reload, scaffold, validate,
+/// and localize structured mod categories with live validation, ScriptedEffects/Trigger reference,
+/// snippet insertion, New Mod wizard, and 1-click switching across Country/Flag/Map/Layout editors.
 /// </summary>
 public partial class DealOrForceGame
 {
@@ -22,15 +25,20 @@ public partial class DealOrForceGame
     private CodeEdit _studioJsonPreview;
     private CodeEdit _studioLocPreview;
     private CodeEdit _studioRefCode;
+    private CodeEdit _studioScriptDraft;
     private LineEdit _studioCategoryFilter;
     private LineEdit _studioRefFilter;
     private OptionButton _studioSavedSelect;
+    private OptionButton _studioSnippetSelect;
     private Button _studioLoadSavedBtn;
+    private Button _studioResetFormBtn;
+    private TabContainer _studioTabs;
     private Label _studioPathLabel;
     private Label _studioStatusLabel;
     private CheckBox _studioWriteLocToggle;
     private Button _studioSaveBtn;
     private Button _studioSaveReloadBtn;
+    private bool _studioSuppressJsonSync;
     private readonly Dictionary<ModStudioCategory, Button> _studioCategoryButtons = new();
     private readonly Dictionary<ModStudioSection, Label> _studioSectionHeaders = new();
     private IReadOnlyList<string> _studioSavedFiles = Array.Empty<string>();
@@ -41,6 +49,7 @@ public partial class DealOrForceGame
         ModStudioSection.EconomyAndTech => "studio.sec.economy_tech",
         ModStudioSection.MilitaryAndProjects => "studio.sec.military_projects",
         ModStudioSection.PoliticsAndBalance => "studio.sec.politics_balance",
+        ModStudioSection.FormableAndWorld => "studio.sec.formable_world",
         _ => "studio.categories_hdr"
     };
 
@@ -72,6 +81,15 @@ public partial class DealOrForceGame
 
         string CurrentTag() => (_selectedNation ?? _campaign?.Player)?.Tag ?? "";
         void ReopenSelf() => OpenModContentStudio(_studioDoc?.Category ?? initialCategory);
+
+        var newModBtn = ActionButton(Loc.Get("studio.tool.new_mod"), OpenNewModWizard, 0, touch ? 42f : 32f, true);
+        newModBtn.Name = "StudioToolNewMod";
+        toolStrip.AddChild(newModBtn);
+
+        var validateModBtn = ActionButton(Loc.Get("studio.tool.validate_mod"), ValidateWholeModInStudio, 0, touch ? 42f : 32f);
+        validateModBtn.Name = "StudioToolValidateMod";
+        toolStrip.AddChild(validateModBtn);
+
         AddToolSwitch("StudioToolCountry", "studio.tool.country_editor", () => OpenCountryEditor(CurrentTag(), ReopenSelf), _campaign is null);
         AddToolSwitch("StudioToolFlag", "studio.tool.flag_designer", () => OpenFlagEditor(CurrentTag(), ReopenSelf));
         AddToolSwitch("StudioToolMap", "studio.tool.map_editor", OpenScenarioMapEditor, _campaign?.ProvinceMap is null);
@@ -181,6 +199,32 @@ public partial class DealOrForceGame
         dupBtn.Name = "ModStudioDuplicate";
         savedBar.AddChild(dupBtn);
 
+        var snippetBar = new HFlowContainer { Name = "ModStudioSnippetBar" };
+        snippetBar.AddThemeConstantOverride("h_separation", 8);
+        snippetBar.AddThemeConstantOverride("v_separation", 6);
+        centerCol.AddChild(snippetBar);
+
+        snippetBar.AddChild(Title(Loc.Get("studio.snippet.bar_lbl"), 12, Ui.Colour("text.muted")));
+        _studioSnippetSelect = new OptionButton
+        {
+            Name = "ModStudioSnippetSelect",
+            CustomMinimumSize = new Vector2(220, touch ? 40f : 30f),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        foreach (var snip in ModStudioSnippets.All)
+            _studioSnippetSelect.AddItem(Loc.Get(snip.TitleKey));
+        if (ModStudioSnippets.All.Count > 0) _studioSnippetSelect.Select(0);
+        snippetBar.AddChild(_studioSnippetSelect);
+
+        var insertSnipBtn = ActionButton(Loc.Get("studio.snippet.insert_btn"), InsertSelectedStudioSnippet, 0, touch ? 40f : 30f);
+        insertSnipBtn.Name = "ModStudioInsertSnippet";
+        snippetBar.AddChild(insertSnipBtn);
+
+        _studioResetFormBtn = ActionButton(Loc.Get("studio.snippet.reset_form_btn"), ResetStudioRawOverride, 0, touch ? 40f : 30f);
+        _studioResetFormBtn.Name = "ModStudioResetForm";
+        _studioResetFormBtn.Disabled = true;
+        snippetBar.AddChild(_studioResetFormBtn);
+
         _studioPathLabel = Title("", 12, Ui.Colour("text.accent"));
         _studioPathLabel.Name = "ModStudioTargetPath";
         _studioPathLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
@@ -190,6 +234,7 @@ public partial class DealOrForceGame
         centerCol.AddChild(_studioPathLabel);
 
         var tabs = new TabContainer { Name = "ModStudioTabs", SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
+        _studioTabs = tabs;
         centerCol.AddChild(tabs);
 
         var formScroll = new ScrollContainer
@@ -213,11 +258,12 @@ public partial class DealOrForceGame
         _studioJsonPreview = new CodeEdit
         {
             Name = "LiveJsonPreview",
-            Editable = false,
+            Editable = true,
             GuttersDrawLineNumbers = true,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
         _studioJsonPreview.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        _studioJsonPreview.TextChanged += OnStudioJsonDraftEdited;
         tabs.AddChild(_studioJsonPreview);
         tabs.SetTabTitle(1, Loc.Get("studio.tab_json"));
 
@@ -260,6 +306,31 @@ public partial class DealOrForceGame
         };
         _studioRefCode.AddThemeFontOverride("font", PresentationFonts.Tabular());
         refTab.AddChild(_studioRefCode);
+
+        // 5th Tab: Script Draft (GDScript/Luau scratchpad + Save scripts/mod_main.gd)
+        var scriptTab = new VBoxContainer { Name = "ScriptDraft", SizeFlagsVertical = SizeFlags.ExpandFill };
+        scriptTab.AddThemeConstantOverride("separation", 6);
+        tabs.AddChild(scriptTab);
+        tabs.SetTabTitle(4, Loc.Get("studio.tab_script"));
+
+        var scriptBtnBar = new HBoxContainer { Name = "ModStudioScriptBar" };
+        scriptBtnBar.AddThemeConstantOverride("separation", 8);
+        scriptTab.AddChild(scriptBtnBar);
+
+        var saveScriptBtn = ActionButton(Loc.Get("studio.snippet.save_script_btn"), SaveStudioScriptDraft, 0, touch ? 40f : 32f);
+        saveScriptBtn.Name = "ModStudioSaveScript";
+        scriptBtnBar.AddChild(saveScriptBtn);
+
+        _studioScriptDraft = new CodeEdit
+        {
+            Name = "ModStudioScriptDraft",
+            Editable = true,
+            GuttersDrawLineNumbers = true,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        _studioScriptDraft.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        scriptTab.AddChild(_studioScriptDraft);
+        LoadStudioScriptDraft();
 
         // ---- Column 3: Live Validation, Save & Hot-Reload Inspector
         var rightPanel = new PanelContainer
@@ -643,7 +714,17 @@ public partial class DealOrForceGame
 
         var report = _studioDoc.Validate();
         _studioPathLabel.Text = Loc.Format("studio.target_path_fmt", report.SuggestedPath);
-        _studioJsonPreview.Text = _studioDoc.RenderJson();
+
+        if (!_studioSuppressJsonSync && _studioJsonPreview is not null)
+        {
+            _studioSuppressJsonSync = true;
+            var rendered = _studioDoc.RenderJson();
+            if (!string.Equals(_studioJsonPreview.Text, rendered, StringComparison.Ordinal))
+                _studioJsonPreview.Text = rendered;
+            _studioSuppressJsonSync = false;
+        }
+        if (_studioResetFormBtn is not null)
+            _studioResetFormBtn.Disabled = !_studioDoc.HasRawOverride;
 
         _studioDoc.RenderLocalizationStubs(out var enStub, out var ruStub);
         _studioLocPreview.Text = "// EN\n" + enStub + "\n// RU\n" + ruStub;
@@ -679,6 +760,295 @@ public partial class DealOrForceGame
         if (_studioSaveReloadBtn is not null) _studioSaveReloadBtn.Disabled = !canSave;
     }
 
+    private void OnStudioJsonDraftEdited()
+    {
+        if (_studioSuppressJsonSync || _studioDoc is null || _studioJsonPreview is null) return;
+        _studioSuppressJsonSync = true;
+        _studioDoc.LoadRawOverride(_studioJsonPreview.Text);
+        _authorDirty = true;
+        RefreshStudioValidationAndPreview();
+        _studioSuppressJsonSync = false;
+    }
+
+    private void ResetStudioRawOverride()
+    {
+        if (_studioDoc is null) return;
+        _studioDoc.ClearRawOverride();
+        _authorDirty = true;
+        RefreshStudioValidationAndPreview();
+    }
+
+    private void InsertSelectedStudioSnippet()
+    {
+        if (_studioSnippetSelect is null || ModStudioSnippets.All.Count == 0) return;
+        var idx = _studioSnippetSelect.Selected;
+        if (idx < 0 || idx >= ModStudioSnippets.All.Count) idx = 0;
+        var snip = ModStudioSnippets.All[idx];
+
+        if (snip.Target is ModSnippetTarget.GdScript or ModSnippetTarget.Luau)
+        {
+            if (_studioTabs is not null) _studioTabs.CurrentTab = 4;
+            if (_studioScriptDraft is not null)
+            {
+                var cur = _studioScriptDraft.Text ?? "";
+                if (cur.Length > 0 && !cur.EndsWith('\n')) cur += "\n";
+                _studioScriptDraft.Text = cur + "\n" + snip.Code.TrimEnd() + "\n";
+                _authorDirty = true;
+            }
+            if (_studioStatusLabel is not null)
+                _studioStatusLabel.Text = Loc.Format("studio.snippet.inserted_fmt", Loc.Get(snip.TitleKey));
+            PlayStrategicCue("ui_select");
+            return;
+        }
+
+        if (_studioDoc is null) return;
+        if (_studioTabs is not null) _studioTabs.CurrentTab = 1;
+        string mergedJson = null;
+        try
+        {
+            var baseText = _studioJsonPreview is not null && !string.IsNullOrWhiteSpace(_studioJsonPreview.Text)
+                ? _studioJsonPreview.Text
+                : _studioDoc.RenderJson();
+            var rootNode = JsonNode.Parse(StructuredData.ToJson(_studioDoc.SuggestedRelativePath(), baseText),
+                documentOptions: GameDataLoader.ForgivingJson) as JsonObject;
+            var snipNode = JsonNode.Parse(snip.Code, documentOptions: GameDataLoader.ForgivingJson) as JsonObject;
+            if (rootNode is not null && snipNode is not null)
+            {
+                var targetObj = rootNode
+                    .FirstOrDefault(kv => !kv.Key.StartsWith("//", StringComparison.Ordinal) && kv.Value is JsonObject)
+                    .Value as JsonObject ?? rootNode;
+                var blockKey = snip.Target == ModSnippetTarget.JsonTrigger ? "trigger" : "effects";
+                if (targetObj[blockKey] is not JsonObject subObj)
+                {
+                    subObj = new JsonObject();
+                    targetObj[blockKey] = subObj;
+                }
+                foreach (var kv in snipNode)
+                    subObj[kv.Key] = kv.Value?.DeepClone();
+                mergedJson = rootNode.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
+            }
+        }
+        catch
+        {
+            mergedJson = null;
+        }
+
+        mergedJson ??= (_studioJsonPreview?.Text ?? "") + "\n" + snip.Code + "\n";
+        _studioSuppressJsonSync = true;
+        _studioDoc.LoadRawOverride(mergedJson);
+        if (_studioJsonPreview is not null) _studioJsonPreview.Text = mergedJson;
+        _studioSuppressJsonSync = false;
+        _authorDirty = true;
+        RefreshStudioValidationAndPreview();
+        if (_studioStatusLabel is not null)
+            _studioStatusLabel.Text = Loc.Format("studio.snippet.inserted_fmt", Loc.Get(snip.TitleKey));
+        PlayStrategicCue("ui_select");
+    }
+
+    private void LoadStudioScriptDraft()
+    {
+        if (_studioScriptDraft is null) return;
+        try
+        {
+            var path = Path.Combine(AuthorRoot, "scripts", "mod_main.gd");
+            if (File.Exists(path))
+            {
+                _studioScriptDraft.Text = File.ReadAllText(path);
+                return;
+            }
+        }
+        catch { }
+
+        _studioScriptDraft.Text =
+            "extends RefCounted\n\n" +
+            "func on_load(api) -> void:\n" +
+            "\tapi.log(\"Custom GDScript mod loaded; map=\" + api.get_map_id())\n\n" +
+            "func on_campaign_created(api) -> void:\n" +
+            "\tvar tags: PackedStringArray = api.get_all_tags()\n" +
+            "\tapi.log(\"Active nations: \" + str(tags.size()))\n\n" +
+            "func on_day_advanced(api) -> void:\n" +
+            "\tpass\n";
+    }
+
+    private void SaveStudioScriptDraft()
+    {
+        if (_studioScriptDraft is null) return;
+        try
+        {
+            ContentWorkbench.EnsureMod(AuthorRoot);
+            var target = ScenarioLibrary.SafePath(AuthorRoot, "scripts/mod_main.gd");
+            ContentWorkbench.RejectLinks(target);
+            var dir = Path.GetDirectoryName(target);
+            if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+            var body = (_studioScriptDraft.Text ?? "").Replace("\r\n", "\n", StringComparison.Ordinal);
+            if (!body.EndsWith('\n')) body += "\n";
+            File.WriteAllText(target, body, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            _authorDirty = false;
+            if (_studioStatusLabel is not null)
+                _studioStatusLabel.Text = Loc.Format("studio.snippet.saved_script_fmt", target);
+            PlayStrategicCue("ui_select");
+        }
+        catch (Exception ex)
+        {
+            if (_studioStatusLabel is not null) _studioStatusLabel.Text = ex.Message;
+        }
+    }
+
+    private void ValidateWholeModInStudio()
+    {
+        if (_studioValidationRows is null) return;
+        var tags = _campaign?.Nations.Select(n => n.Tag).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray();
+        var report = ModValidator.ValidateMod(AuthorRoot, tags);
+
+        foreach (var child in _studioValidationRows.GetChildren()) child.QueueFree();
+
+        var errCount = report.ErrorCount;
+        var warnCount = report.WarningCount;
+        var badgeTok = report.IsValid ? (warnCount == 0 ? "state.positive" : "state.warning") : "state.negative";
+        var summaryKey = report.IsValid ? "studio.mod_val_pass_fmt" : "studio.mod_val_fail_fmt";
+        var summaryText = Loc.Format(summaryKey, errCount, warnCount);
+
+        var badge = new PanelContainer { ClipContents = true };
+        badge.AddThemeStyleboxOverride("panel",
+            Ui.ChromeBox(badgeTok, 0.18f, badgeTok, 0.85f, cornerRadius: 3, borderWidth: 1, padX: 8, padY: 6, leftBorderWidth: 3));
+        var badgeLbl = Title(summaryText, 13, Ui.Colour(badgeTok));
+        badgeLbl.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        badge.AddChild(badgeLbl);
+        _studioValidationRows.AddChild(badge);
+
+        foreach (var diag in report.Diagnostics.Take(40))
+        {
+            var colTok = diag.Severity == ModDiagnosticSeverity.Error ? "state.negative"
+                : diag.Severity == ModDiagnosticSeverity.Warning ? "state.warning" : "text.body_soft";
+            var locPart = string.IsNullOrWhiteSpace(diag.Path) ? diag.File : $"{diag.File} ({diag.Path})";
+            var msgLbl = Title($"• [{diag.Code}] {locPart}: {diag.Message}", 11, Ui.Colour(colTok));
+            msgLbl.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            _studioValidationRows.AddChild(msgLbl);
+
+            if (!string.IsNullOrWhiteSpace(diag.SuggestedFix))
+            {
+                var fixLbl = Title($"   -> {diag.SuggestedFix}", 10, Ui.Colour("text.body_soft"));
+                fixLbl.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                _studioValidationRows.AddChild(fixLbl);
+            }
+        }
+
+        if (_studioStatusLabel is not null) _studioStatusLabel.Text = summaryText;
+        PlayStrategicCue(report.IsValid ? "ui_select" : "ui_error");
+    }
+
+    private void OpenNewModWizard()
+    {
+        if (!IsInstanceValid(_authorCanvas)) return;
+        var touch = PlatformProfile.Current.IsTouchPrimary;
+        var dialog = new Window
+        {
+            Name = "ModStudioNewModWizard",
+            Title = Loc.Get("studio.wizard.title"),
+            Size = new Vector2I(560, 480),
+            MinSize = new Vector2I(460, 420),
+            Exclusive = true,
+            Theme = ScenarioEditorTheme.Create()
+        };
+        _authorCanvas.AddChild(dialog);
+
+        var surface = new Panel();
+        dialog.AddChild(surface);
+        surface.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        surface.AddThemeStyleboxOverride("panel", ScenarioEditorTheme.Surface("shell.background", "shell.border", 0));
+        surface.MouseFilter = Control.MouseFilterEnum.Ignore;
+
+        var rows = new VBoxContainer
+        {
+            OffsetLeft = 18, OffsetTop = 14, AnchorRight = 1, AnchorBottom = 1,
+            OffsetRight = -18, OffsetBottom = -14
+        };
+        rows.AddThemeConstantOverride("separation", 8);
+        dialog.AddChild(rows);
+
+        var sub = Title(Loc.Get("studio.wizard.subtitle"), 12, Ui.Colour("text.muted"));
+        sub.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        rows.AddChild(sub);
+
+        rows.AddChild(Title(Loc.Get("studio.wizard.id_lbl"), 12, Ui.Colour("text.caption")));
+        var idEdit = new LineEdit { Name = "WizardModId", PlaceholderText = "my_custom_mod", MaxLength = 64 };
+        Ui.FocusInputIfDesktop(idEdit);
+        rows.AddChild(idEdit);
+
+        rows.AddChild(Title(Loc.Get("studio.wizard.name_lbl"), 12, Ui.Colour("text.caption")));
+        var nameEdit = new LineEdit { Name = "WizardModName", PlaceholderText = "My Custom Mod", MaxLength = 120 };
+        rows.AddChild(nameEdit);
+
+        rows.AddChild(Title(Loc.Get("studio.wizard.author_lbl"), 12, Ui.Colour("text.caption")));
+        var authorEdit = new LineEdit { Name = "WizardModAuthor", Text = "Deal or Force Modder", MaxLength = 80 };
+        rows.AddChild(authorEdit);
+
+        rows.AddChild(Title(Loc.Get("studio.wizard.kind_lbl"), 12, Ui.Colour("text.caption")));
+        var kinds = new (ModScaffoldKind Kind, string Key, ModStudioCategory LandingCategory)[]
+        {
+            (ModScaffoldKind.Data, "studio.wizard.kind_data", ModStudioCategory.Decision),
+            (ModScaffoldKind.MapPack, "studio.wizard.kind_map", ModStudioCategory.MapPack),
+            (ModScaffoldKind.Scenario, "studio.wizard.kind_scenario", ModStudioCategory.Decision),
+            (ModScaffoldKind.Formable, "studio.wizard.kind_formable", ModStudioCategory.FormableNation),
+            (ModScaffoldKind.GdScript, "studio.wizard.kind_gdscript", ModStudioCategory.Event),
+            (ModScaffoldKind.CSharp, "studio.wizard.kind_csharp", ModStudioCategory.Event),
+            (ModScaffoldKind.RustWorker, "studio.wizard.kind_rust", ModStudioCategory.Event)
+        };
+        var kindSelect = new OptionButton { Name = "WizardModKind", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        foreach (var item in kinds) kindSelect.AddItem(Loc.Get(item.Key));
+        kindSelect.Select(0);
+        rows.AddChild(kindSelect);
+
+        var errorLbl = Title("", 12, Ui.Colour("state.negative"));
+        errorLbl.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        rows.AddChild(errorLbl);
+
+        var btnRow = new HBoxContainer();
+        btnRow.AddThemeConstantOverride("separation", 10);
+        rows.AddChild(btnRow);
+
+        var createBtn = ActionButton(Loc.Get("studio.wizard.create_btn"), () =>
+        {
+            try
+            {
+                var idx = kindSelect.Selected;
+                if (idx < 0 || idx >= kinds.Length) idx = 0;
+                var chosen = kinds[idx];
+                var res = ModStudioScaffolder.Scaffold(new ModScaffoldRequest(
+                    AuthorModsRoot, idEdit.Text, nameEdit.Text, authorEdit.Text, chosen.Kind));
+
+                _authorSelectedRoot = res.ModRoot;
+                _authorDirty = false;
+                _modLoader?.Discover();
+                MapCatalog.SetModRoots((_modLoader?.Packages.Select(p => p.PhysicalRoot) ?? Array.Empty<string>())
+                    .Concat(new[] { res.ModRoot }));
+                MapCatalog.Refresh();
+
+                dialog.QueueFree();
+                OpenModContentStudio(chosen.LandingCategory);
+                if (_studioSavedFiles.Count > 0)
+                    LoadSelectedStudioEntry();
+                if (_studioStatusLabel is not null)
+                    _studioStatusLabel.Text = Loc.Format("studio.wizard.created_fmt", Path.GetFileName(res.ModRoot), res.CreatedFiles.Count);
+                PlayStrategicCue("ui_select");
+            }
+            catch (Exception ex)
+            {
+                errorLbl.Text = ex.Message;
+                PlayStrategicCue("ui_error");
+            }
+        }, 0, touch ? 42f : 36f, true);
+        createBtn.Name = "WizardCreateModBtn";
+        createBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        btnRow.AddChild(createBtn);
+
+        var cancelBtn = ActionButton(Loc.Get("studio.wizard.cancel_btn"), () => dialog.QueueFree(), 120, touch ? 42f : 36f);
+        btnRow.AddChild(cancelBtn);
+
+        dialog.CloseRequested += () => dialog.QueueFree();
+        dialog.PopupCentered();
+    }
+
     private void SaveStudioDocument()
     {
         if (_studioDoc is null) return;
@@ -686,6 +1056,12 @@ public partial class DealOrForceGame
         {
             var written = _studioDoc.SaveToMod(AuthorRoot, _studioWriteLocToggle?.ButtonPressed ?? true);
             _authorDirty = false;
+            if (_studioDoc.Category == ModStudioCategory.MapPack)
+            {
+                MapCatalog.SetModRoots((_modLoader?.Packages.Select(p => p.PhysicalRoot) ?? Array.Empty<string>())
+                    .Concat(new[] { AuthorRoot }));
+                MapCatalog.Refresh();
+            }
             _studioStatusLabel.Text = Loc.Format("studio.saved_fmt", written);
             PlayStrategicCue("ui_select");
             RefreshSavedEntriesDropdown();

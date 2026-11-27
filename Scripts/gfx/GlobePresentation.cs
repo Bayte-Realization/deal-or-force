@@ -351,7 +351,23 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _lastLockFreeVisualVersion = -1;
         _lastLockFreeBattleHours = -1;
         _lastLockFreeBattleCount = -1;
+        _lastLockFreeBattleFog = false;
         _lastLockFreeNationPaletteHash = 0;
+        _lastLockFreeArmyVersion = -1;
+        _lastLockFreeArmyHours = -1;
+        _lastLockFreeArmyMapRev = -1;
+        _lastLockFreeArmyFog = false;
+        _lastLockFreeArmyShownNation = -999;
+        _lastLockFreeArmyFlat = false;
+        _lastLockFreeArmySelectionHash = 0;
+        _lockFreeArmyStructureFingerprint = int.MinValue;
+        _hydratedLockFreeArmyVersion = -1;
+        _lockFreeLabelBudgetPending = false;
+        _frontGeometryRevision = -1;
+        _frontGeometryDirty = false;
+        _armyStructureFingerprint = int.MinValue;
+        _deferredLabelAnchors = null;
+        _deferredLabelNations = null;
     }
 
     internal bool NeedsFencedSync(bool fastSim)
@@ -363,12 +379,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         var snap = CurrentRenderSnapshot();
         var mapBehind = snap is { Version: > 0 } &&
                         (snap.MapRevision > _controlRevision || snap.MapRevision > _frontRevision || snap.WarRevision > _frontWarRevision);
-        var hoursBehind = snap is { Version: > 0 } && snap.ElapsedHours > _lastCombatSyncHours;
-        var syncCap = isMobileOrTouch
-            ? (fastSim ? 0.16 : 0.045)
-            : (fastSim ? 0.033 : 0.016);
+        var housekeepingCap = isMobileOrTouch ? 0.40 : 0.25;
         return !_mapApplied || _controlRevision < 0 || _routeFingerprint == int.MinValue ||
-               mapBehind || (!isMobileOrTouch && hoursBehind) || _sinceLastFencedSync >= syncCap;
+               _frontGeometryDirty || mapBehind || _sinceLastFencedSync >= housekeepingCap;
     }
 
     internal bool NeedsUrgentFencedSync(bool fastSim)
@@ -377,16 +390,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         ResetRevisionTrackingIfCampaignChanged(_campaign);
         var isMobileOrTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
                               Platform.PlatformProfile.Current?.IsMobile == true;
-        var snap = CurrentRenderSnapshot();
-        var mapBehind = snap is { Version: > 0 } &&
-                        (snap.MapRevision > _controlRevision || snap.MapRevision > _frontRevision || snap.WarRevision > _frontWarRevision);
-        var hoursBehind = snap is { Version: > 0 } && snap.ElapsedHours > _lastCombatSyncHours;
-        var syncCap = isMobileOrTouch
-            ? (fastSim ? 0.16 : 0.045)
-            : (fastSim ? 0.033 : 0.016);
+        var urgentCap = isMobileOrTouch ? 0.40 : 0.25;
         return !_mapApplied || _controlRevision < 0 || _routeFingerprint == int.MinValue ||
-               (!isMobileOrTouch && (mapBehind || (hoursBehind && _sinceLastFencedSync >= 0.033))) ||
-               _sinceLastFencedSync >= syncCap;
+               _frontGeometryDirty || _sinceLastFencedSync >= urgentCap;
     }
 
     internal void SyncWorldVisualsUnderReadLock(Simulation.Campaign fencedCampaign, double delta)
@@ -398,8 +404,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         AccumulateFencedSyncTimers(delta);
         var snap = CurrentRenderSnapshot();
         var fastSim = snap is { Version: > 0 }
-            ? snap is { IsPaused: false, Speed: >= 4 }
-            : fencedCampaign is { IsPaused: false, Speed: >= 4 };
+            ? snap is { IsPaused: false, Speed: >= 7 }
+            : fencedCampaign is { IsPaused: false, Speed: >= 7 };
         SyncFencedWorldVisuals(snap, fencedCampaign, fastSim);
         _lastFencedSyncFrame = frame;
     }
@@ -425,15 +431,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         ResetRevisionTrackingIfCampaignChanged(campaign);
         var isMobileOrTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true ||
                               Platform.PlatformProfile.Current?.IsMobile == true;
-        var snap = CurrentRenderSnapshot();
-        var mapBehind = snap is { Version: > 0 } &&
-                        (snap.MapRevision > _controlRevision || snap.MapRevision > _frontRevision || snap.WarRevision > _frontWarRevision);
-        var syncCap = isMobileOrTouch
-            ? (fastSim ? 0.16 : 0.045)
-            : (fastSim ? 0.033 : 0.016);
+        var urgentCap = isMobileOrTouch ? 0.40 : 0.25;
         var wantWindow = !_mapApplied || _controlRevision < 0 || _routeFingerprint == int.MinValue ||
-                         (!isMobileOrTouch && mapBehind && _sinceLastFencedSync >= 0.033) ||
-                         _sinceLastFencedSync >= syncCap;
+                         _frontGeometryDirty || _sinceLastFencedSync >= urgentCap;
         return campaign.TryEnterRead(0, wantWindow);
     }
 
@@ -532,8 +532,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         var snap = CurrentRenderSnapshot();
         var fastSim = snap is { Version: > 0 }
-            ? snap is { IsPaused: false, Speed: >= 4 }
-            : _campaign is { IsPaused: false, Speed: >= 4 };
+            ? snap is { IsPaused: false, Speed: >= 7 }
+            : _campaign is { IsPaused: false, Speed: >= 7 };
 
         AdvanceCameraForFrame(delta);
 
@@ -625,8 +625,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // mipmapped contribution remains to suppress shimmer while the full authored
         // layer carries the actual line work.
         var detailMix = _flatMap
-            ? Mathf.Clamp((13f - _flatZoom) / 4.8f, 0.15f, 1f)
-            : Mathf.Clamp((17f - _distance) / 5.5f, 0.12f, 1f);
+            ? Mathf.Clamp((13.5f - _flatZoom) / 4.0f, 0.15f, 1f)
+            : Mathf.Clamp((21f - _distance) / 5.5f, 0.12f, 1f);
         var provinceDetail = _flatMap
             ? 1f - Mathf.SmoothStep(
                 Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_province_full_zoom", 0.95f), MinimumFlatZoom, 3f),
@@ -669,7 +669,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _sinceLastFencedSync = 0;
         var heavyGpuUploadedThisFrame = PollPlateRepaint();
         var fogViewer = FogOfWarActive && fencedCampaign?.Player is { IsHuman: true } ? fencedCampaign.Player.Id : -1;
-        if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
+        if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; _uploadedVisionRevision = -1; }
         var fogViewerParam = FogOfWarActive && fencedCampaign?.Player is { IsHuman: true } ? fencedCampaign.Player.MapIndex : -1;
         if (_cachedFogViewerParam != fogViewerParam)
         {
@@ -713,11 +713,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // army density, cities/settlements, and country/region labels never spike one frame.
         var isTouchPrimary = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
         var isMobileOrTouch = isTouchPrimary || Platform.PlatformProfile.Current?.IsMobile == true;
-        var speed5Running = snap is { Version: > 0 }
-            ? snap is { IsPaused: false, Speed: >= 5 }
-            : fencedCampaign is { IsPaused: false, Speed: >= 5 };
+        var speedTopRunning = snap is { Version: > 0 }
+            ? snap is { IsPaused: false, Speed: >= 8 }
+            : fencedCampaign is { IsPaused: false, Speed: >= 8 };
         var isPausedNow = snap is { Version: > 0 } ? snap.IsPaused : fencedCampaign?.IsPaused == true;
-        var phaseInterval = isMobileOrTouch && speed5Running ? 0.085 : (isTouchPrimary ? 0.045 : 0.030);
+        var phaseInterval = isMobileOrTouch ? 0.045 : 0.030;
         if (_visualClock >= phaseInterval)
         {
             _visualClock = 0;
@@ -731,14 +731,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
         var controllerUploadedThisFrame = false;
         var mapChanged = _mapApplied && fencedCampaign is not null && _controlRevision != fencedCampaign.MapRevision;
         var warChanged = _mapApplied && fencedCampaign is not null && _frontWarRevision != fencedCampaign.WarRevision;
-        // Mobile/touch at uncapped Speed 5: keep 220ms owner/controller plate cadence; desktop
-        // updates immediately on MapRevision or WarRevision changes without deferring behind plate uploads.
-        var uploadInterval = isMobileOrTouch
-            ? (speed5Running && _peacePreview.Count == 0 && _lastMapModeDay > -100 ? 0.22 : 0.0)
-            : 0.0;
-        var gpuGateOk = !isMobileOrTouch || !heavyGpuUploadedThisFrame;
-        var uploadDue = _controlRevision < 0 || (gpuGateOk && (uploadInterval <= 0.0 || _controllerUploadTimer >= uploadInterval));
-        if (_mapApplied && fencedCampaign is not null && (mapChanged || warChanged) && uploadDue)
+        var frontBehind = _mapApplied && fencedCampaign is not null &&
+                          (_frontGeometryDirty || warChanged || _frontRevision != fencedCampaign.MapRevision);
+        // Plate & front updates dispatch immediately on MapRevision/WarRevision changes without
+        // artificial 220ms mobile delays.
+        if (_mapApplied && fencedCampaign is not null && (mapChanged || frontBehind))
         {
             _controllerUploadTimer = 0;
             if (mapChanged)
@@ -746,7 +743,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 controllerUploadedThisFrame = true;
                 using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
             }
-            if (_controlRevision == fencedCampaign.MapRevision || warChanged)
+            if (_frontGeometryDirty || warChanged || _frontRevision != fencedCampaign.MapRevision)
             {
                 using (Simulation.SimProfiler.Measure("f:front preview")) BuildFrontPreviewCore();
                 _frontRevision = fencedCampaign.MapRevision;
@@ -754,7 +751,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 _frontPreviewDeferred = false;
             }
         }
-        if (_frontPreviewDeferred && gpuGateOk && _mapApplied && fencedCampaign is not null)
+        if (_frontPreviewDeferred && _mapApplied && fencedCampaign is not null)
         {
             _frontPreviewDeferred = false;
             using (Simulation.SimProfiler.Measure("f:front preview")) BuildFrontPreviewCore();
@@ -767,36 +764,56 @@ public sealed partial class GlobePresentation : SubViewportContainer
             if (_frontPreview.Visible != showFront) _frontPreview.Visible = showFront;
         }
 
-        var armySyncInterval = isPausedNow
-            ? 0.0
-            : (isMobileOrTouch
-                ? (speed5Running ? 0.25 : fastSim ? 0.12 : 0.10)
-                : 0.033);
+        var armySyncInterval = isPausedNow ? 0.0 : (isMobileOrTouch ? 0.045 : 0.033);
         var routeSelectionDirty = _routeFingerprint == int.MinValue;
-        var routeInterval = isPausedNow ? 0.0 : (isMobileOrTouch && speed5Running ? 0.30 : isTouchPrimary ? 0.22 : 0.033);
+        var routeInterval = isPausedNow ? 0.0 : (isMobileOrTouch ? 0.045 : 0.033);
         var desktopTopologyMoved = !isMobileOrTouch && (controllerUploadedThisFrame || warChanged);
         var hoursChanged = fencedCampaign is not null && fencedCampaign.ElapsedHours != _lastCombatSyncHours;
+        var armyLockFreeFresh = fencedCampaign is not null &&
+            _lastLockFreeArmyHours == fencedCampaign.ElapsedHours &&
+            _lastLockFreeArmyMapRev == fencedCampaign.MapRevision &&
+            _lastLockFreeArmyFog == FogOfWarActive &&
+            _lastLockFreeArmyShownNation == ShownCountryId &&
+            _lastLockFreeArmyFlat == _flatMap &&
+            _lastLockFreeArmySelectionHash == CurrentSelectedArmyHash();
         var combatDueDesktop = !isMobileOrTouch &&
             (desktopTopologyMoved || isPausedNow ||
              (hoursChanged && _militaryVisualAccumulator >= armySyncInterval) ||
              _militaryVisualAccumulator >= armySyncInterval);
         var armyDue = isMobileOrTouch ? _militaryVisualAccumulator >= armySyncInterval : combatDueDesktop;
-        if (MilitaryMarkersEnabled && _mapApplied && fencedCampaign is not null && armyDue)
+        if (MilitaryMarkersEnabled && _mapApplied && fencedCampaign is not null && (armyDue || desktopTopologyMoved))
         {
             _militaryVisualAccumulator = 0;
             _lastCombatSyncHours = fencedCampaign.ElapsedHours;
-            using (Simulation.SimProfiler.Measure("f:army sync")) SyncArmyMarkers();
-            using (Simulation.SimProfiler.Measure("f:army look")) UpdateMilitaryPresentation(forceNow: desktopTopologyMoved);
-            if (desktopTopologyMoved)
+            if (_lastLockFreeArmyVersion <= 0)
             {
-                RefreshArmyMarkerVisibility();
-                InvalidateFlatCounterDensity();
+                if (!armyLockFreeFresh || desktopTopologyMoved)
+                {
+                    using (Simulation.SimProfiler.Measure("f:army sync")) SyncArmyMarkers();
+                    using (Simulation.SimProfiler.Measure("f:army look")) UpdateMilitaryPresentation(forceNow: desktopTopologyMoved);
+                    if (desktopTopologyMoved)
+                    {
+                        RefreshArmyMarkerVisibility();
+                        InvalidateFlatCounterDensity();
+                    }
+                }
+                else
+                {
+                    UpdateBattleMarkers(forceNow: false);
+                }
+            }
+            else
+            {
+                if (!armyLockFreeFresh || desktopTopologyMoved || _hydratedLockFreeArmyVersion != _lastLockFreeArmyVersion)
+                    HydrateLockFreeMarkerStacks(fencedCampaign);
+                if (desktopTopologyMoved)
+                {
+                    RefreshArmyMarkerVisibility();
+                    InvalidateFlatCounterDensity();
+                }
+                UpdateBattleMarkers(forceNow: false);
             }
             WakeGlobeRendering();
-        }
-        else if (MilitaryMarkersEnabled && _mapApplied && fencedCampaign is not null && desktopTopologyMoved)
-        {
-            _lastCombatSyncHours = fencedCampaign.ElapsedHours;
         }
         if (IsInstanceValid(_battleRoot) && _battleRoot.Visible != MilitaryMarkersEnabled)
             _battleRoot.Visible = MilitaryMarkersEnabled;
@@ -811,11 +828,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
             WakeGlobeRendering();
         }
         var labelInterval = isMobileOrTouch ? 0.45 : 0.25;
+        var gpuGateOk = !isMobileOrTouch || !heavyGpuUploadedThisFrame;
         if (_mapApplied && fencedCampaign is not null &&
-            (_labelTask is not null || (gpuGateOk && _labelRevision != fencedCampaign.MapRevision &&
-                                        (_labelRefreshTimer >= labelInterval || isPausedNow))))
+            (_deferredLabelAnchors is not null || _labelTask is not null ||
+             (gpuGateOk && _labelRevision != fencedCampaign.MapRevision &&
+              (_labelRefreshTimer >= labelInterval || isPausedNow))))
         {
-            if (_labelTask is null) _labelRefreshTimer = 0.0;
+            if (_labelTask is null && _deferredLabelAnchors is null) _labelRefreshTimer = 0.0;
             using (Simulation.SimProfiler.Measure("f:label place")) RefreshCountryLabelPlacement();
         }
         if (RegionIconsWanted || _badgePendingRedraw || AnyRegionBadgeActive())
@@ -1126,29 +1145,34 @@ public sealed partial class GlobePresentation : SubViewportContainer
             _packedLookups is not null ? "full-packed-atlas (12 texture units)" : "full-atlas") + " renderer=" + RenderingServer.GetCurrentRenderingMethod());
         // Until the asynchronous political map has finished, the shader sees transparent
         // political pixels and presents the deliberately flat strategic ocean.
-        var transparent = Image.CreateEmpty(2, 2, false, Image.Format.Rgba8);
+        using var transparent = Image.CreateEmpty(2, 2, false, Image.Format.Rgba8);
         var placeholder = ImageTexture.CreateFromImage(transparent);
         _globeMaterial.SetShaderParameter("political_map", placeholder);
-        var emptyIds = ImageTexture.CreateFromImage(Image.CreateEmpty(2, 2, false, Image.Format.Rg8));
+        using var emptyIdImage = Image.CreateEmpty(2, 2, false, Image.Format.Rg8);
+        var emptyIds = ImageTexture.CreateFromImage(emptyIdImage);
         if (_packedIds is null)
         {
             _globeMaterial.SetShaderParameter("region_ids", emptyIds);
             _globeMaterial.SetShaderParameter("province_ids", emptyIds);
             _globeMaterial.SetShaderParameter("nation_ids", emptyIds);
         }
-        var dryWater = Image.CreateEmpty(2, 2, false, Image.Format.R8);
+        using var dryWater = Image.CreateEmpty(2, 2, false, Image.Format.R8);
         dryWater.Fill(Colors.White);
         _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(dryWater));
         if (!ReducedMap) _globeMaterial.SetShaderParameter("river_centre_map", placeholder);
         if (_packedLookups is null)
         {
-            _ownerIdTexture = ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8));
+            using var blankOwnerIds = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
+            _ownerIdTexture = ImageTexture.CreateFromImage(blankOwnerIds);
             _globeMaterial.SetShaderParameter("province_owner_ids", _ownerIdTexture);
-            _controllerTexture = ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8));
+            using var blankCtrl = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
+            _controllerTexture = ImageTexture.CreateFromImage(blankCtrl);
             _globeMaterial.SetShaderParameter("province_control_colors", _controllerTexture);
-            _frontTexture = ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8));
+            using var blankFront = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
+            _frontTexture = ImageTexture.CreateFromImage(blankFront);
             _globeMaterial.SetShaderParameter("front_membership", _frontTexture);
-            _mapModeTexture = ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8));
+            using var blankMapMode = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
+            _mapModeTexture = ImageTexture.CreateFromImage(blankMapMode);
             _globeMaterial.SetShaderParameter("map_mode_colors", _mapModeTexture);
             _globeMaterial.SetShaderParameter("province_owner_colors", placeholder);
             _globeMaterial.SetShaderParameter("resource_colors", placeholder);

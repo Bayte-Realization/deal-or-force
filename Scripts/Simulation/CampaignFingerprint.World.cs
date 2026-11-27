@@ -86,6 +86,11 @@ public static partial class CampaignFingerprint
         }
         foreach (var character in campaign.ScenarioId ?? "2024") Mix(ref hash, character);
         Mix(ref hash, -1);
+        if (!string.IsNullOrEmpty(campaign.MapId) &&
+            !string.Equals(campaign.MapId, MapCatalog.StandardId, StringComparison.Ordinal))
+        {
+            MixText(ref hash, campaign.MapId);
+        }
         MixScenarioFeatures(campaign, ref hash);
         MixScenarioCalendarAndMeta(campaign, ref hash);
         MixWorldSituations(campaign, ref hash);

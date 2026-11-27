@@ -294,30 +294,28 @@ public static class LandCrossings
     /// <summary>What the last <see cref="Attach"/> could not place, one line an entry. Empty when the data is sound.</summary>
     public static IReadOnlyList<string> LastErrors { get; private set; } = Array.Empty<string>();
 
-    /// <summary>
-    /// Find every authored crossing on this map and make it an edge of the map's graph.
-    /// Called once, where the map is read (MapRasterCatalog), before any campaign takes it.
-    /// An entry that cannot be placed is reported by name and left out; the rest still attach,
-    /// because one bad coordinate in a mod must not take the Bosphorus away from everybody.
-    /// </summary>
+    /// <summary>Find every authored crossing on this map and make it an edge of the map's graph.</summary>
     public static int Attach(ProvinceTopology map, List<string> errors = null)
     {
         if (map is null) return 0;
         var problems = errors ?? new List<string>();
         var before = problems.Count;
         LandCrossingCatalog.ResetCatalog(problems);
-        // The tolerances are tunables like any other, and a map is read before there is a
-        // campaign to own a Defines - so the shipped and modded values are read here once.
         var defines = new Defines();
         GameDataLoader.ApplyDefines(defines);
         var resolved = Resolve(map, LandCrossingCatalog.All, defines, problems);
         map.AttachCrossings(resolved);
+        var isCoarsePack = !string.Equals(MapCatalog.ActiveMapId, MapCatalog.StandardId, StringComparison.Ordinal);
         var found = new List<string>();
         for (var index = before; index < problems.Count; index++)
         {
-            found.Add(problems[index]);
-            Debug.WriteLine($"[dof] {problems[index]}");
-            DiagnosticLogs.Write("errors", $"CROSSING_REJECTED {problems[index]}");
+            var problem = problems[index];
+            found.Add(problem);
+            Debug.WriteLine($"[dof] {problem}");
+            var coarseFold = isCoarsePack && (problem.Contains("both shores are province", StringComparison.Ordinal) ||
+                problem.Contains("already joined by another crossing", StringComparison.Ordinal) ||
+                problem.Contains("already share a border", StringComparison.Ordinal));
+            DiagnosticLogs.Write(coarseFold ? "system" : "errors", $"CROSSING_REJECTED {problem}");
         }
         LastErrors = found;
         return resolved.Count;
