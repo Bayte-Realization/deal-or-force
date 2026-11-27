@@ -246,6 +246,10 @@ public partial class DealOrForceGame : Control
         {
             var isNewShell = IsNewShellActive;
             var hudSnap = _simRunner.ReadHudSnapshot(_campaign);
+            // Frame-0 lock-free world visual sync: updates political overlays, occupation stripes,
+            // live war fronts, GPU battle badges, GPU compute / incremental plate repaints, and
+            // country label placement WITHOUT acquiring CampaignAccessGate.
+            var presentedVisualVer = _globe?.SyncLockFreeWorldVisuals(_simRunner) ?? 0;
             var fastSim = !(hudSnap?.IsPaused ?? _campaign!.IsPaused) && _speed >= 4;
             var globeNeedsSync = _globe is not null && _globe.NeedsFencedSync(fastSim);
             var globeUrgent = _globe is not null && _globe.NeedsUrgentFencedSync(fastSim);
@@ -288,6 +292,9 @@ public partial class DealOrForceGame : Control
             }
             if (isNewShell)
                 _shell?.DatePlate.RefreshClock();
+            var presentedVer = presentedVisualVer > 0 ? presentedVisualVer : (hudSnap?.Version ?? 0);
+            if (presentedVer > 0)
+                _simRunner.NotifyVisualFramePresented(presentedVer);
         }
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible)
             // Nobody's eyes: an observer of the whole world sees the whole world. Watching one country, he sees what it sees.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::raster_blur::{pack_bytes_only, smooth_and_pack};
+use crate::raster_blur::{pack_byte, pack_bytes_only, smooth_and_pack};
 
 pub struct DofRasterBake {
     pub width: usize,
@@ -11,6 +11,8 @@ pub struct DofRasterBake {
     distance: Vec<f32>,
     across: Vec<f32>,
     seam_snap: Vec<f32>,
+    rect_dist: Vec<f32>,
+    rect_across: Vec<f32>,
 }
 
 pub(crate) struct SyncUnsafePtr<T>(pub(crate) *mut T);
@@ -63,6 +65,8 @@ impl DofRasterBake {
             distance: vec![0.0f32; cells],
             across: vec![0.0f32; cells],
             seam_snap: Vec::new(),
+            rect_dist: Vec::new(),
+            rect_across: Vec::new(),
         })
     }
 
@@ -150,6 +154,294 @@ impl DofRasterBake {
             );
         } else {
             pack_bytes_only(&self.distance, self.cells, cap, out_bytes, n_threads);
+        }
+
+        Ok(())
+    }
+
+    /// Incremental dirty-rect frontier field update, guaranteed 100% bit-exact with `bake_frontier`.
+    /// Updates ONLY pixels inside `[x0..x1) x [y0..y1)` of `out_bytes` by computing Chamfer + Gaussian
+    /// over a mathematically exact dependency halo `(ceil(cap) + 1 + ceil(3 * smoothing))`.
+    /// Falls back automatically to full `bake_frontier` if the padded halo crosses `x = 0` or `x = w`
+    /// (preserving exact Chamfer wrap-around order) or if the dirty area exceeds half the planet.
+    #[allow(clippy::too_many_arguments)]
+    pub fn bake_frontier_rect(
+        &mut self,
+        owners: &[u16],
+        authored_owners: &[u16],
+        cap: f32,
+        smoothing: f32,
+        rect_x0: usize,
+        rect_y0: usize,
+        rect_x1: usize,
+        rect_y1: usize,
+        out_bytes: &mut [u8],
+    ) -> Result<(), i32> {
+        if out_bytes.len() < self.cells {
+            return Err(-3);
+        }
+        if !cap.is_finite() || cap <= 0.0 || !smoothing.is_finite() || smoothing < 0.0 {
+            return Err(-2);
+        }
+
+        let w = self.width;
+        let h = self.height;
+        let x0 = rect_x0.min(w);
+        let x1 = rect_x1.min(w);
+        let y0 = rect_y0.min(h);
+        let y1 = rect_y1.min(h);
+        if x0 >= x1 || y0 >= y1 {
+            return Ok(());
+        }
+
+        let r_blur = if smoothing > 0.0 {
+            (smoothing * 3.0).ceil() as usize
+        } else {
+            0
+        };
+        let r_chamfer = (cap.ceil() as usize).saturating_add(1);
+        let halo = r_chamfer.saturating_add(r_blur);
+
+        let rw = x1 - x0;
+        let rh = y1 - y0;
+        if x0 < halo || x1 + halo > w || rw.saturating_mul(rh).saturating_mul(2) >= self.cells {
+            return self.bake_frontier(owners, authored_owners, cap, smoothing, 0, out_bytes);
+        }
+
+        let has_prov = !self.cell_to_province.is_empty() && !owners.is_empty();
+        let mut has_override = false;
+        if has_prov {
+            self.prov_lut.fill(0);
+            let limit = owners.len().min(65_536);
+            for p in 1..limit {
+                let owner = owners[p];
+                let same_authored =
+                    !authored_owners.is_empty() && p < authored_owners.len() && authored_owners[p] == owner;
+                if !same_authored {
+                    self.prov_lut[p] = if owner == 0 { 65_535 } else { owner };
+                    has_override = true;
+                }
+            }
+        }
+
+        let wx0 = x0 - halo;
+        let wx1 = x1 + halo;
+        let lw = wx1 - wx0;
+        let wy0 = y0.saturating_sub(halo);
+        let wy1 = (y1 + halo).min(h);
+        let lh = wy1 - wy0;
+        let local_cells = lw * lh;
+        if self.rect_dist.len() < local_cells {
+            self.rect_dist.resize(local_cells, 0.0);
+        }
+        if smoothing > 0.0 && self.rect_across.len() < local_cells {
+            self.rect_across.resize(local_cells, 0.0);
+        }
+
+        // Step 1: Init exact frontier distances inside [wx0..wx1) x [wy0..wy1).
+        let authored = &self.authored_holders;
+        let provs = &self.cell_to_province;
+        let lut = &self.prov_lut;
+        let rdist = &mut self.rect_dist[..local_cells];
+
+        for ly in 0..lh {
+            let gy = wy0 + ly;
+            let row = gy * w;
+            let lrow = ly * lw;
+            let has_up = gy > 0;
+            let has_down = gy + 1 < h;
+            for lx in 0..lw {
+                let gx = wx0 + lx;
+                let cell = row + gx;
+                let here = effective_holder(authored, provs, lut, has_override, cell);
+                let east_x = if gx + 1 == w { 0 } else { gx + 1 };
+                let west_x = if gx == 0 { w - 1 } else { gx - 1 };
+                let frontier = effective_holder(authored, provs, lut, has_override, row + east_x) != here
+                    || effective_holder(authored, provs, lut, has_override, row + west_x) != here
+                    || (has_up && effective_holder(authored, provs, lut, has_override, cell - w) != here)
+                    || (has_down && effective_holder(authored, provs, lut, has_override, cell + w) != here);
+                unsafe {
+                    *rdist.get_unchecked_mut(lrow + lx) = if frontier { 0.5 } else { cap };
+                }
+            }
+        }
+
+        // Step 2: Forward Chamfer (exact same arithmetic order as full-planet interior).
+        const STRAIGHT: f32 = 1.0;
+        const DIAGONAL: f32 = 1.41421356;
+        for ly in 0..lh {
+            let lrow = ly * lw;
+            let prev_row = if ly > 0 { (ly - 1) * lw } else { 0 };
+            let mut west_best = unsafe { *rdist.get_unchecked(lrow) };
+            if ly > 0 && west_best > 0.5 {
+                let mut best = west_best;
+                best = best.min(unsafe { *rdist.get_unchecked(prev_row) } + STRAIGHT);
+                if lw > 1 {
+                    best = best.min(unsafe { *rdist.get_unchecked(prev_row + 1) } + DIAGONAL);
+                }
+                unsafe { *rdist.get_unchecked_mut(lrow) = best };
+                west_best = best;
+            }
+            if ly > 0 {
+                for lx in 1..lw - 1 {
+                    let mut best = unsafe { *rdist.get_unchecked(lrow + lx) };
+                    if best > 0.5 {
+                        best = best.min(west_best + STRAIGHT);
+                        best = best.min(unsafe { *rdist.get_unchecked(prev_row + lx) } + STRAIGHT);
+                        best = best.min(unsafe { *rdist.get_unchecked(prev_row + lx - 1) } + DIAGONAL);
+                        best = best.min(unsafe { *rdist.get_unchecked(prev_row + lx + 1) } + DIAGONAL);
+                        unsafe { *rdist.get_unchecked_mut(lrow + lx) = best };
+                        west_best = best;
+                    } else {
+                        west_best = best;
+                    }
+                }
+                if lw > 1 {
+                    let lx = lw - 1;
+                    let mut best = unsafe { *rdist.get_unchecked(lrow + lx) };
+                    if best > 0.5 {
+                        best = best.min(west_best + STRAIGHT);
+                        best = best.min(unsafe { *rdist.get_unchecked(prev_row + lx) } + STRAIGHT);
+                        best = best.min(unsafe { *rdist.get_unchecked(prev_row + lx - 1) } + DIAGONAL);
+                        unsafe { *rdist.get_unchecked_mut(lrow + lx) = best };
+                    }
+                }
+            } else {
+                for lx in 1..lw {
+                    let mut best = unsafe { *rdist.get_unchecked(lrow + lx) };
+                    if best > 0.5 {
+                        best = best.min(west_best + STRAIGHT);
+                        unsafe { *rdist.get_unchecked_mut(lrow + lx) = best };
+                        west_best = best;
+                    } else {
+                        west_best = best;
+                    }
+                }
+            }
+        }
+
+        // Step 3: Backward Chamfer (exact same arithmetic order as full-planet interior).
+        for ly in (0..lh).rev() {
+            let lrow = ly * lw;
+            let next_row = if ly + 1 < lh { (ly + 1) * lw } else { 0 };
+            let last_x = lw - 1;
+            let mut east_best = unsafe { *rdist.get_unchecked(lrow + last_x) };
+            if east_best > 0.5 {
+                let mut best = east_best;
+                if ly + 1 < lh {
+                    best = best.min(unsafe { *rdist.get_unchecked(next_row + last_x) } + STRAIGHT);
+                    if lw > 1 {
+                        best = best.min(unsafe { *rdist.get_unchecked(next_row + last_x - 1) } + DIAGONAL);
+                    }
+                }
+                best = best.min(cap);
+                unsafe { *rdist.get_unchecked_mut(lrow + last_x) = best };
+                east_best = best;
+            }
+            if ly + 1 < lh {
+                if lw > 2 {
+                    for lx in (1..lw - 1).rev() {
+                        let mut best = unsafe { *rdist.get_unchecked(lrow + lx) };
+                        if best > 0.5 {
+                            best = best.min(east_best + STRAIGHT);
+                            best = best.min(unsafe { *rdist.get_unchecked(next_row + lx) } + STRAIGHT);
+                            best = best.min(unsafe { *rdist.get_unchecked(next_row + lx - 1) } + DIAGONAL);
+                            best = best.min(unsafe { *rdist.get_unchecked(next_row + lx + 1) } + DIAGONAL);
+                            best = best.min(cap);
+                            unsafe { *rdist.get_unchecked_mut(lrow + lx) = best };
+                            east_best = best;
+                        } else {
+                            east_best = best;
+                        }
+                    }
+                }
+                if lw > 1 {
+                    let mut best = unsafe { *rdist.get_unchecked(lrow) };
+                    if best > 0.5 {
+                        best = best.min(east_best + STRAIGHT);
+                        best = best.min(unsafe { *rdist.get_unchecked(next_row) } + STRAIGHT);
+                        best = best.min(unsafe { *rdist.get_unchecked(next_row + 1) } + DIAGONAL);
+                        best = best.min(cap);
+                        unsafe { *rdist.get_unchecked_mut(lrow) = best };
+                    }
+                }
+            } else {
+                for lx in (0..lw - 1).rev() {
+                    let mut best = unsafe { *rdist.get_unchecked(lrow + lx) };
+                    if best > 0.5 {
+                        best = best.min(east_best + STRAIGHT).min(cap);
+                        unsafe { *rdist.get_unchecked_mut(lrow + lx) = best };
+                        east_best = best;
+                    } else {
+                        east_best = best;
+                    }
+                }
+            }
+        }
+
+        // Step 4 & 5: Gaussian smoothing (if > 0) + fused u8 byte pack ONLY into [x0..x1) x [y0..y1).
+        let scale = 255.0f32 / cap;
+        if smoothing > 0.0 {
+            let radius = r_blur as isize;
+            let klen = (radius * 2 + 1) as usize;
+            let mut weights = vec![0.0f32; klen];
+            let mut total = 0.0f32;
+            let inv_two_var = -1.0f32 / (2.0f32 * smoothing * smoothing);
+            for (idx, i) in (-radius..=radius).enumerate() {
+                let fi = (i * i) as f32;
+                let wv = (fi * inv_two_var).exp();
+                weights[idx] = wv;
+                total += wv;
+            }
+            for wv in &mut weights {
+                *wv /= total;
+            }
+
+            let sy0 = y0.saturating_sub(r_blur);
+            let sy1 = (y1 + r_blur).min(h);
+            let racross = &mut self.rect_across[..local_cells];
+            // Horizontal pass on [sy0..sy1) x [x0..x1)
+            for gy in sy0..sy1 {
+                let ly = gy - wy0;
+                let lrow = ly * lw;
+                for gx in x0..x1 {
+                    let lx = gx - wx0;
+                    let mut sum = 0.0f32;
+                    for ki in 0..klen {
+                        let col = lx + ki - r_blur;
+                        sum += unsafe { *rdist.get_unchecked(lrow + col) * *weights.get_unchecked(ki) };
+                    }
+                    unsafe { *racross.get_unchecked_mut(lrow + lx) = sum };
+                }
+            }
+            // Vertical pass + byte pack on [y0..y1) x [x0..x1)
+            let mut line_offs = vec![0usize; klen];
+            for gy in y0..y1 {
+                for (ki, k) in (-radius..=radius).enumerate() {
+                    let line = (gy as isize + k).clamp(0, (h as isize) - 1) as usize;
+                    line_offs[ki] = (line - wy0) * lw;
+                }
+                let out_row = gy * w;
+                for gx in x0..x1 {
+                    let lx = gx - wx0;
+                    let mut sum = 0.0f32;
+                    for ki in 0..klen {
+                        sum += unsafe { *racross.get_unchecked(line_offs[ki] + lx) * *weights.get_unchecked(ki) };
+                    }
+                    unsafe { *out_bytes.get_unchecked_mut(out_row + gx) = pack_byte(sum * scale) };
+                }
+            }
+        } else {
+            for gy in y0..y1 {
+                let ly = gy - wy0;
+                let lrow = ly * lw;
+                let out_row = gy * w;
+                for gx in x0..x1 {
+                    let lx = gx - wx0;
+                    let v = unsafe { *rdist.get_unchecked(lrow + lx) } * scale;
+                    unsafe { *out_bytes.get_unchecked_mut(out_row + gx) = pack_byte(v) };
+                }
+            }
         }
 
         Ok(())

@@ -27,11 +27,13 @@ namespace DealOrForce;
 /// </summary>
 public sealed partial class GlobePresentation
 {
-    private const double PlateRepaintSeconds = 0.75;
-    private const double FrontierRepaintSeconds = 2.5;
-    private const double FastSimPlateRepaintSeconds = 2.5;
-    private const double FastSimFrontierRepaintSeconds = 10.0;
-    private const double MobilePlateRepaintSeconds = 6.5;
+    private const double PlateRepaintSeconds = 0.25;
+    private const double FrontierRepaintSeconds = 0.50;
+    private const double FastSimPlateRepaintSeconds = 0.35;
+    private const double FastSimFrontierRepaintSeconds = 0.85;
+    private const double GpuPlateRepaintSeconds = 0.16;
+    private const double GpuFrontierRepaintSeconds = 0.30;
+    private const double MobilePlateRepaintSeconds = 1.0;
 
     private ImageTexture _plateTexture;
     private Simulation.PoliticalPlateSource _plateSource;
@@ -39,8 +41,9 @@ public sealed partial class GlobePresentation
     /// <summary>The owners the plate on screen was painted from, and those of the one being painted.</summary>
     private ushort[] _plateShownOwners;
     private ushort[] _plateWorkOwners;
-    private byte[] _platePixelScratch;
-    private byte[] _frontierPixelScratch;
+    private ushort[] _frontierShownOwners;
+    private byte[] _plateMipScratch;
+    private byte[] _frontierMipScratch;
     private Image _pendingPlateUpload;
     private ushort[] _pendingPlateOwners;
 
@@ -48,7 +51,7 @@ public sealed partial class GlobePresentation
     private bool _plateColoursStale;
     private bool _plateWorkStartedStale;
     private bool _plateFailureReported;
-    private Task<(Image Plate, Image Frontier)> _plateWork;
+    private Task<(Image Plate, Image Frontier, ushort[] FrontierOwners)> _plateWork;
     private ImageTexture _frontierTexture;
     /// <summary>The authored holder of every raster cell, kept for the frontier field's repaints.</summary>
     private ushort[] _frontierAuthored;
@@ -56,12 +59,20 @@ public sealed partial class GlobePresentation
     private ulong _frontierRequestedMsec;
     private bool _platePending;
 
+    // Optional Forward+ (Vulkan / D3D12) GLSL compute backend; null on Compatibility/GLES3 & headless.
+    private GpuMapCompute _gpuMapCompute;
+    private bool _gpuMapBound;
+
     /// <summary>The opening plate has been uploaded: remember what it was painted from.</summary>
     private void PlateApplied(Simulation.PoliticalPlateSource source, ushort[] owners)
     {
         _plateSource = source;
         _plateShownOwners = owners;
+        _frontierShownOwners = null;
         _plateWorkOwners = null;
+        _plateMipScratch = null;
+        _frontierMipScratch = null;
+        _pendingPlateUpload?.Dispose();
         _pendingPlateUpload = null;
         _pendingPlateOwners = null;
         // Painted from the palette this campaign was bound with, a moment ago.
@@ -69,59 +80,170 @@ public sealed partial class GlobePresentation
         _plateWorkStartedStale = false;
     }
 
-    private void RequestPlateRepaint(Simulation.ProvinceTopology topology)
+    private void TryStartGpuMapCompute(Simulation.ProvinceTopology topology, ushort[] initialOwners)
+    {
+        DisposeGpuMapCompute();
+        if (_plateSource is null || !GpuMapCompute.IsEnvironmentAllowed()) return;
+        var gpu = new GpuMapCompute();
+        var wantFrontier = FrontierFieldWanted() && _frontierAuthored is not null && topology?.CellToProvince is not null;
+        if (gpu.BeginInitialize(
+                _plateSource,
+                wantFrontier ? _frontierAuthored : null,
+                wantFrontier ? topology.CellToProvince : null,
+                wantFrontier ? topology.Width : 0,
+                wantFrontier ? topology.Height : 0,
+                initialOwners,
+                _paintedOwner,
+                _colorByMapIndex,
+                Simulation.MapBorderStyles.PlateShades()))
+        {
+            _gpuMapCompute = gpu;
+            _gpuMapBound = false;
+        }
+        else
+        {
+            gpu.Dispose();
+        }
+    }
+
+    private void DisposeGpuMapCompute()
+    {
+        if (_gpuMapBound && _globeMaterial is not null)
+        {
+            if (_plateTexture is not null) _globeMaterial.SetShaderParameter("political_map", _plateTexture);
+            if (_frontierTexture is not null) _globeMaterial.SetShaderParameter("frontier_field", _frontierTexture);
+        }
+        _gpuMapBound = false;
+        _gpuMapCompute?.Dispose();
+        _gpuMapCompute = null;
+    }
+
+    private void PollGpuMapComputeBinding()
+    {
+        if (_gpuMapCompute is null) return;
+        if (_gpuMapCompute.IsFailed)
+        {
+            DisposeGpuMapCompute();
+            return;
+        }
+        if (!_gpuMapBound && _gpuMapCompute.IsReady && _globeMaterial is not null)
+        {
+            _globeMaterial.SetShaderParameter("political_map", _gpuMapCompute.PlateTexture);
+            if (_gpuMapCompute.HasFrontier && FrontierFieldWanted())
+            {
+                _globeMaterial.SetShaderParameter("frontier_field", _gpuMapCompute.FrontierTexture);
+                _globeMaterial.SetShaderParameter("frontier_cap", Simulation.FrontierField.Cap);
+                _globeMaterial.SetShaderParameter("frontier_ready", 1f);
+            }
+            _gpuMapBound = true;
+        }
+    }
+
+    private void RequestPlateRepaint(Simulation.ProvinceTopology topology, ushort[] ownersOverride = null, bool? fastForwardOverride = null)
     {
         if (_plateSource is null || topology is null) return;
         _platePending = true;
-        TryStartPlateRepaint(topology);
+        TryStartPlateRepaint(topology, ownersOverride, fastForwardOverride);
     }
 
-    private void TryStartPlateRepaint(Simulation.ProvinceTopology topology)
+    private void TryStartPlateRepaint(Simulation.ProvinceTopology topology, ushort[] ownersOverride = null, bool? fastForwardOverride = null)
     {
+        PollGpuMapComputeBinding();
         if (!_platePending || _plateWork is not null || _pendingPlateUpload is not null) return;
+        var currentOwners = ownersOverride is { Length: > 0 } ? ownersOverride : topology.ProvinceToNation;
         // The picture on screen already is today's owners in today's colours: nothing to do.
         if (!_plateColoursStale && _plateShownOwners is not null &&
-            topology.ProvinceToNation.AsSpan().SequenceEqual(_plateShownOwners))
+            currentOwners.AsSpan().SequenceEqual(_plateShownOwners))
         {
             _platePending = false;
             return;
         }
         var now = Time.GetTicksMsec();
-        var fastForward = _campaign is { IsPaused: false, Speed: >= 4 };
-        var desktopPlateSeconds = fastForward ? FastSimPlateRepaintSeconds : PlateRepaintSeconds;
-        var desktopFrontierSeconds = fastForward ? FastSimFrontierRepaintSeconds : FrontierRepaintSeconds;
+        var fastForward = fastForwardOverride ?? (_campaign is { IsPaused: false, Speed: >= 4 });
+        // If Forward+ GPU compute init is still finishing on the render thread, wait one frame
+        // rather than launching a redundant full-planet CPU bake.
+        if (_gpuMapCompute is { IsPending: true }) return;
+        var gpuReady = _gpuMapBound && _gpuMapCompute is { IsReady: true };
+
+        var desktopPlateSeconds = gpuReady
+            ? GpuPlateRepaintSeconds
+            : (fastForward ? FastSimPlateRepaintSeconds : PlateRepaintSeconds);
+        var desktopFrontierSeconds = gpuReady
+            ? GpuFrontierRepaintSeconds
+            : (fastForward ? FastSimFrontierRepaintSeconds : FrontierRepaintSeconds);
         var cooldownMs = (Platform.PlatformProfile.Current?.IsTouchPrimary == true ? MobilePlateRepaintSeconds : desktopPlateSeconds) * 1000.0;
         if (_plateRequestedMsec > 0 && now - _plateRequestedMsec < cooldownMs) return;
         _plateRequestedMsec = now;
         _platePending = false;
-        _plateWorkStartedStale = _plateColoursStale;
-        _plateColoursStale = false;
-        var owners = (ushort[])topology.ProvinceToNation.Clone();
-        _plateWorkOwners = owners;
-        // Never written after the map is applied, so the worker may read it as it is.
+
+        var owners = ownersOverride is { Length: > 0 } ? ownersOverride : (ushort[])topology.ProvinceToNation.Clone();
         var authoredOwners = _paintedOwner;
-        var colors = new System.Collections.Generic.Dictionary<int, uint>(_colorByMapIndex);
-        var source = _plateSource;
         var shades = Simulation.MapBorderStyles.PlateShades();
-        // The picture and its mipmaps are made on the worker too: the main thread only uploads.
-        // Skip heavy 5760x2880 FrontierField repaints during active war on touch/mobile GPUs
-        // (close-up borders and UploadPlateCatchUp stay exact without 22 MB mipmap uploads),
-        // and throttle desktop FrontierField rebuilds to 2.5s (10s at Speed 4/5) while keeping
-        // fast 0.75s (2.5s at Speed 4/5) PoliticalPlate updates with reusable LOH pixel buffers.
         var wantFrontierNow = FrontierFieldWanted() && Platform.PlatformProfile.Current?.IsTouchPrimary != true &&
                               (_frontierRequestedMsec == 0 || now - _frontierRequestedMsec >= desktopFrontierSeconds * 1000.0);
+
+        // Fast Path: Forward+ GLSL Compute Shaders (Vulkan / D3D12) — zero RAM->VRAM upload, < 1 ms in VRAM!
+        if (gpuReady)
+        {
+            if (wantFrontierNow) _frontierRequestedMsec = now;
+            var updateColors = _plateColoursStale;
+            _plateColoursStale = false;
+            if (_gpuMapCompute.DispatchRepaint(owners, authoredOwners, _colorByMapIndex, shades, updateColors, wantFrontierNow))
+            {
+                _plateShownOwners = owners;
+                if (wantFrontierNow) _frontierShownOwners = owners;
+                UploadPlateCatchUp();
+                return;
+            }
+            // If GPU compute tripped, restore fallback bindings and continue on CPU incremental Rust path.
+            _plateColoursStale |= updateColors;
+            DisposeGpuMapCompute();
+        }
+
+        _plateWorkStartedStale = _plateColoursStale;
+        _plateColoursStale = false;
+        _plateWorkOwners = owners;
+        var prevPlateOwners = _plateWorkStartedStale ? null : _plateShownOwners;
+        var prevFrontierOwners = _frontierShownOwners;
+        var colors = new System.Collections.Generic.Dictionary<int, uint>(_colorByMapIndex);
+        var source = _plateSource;
         if (wantFrontierNow) _frontierRequestedMsec = now;
         var frontierAuthored = wantFrontierNow ? _frontierAuthored : null;
+        var forceFullPlate = _plateWorkStartedStale;
+
+        // Tier A CPU Path (Android ARM64 NEON, Compatibility/GLES3, headless):
+        // Incremental dirty-rect PoliticalPlate + FrontierField + incremental mipmap pyramid
+        // (zero full-planet Image.GenerateMipmaps() stall!).
         _plateWork = Task.Run(() =>
         {
-            var platePixels = Simulation.PoliticalPlate.PaintInto(
-                source, owners, authoredOwners, colors, shades, ref _platePixelScratch);
-            var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8, platePixels);
-            image.GenerateMipmaps();
-            var frontier = frontierAuthored is null ? null
-                : FrontierImageInto(frontierAuthored, topology, owners, authoredOwners, ref _frontierPixelScratch);
-            return (image, frontier);
+            var plateMipBytes = Simulation.PoliticalPlate.PaintDirtyMipmappedInto(
+                source, prevPlateOwners, owners, authoredOwners, colors, shades,
+                forceFullPlate, ref _plateMipScratch, out _);
+            var image = Image.CreateFromData(source.Width, source.Height, true, Image.Format.Rgba8, plateMipBytes);
+            Image frontier = null;
+            ushort[] frontierDoneOwners = null;
+            if (frontierAuthored is not null)
+            {
+                frontier = FrontierImageDirtyInto(
+                    frontierAuthored, topology, prevFrontierOwners, owners, authoredOwners, ref _frontierMipScratch);
+                if (frontier is not null) frontierDoneOwners = owners;
+            }
+            return (image, frontier, frontierDoneOwners);
         });
+    }
+
+    private static Image FrontierImageDirtyInto(
+        ushort[] authored, Simulation.ProvinceTopology topology,
+        ushort[] prevOwners, ushort[] owners, ushort[] authoredOwners, ref byte[] mipScratch)
+    {
+        if (authored is null || topology?.CellToProvince is null) return null;
+        var width = topology.Width;
+        var height = topology.Height;
+        if (authored.Length < width * height || topology.CellToProvince.Length < width * height) return null;
+        var mipBytes = Simulation.FrontierField.BuildDirtyMipmappedInto(
+            authored, topology.CellToProvince, width, height, prevOwners, owners, authoredOwners,
+            forceFull: false, ref mipScratch, out _);
+        return Image.CreateFromData(width, height, true, Image.Format.R8, mipBytes);
     }
 
     /// <summary>
@@ -182,8 +304,9 @@ public sealed partial class GlobePresentation
     }
 
     /// <summary>Called every frame: swaps a finished plate in, and starts a waiting one. Returns true when a large map texture uploaded this frame.</summary>
-    private bool PollPlateRepaint()
+    private bool PollPlateRepaint(ushort[] ownersOverride = null, bool? fastForwardOverride = null)
     {
+        PollGpuMapComputeBinding();
         if (_pendingPlateUpload is { } pendingPlate)
         {
             _pendingPlateUpload = null;
@@ -194,7 +317,7 @@ public sealed partial class GlobePresentation
                 _pendingPlateOwners = null;
                 // The plate has caught up: the stopgap table has nothing left to say about
                 // the provinces this repaint covered.
-                UploadPlateCatchUp();
+                UploadPlateCatchUp(ownersOverride);
             }
             finally
             {
@@ -209,6 +332,7 @@ public sealed partial class GlobePresentation
             if (done.IsCompletedSuccessfully && done.Result.Plate is { } image)
             {
                 var frontier = done.Result.Frontier;
+                var frontierDoneOwners = done.Result.FrontierOwners;
                 _plateWorkStartedStale = false;
                 if (frontier is not null)
                 {
@@ -216,7 +340,11 @@ public sealed partial class GlobePresentation
                     // separate frames so a single frame never uploads 32 MB of mipmapped textures at once.
                     _pendingPlateUpload = image;
                     _pendingPlateOwners = _plateWorkOwners;
-                    try { ApplyFrontier(frontier); }
+                    try
+                    {
+                        ApplyFrontier(frontier);
+                        if (frontierDoneOwners is not null) _frontierShownOwners = frontierDoneOwners;
+                    }
                     finally { frontier.Dispose(); }
                     uploaded = true;
                 }
@@ -226,7 +354,7 @@ public sealed partial class GlobePresentation
                     {
                         if (_plateTexture is not null) _plateTexture.Update(image);
                         _plateShownOwners = _plateWorkOwners;
-                        UploadPlateCatchUp();
+                        UploadPlateCatchUp(ownersOverride);
                     }
                     finally
                     {
@@ -257,8 +385,8 @@ public sealed partial class GlobePresentation
             _plateWorkOwners = null;
             return uploaded;
         }
-        if (_platePending && _pendingPlateUpload is null && _campaign?.ProvinceMap is { } topology)
-            TryStartPlateRepaint(topology);
+        if (_platePending && _pendingPlateUpload is null && (_provinceTopology ?? _campaign?.ProvinceMap) is { } topology)
+            TryStartPlateRepaint(topology, ownersOverride, fastForwardOverride);
         return false;
     }
 
@@ -266,11 +394,13 @@ public sealed partial class GlobePresentation
     /// The provinces the plate on screen has not caught up with (PoliticalPlate.PackCatchUp),
     /// uploaded as the table both materials lay over the plate sample. Empty almost always.
     /// </summary>
-    private void UploadPlateCatchUp()
+    private void UploadPlateCatchUp(ushort[] ownersOverride = null)
     {
-        if (_campaign?.ProvinceMap is not { } topology || _globeMaterial is null) return;
+        var topology = _provinceTopology ?? _campaign?.ProvinceMap;
+        if (topology is null || _globeMaterial is null) return;
+        var currentOwners = ownersOverride is { Length: > 0 } ? ownersOverride : topology.ProvinceToNation;
         var pixels = _ownerPixels ??= new byte[256 * 256 * 4];
-        Simulation.PoliticalPlate.PackCatchUp(topology.ProvinceCount, topology.ProvinceToNation,
+        Simulation.PoliticalPlate.PackCatchUp(topology.ProvinceCount, currentOwners,
             _plateShownOwners, _colorByMapIndex, Simulation.MapBorderStyles.PlateShades().Inland, pixels);
         if (_ownerImage is null) _ownerImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _ownerImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);

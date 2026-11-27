@@ -244,10 +244,14 @@ public static class OpinionSystem
         geopolitics = 0f;
         if (campaign is null || leftNation is null || rightNation is null || leftNation.Id == rightNation.Id) return;
 
-        var leftClaim = LostLands.HasClaimedLand(campaign, leftNation, rightNation);
-        var rightClaim = LostLands.HasClaimedLand(campaign, rightNation, leftNation);
-        var leftHome = TerritorialClaims.HoldsOurHomeland(campaign, leftNation, rightNation);
-        var rightHome = TerritorialClaims.HoldsOurHomeland(campaign, rightNation, leftNation);
+        var disputes = campaign.Caches.TerritorialDisputes;
+        var useDisputeIndex = disputes.IsActiveFor(campaign);
+        var mayLeft = !useDisputeIndex || disputes.MayHaveDispute(leftNation.Id, rightNation.Id);
+        var mayRight = !useDisputeIndex || disputes.MayHaveDispute(rightNation.Id, leftNation.Id);
+        var leftClaim = mayLeft && LostLands.HasClaimedLand(campaign, leftNation, rightNation);
+        var rightClaim = mayRight && LostLands.HasClaimedLand(campaign, rightNation, leftNation);
+        var leftHome = mayLeft && TerritorialClaims.HoldsOurHomeland(campaign, leftNation, rightNation);
+        var rightHome = mayRight && TerritorialClaims.HoldsOurHomeland(campaign, rightNation, leftNation);
         if (leftClaim || rightClaim || leftHome || rightHome)
         {
             var wLeft = leftClaim ? MathF.Max(0.25f, LostLands.Weight(campaign, leftNation, rightNation)) : (leftHome ? 0.50f : 0f);

@@ -8,8 +8,8 @@ static class VersionLabelTests
     {
         var label = GameBuildInfo.VersionLabel;
         var version = GameBuildInfo.Version;
-        if (!string.Equals(label, "PortAlpha 0.8.8.2", StringComparison.Ordinal) ||
-            !string.Equals(version, "0.8.8.2", StringComparison.Ordinal) ||
+        if (!string.Equals(label, "PortAlpha 0.8.8.6", StringComparison.Ordinal) ||
+            !string.Equals(version, "0.8.8.6", StringComparison.Ordinal) ||
             label.StartsWith("EntertAlpha ", StringComparison.Ordinal) ||
             label.StartsWith("DoF ", StringComparison.Ordinal) ||
             label.StartsWith("ReimAlpha 2", StringComparison.Ordinal))

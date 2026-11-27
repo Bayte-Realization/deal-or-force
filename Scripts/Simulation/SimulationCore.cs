@@ -715,6 +715,13 @@ public sealed partial class Campaign
     /// only the ownership arrays key on this instead and survive a war's daily captures.
     /// </summary>
     internal int OwnershipRevision { get; private set; }
+    /// <summary>
+    /// Bumped ONLY when <see cref="ProvinceTopology.ProvinceToState"/> or carved region membership
+    /// changes (state partition, reunification, colonisation). Survives ordinary peace treaties and
+    /// ownership transfers so region-based formable territories never rebuild needlessly.
+    /// </summary>
+    internal int RegionLayoutRevision { get; private set; }
+    internal void BumpRegionLayoutRevision() => RegionLayoutRevision++;
     public int LastTacticalDoctrineDay = -1;
     internal int LastTacticalCourseDay = -1;
     public int LastStrategicDoctrineDay = -1;

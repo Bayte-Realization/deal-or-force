@@ -19,7 +19,7 @@ body:
     attributes:
       label: Version / Версия
       description: Shown at the bottom of the main menu. / Внизу главного меню.
-      placeholder: PortAlpha 0.8.8.2
+      placeholder: PortAlpha 0.8.8.6
     validations:
       required: true
   - type: textarea

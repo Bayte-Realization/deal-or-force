@@ -208,7 +208,7 @@ public sealed partial class GlobePresentation
         const int scale = 3;
         const int w = width * scale;
         const int h = height * scale;
-        var image = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
+        using var image = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
         var outerDark = new Color(0.03f, 0.06f, 0.09f, 0.98f);
         var frameTeal = new Color(0.24f, 0.46f, 0.56f, 0.98f);
         var brassRim = Ui.Colour("map.counter_rim", 0.96f);

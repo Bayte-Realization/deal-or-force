@@ -441,7 +441,7 @@ public sealed partial class GlobePresentation
     private int _lastFlatMobileSupportCount = -1;
     private readonly List<(Node3D Node, float BaseX, float WrappedX)> _flatFleetWrapCache = new();
     private readonly List<(SupportMapMarker Marker, float BaseX, float WrappedX)> _flatSupportWrapCache = new();
-    private readonly List<(Node3D Node, Vector3 Normal, float BaseX, float WrappedX)> _flatBattleWrapCache = new();
+    private readonly List<(BattleMarkerEntry Entry, float BaseX, float WrappedX)> _flatBattleWrapCache = new();
     private readonly List<(ArmyStackMarker Marker, float BaseX, float WrappedX)> _flatArmyWrapCache = new();
     private ulong _lastFlatPausedArmyMsec;
     private ulong _nextFlatLeaderRedrawMsec;
@@ -578,10 +578,9 @@ public sealed partial class GlobePresentation
             _flatBattleWrapCache.Capacity = Math.Max(_flatBattleWrapCache.Capacity, _battleMarkers.Count);
             foreach (var marker in _battleMarkers.Values)
             {
-                if (!IsInstanceValid(marker.Node)) continue;
                 var geo = GeographicFromNormal(marker.Normal);
                 var baseX = geo.Longitude / 360f * FlatMapWidth;
-                _flatBattleWrapCache.Add((marker.Node, marker.Normal, baseX, DateLineSeam.NearestCopy(baseX, _flatX, FlatMapWidth)));
+                _flatBattleWrapCache.Add((marker, baseX, DateLineSeam.NearestCopy(baseX, _flatX, FlatMapWidth)));
             }
         }
         else if (xChanged)
@@ -618,12 +617,15 @@ public sealed partial class GlobePresentation
                 var entry = _flatBattleWrapCache[i];
                 var wrappedX = DateLineSeam.NearestCopy(entry.BaseX, _flatX, FlatMapWidth);
                 if (wrappedX == entry.WrappedX) continue;
-                _flatBattleWrapCache[i] = (entry.Node, entry.Normal, entry.BaseX, wrappedX);
-                if (!IsInstanceValid(entry.Node)) continue;
-                PositionBattleMarker(entry.Node, entry.Normal);
+                _flatBattleWrapCache[i] = (entry.Entry, entry.BaseX, wrappedX);
+                PositionBattleMarker(entry.Entry);
                 anyBattleWrapped = true;
             }
-            if (anyBattleWrapped) _battleMarkerDay = -1;
+            if (anyBattleWrapped)
+            {
+                FinishBattleMarkers();
+                _battleMarkerDay = -1;
+            }
         }
 
         if (simOrCountDirty || zoomChanged || unpausedArmyTick)

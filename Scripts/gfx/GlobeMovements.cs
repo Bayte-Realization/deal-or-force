@@ -418,7 +418,7 @@ public sealed partial class GlobePresentation
                     var width = Math.Max(1, (int)MathF.Floor(image.GetWidth() * scale));
                     var height = Math.Max(1, (int)MathF.Floor(image.GetHeight() * scale));
                     image.Resize(width, height, Image.Interpolation.Lanczos);
-                    var canvas = Image.CreateEmpty(128, 128, false, Image.Format.Rgba8);
+                    using var canvas = Image.CreateEmpty(128, 128, false, Image.Format.Rgba8);
                     canvas.Fill(Colors.Transparent);
                     canvas.BlitRect(image, new Rect2I(0, 0, width, height),
                         new Vector2I((128 - width) / 2, (128 - height) / 2));
@@ -450,7 +450,7 @@ public sealed partial class GlobePresentation
         private static Texture2D CircleTexture(float inner, float outer)
         {
             const int size = 128;
-            var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+            using var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
             var centre = (size - 1) / 2f;
             for (var y = 0; y < size; y++)
             for (var x = 0; x < size; x++)

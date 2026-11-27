@@ -16,7 +16,8 @@ internal static class DemographyRulesFSharpBoot
                 DealOrForce.Rules.DemographyRules.WorkingShare,
                 DealOrForce.Rules.DemographyRules.FertilityFactor,
                 DealOrForce.Rules.DemographyRules.MortalityFactor,
-                StepCohorts);
+                StepCohorts,
+                builtInEquivalent: true);
             DiagnosticLogs.Write("simulation", "RULES_BACKEND fsharp installed=demography");
         }
         catch (Exception error)

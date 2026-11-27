@@ -43,6 +43,91 @@ public static class FrontierField
     private static ushort[] _poolHolders;
     private static float[] _poolDistance;
     private static float[] _poolAcross;
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ushort[], ProvinceRasterBounds> BoundsCache = new();
+    [ThreadStatic] private static System.Collections.Generic.List<RasterDirtyRect> _dirtyRectScratch;
+
+    /// <summary>Exact dependency padding around a changed province (Cap + Gaussian radius + safety margin).</summary>
+    public const int DirtyPadCells = 26;
+
+    /// <summary>
+    /// Incrementally updates a persistent mipmapped R8 frontier buffer (<c>level 0</c> + full mipmap chain)
+    /// touching only the bounding boxes of provinces whose owners changed since <paramref name="prevOwners"/>.
+    /// Produces bit-exact level-0 bytes matching full <see cref="Build"/>.
+    /// </summary>
+    public static byte[] BuildDirtyMipmappedInto(
+        ushort[] authoredHolders,
+        ushort[] cellToProvince,
+        int width,
+        int height,
+        ushort[] prevOwners,
+        ushort[] owners,
+        ushort[] authoredOwners,
+        bool forceFull,
+        ref byte[] mipBuffer,
+        out bool usedIncremental)
+    {
+        if (authoredHolders is null || cellToProvince is null) throw new ArgumentNullException(nameof(authoredHolders));
+        if (width <= 0 || height <= 0) throw new ArgumentException("The field dimensions must be positive.");
+        var cells = checked(width * height);
+        if (authoredHolders.Length < cells || cellToProvince.Length < cells)
+            throw new ArgumentException("The grids are smaller than the field asked for.");
+
+        var mipBytes = NativeRasterBake.ComputeMipmapChainBytes(width, height, 1);
+        var needFull = forceFull || mipBuffer is null || mipBuffer.Length != mipBytes || prevOwners is null;
+        if (mipBuffer is null || mipBuffer.Length != mipBytes)
+            mipBuffer = new byte[mipBytes];
+
+        var rects = _dirtyRectScratch ??= new System.Collections.Generic.List<RasterDirtyRect>(16);
+        rects.Clear();
+        if (!needFull)
+        {
+            var bounds = BoundsCache.GetValue(cellToProvince, key => ProvinceRasterBounds.Build(key, width, height));
+            var any = bounds.ComputeDirtyRects(prevOwners, owners, DirtyPadCells, rects, out needFull, disallowDateLineEdge: true);
+            if (!any && !needFull)
+            {
+                usedIncremental = true;
+                return mipBuffer;
+            }
+        }
+
+        if (!needFull && rects.Count > 0)
+        {
+            var allNative = true;
+            for (var i = 0; i < rects.Count; i++)
+            {
+                var r = rects[i];
+                if (!NativeRasterBake.TryBakeFrontierRectInto(
+                        authoredHolders, cellToProvince, width, height, owners, authoredOwners,
+                        Cap, Smoothing, r.X0, r.Y0, r.X1, r.Y1, mipBuffer))
+                {
+                    allNative = false;
+                    break;
+                }
+            }
+            if (allNative)
+            {
+                for (var i = 0; i < rects.Count; i++)
+                {
+                    var r = rects[i];
+                    if (!NativeRasterBake.TryMipmapR8Rect(width, height, r.X0, r.Y0, r.X1, r.Y1, mipBuffer))
+                        ProvinceRasterBounds.MipmapR8RectManaged(width, height, r.X0, r.Y0, r.X1, r.Y1, mipBuffer);
+                }
+                usedIncremental = true;
+                return mipBuffer;
+            }
+        }
+
+        // Full rebuild fallback (first bake, date-line wrap, >45% dirty, or pure-C# mode).
+        if (!NativeKernelsLoader.EnableRasterDefault ||
+            !NativeRasterBake.TryBakeInto(authoredHolders, cellToProvince, width, height, owners, authoredOwners, Cap, Smoothing, mipBuffer))
+        {
+            BuildManagedInto(authoredHolders, cellToProvince, width, height, owners, authoredOwners, mipBuffer);
+        }
+        if (!NativeRasterBake.TryMipmapR8Rect(width, height, 0, 0, width, height, mipBuffer))
+            ProvinceRasterBounds.MipmapR8RectManaged(width, height, 0, 0, width, height, mipBuffer);
+        usedIncremental = false;
+        return mipBuffer;
+    }
 
     private static ParallelOptions BoundedParallel => new()
     {

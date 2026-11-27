@@ -69,7 +69,7 @@ public static class AirReconnaissance
                 foreach (var war in Warfare.OpenWars(c))
                 {
                     if (war.Ended || !war.Involves(viewerId)) continue;
-                    var attacking = war.Side(true).Contains(viewerId);
+                    var attacking = war.IsAttacking(viewerId);
                     foreach (var enemyId in war.Side(!attacking))
                         if (c.NationById(enemyId) is { } enemy) enemies.Add(enemy.MapIndex);
                 }

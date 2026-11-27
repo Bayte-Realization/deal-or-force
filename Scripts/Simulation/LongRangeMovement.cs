@@ -1283,7 +1283,7 @@ public static partial class LongRangeMovement
         formation.BaseProvinceId = -1;
         formation.DeployDaysLeft = 0;
         formation.CutOff = false;
-        if (DiagnosticLogs.Enabled)
+        if (DiagnosticLogs.VerboseSimulation)
             DiagnosticLogs.Write("orders", $"SUPPORT_RELOCATE formation={formation.Id} nation={formation.NationId} " +
                 $"from={At(formation)} to={plan.Destination} steps={plan.Route.Count} days={plan.Days}");
         return true;

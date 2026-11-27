@@ -442,6 +442,7 @@ public static class UnclaimedLand
                     c.States.Add(state);
                 }
                 map.ProvinceToState[province] = (ushort)state.MapIndex;
+                c.BumpRegionLayoutRevision();
                 c.InvalidateStateIndex();
             }
         }

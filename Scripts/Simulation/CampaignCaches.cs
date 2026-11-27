@@ -21,7 +21,7 @@ public sealed partial class Campaign
 /// Container of lazily initialized derived caches owned by a single <see cref="Campaign"/>.
 /// Every slot is non-persisted and safe to drop or rebuild from authoritative campaign data.
 /// </summary>
-internal sealed class CampaignCaches
+internal sealed partial class CampaignCaches
 {
     private AiStrategyPostureCache _aiStrategyPosture;
     private AiTemperamentCache _aiTemperament;
@@ -225,13 +225,17 @@ internal sealed class CampaignCaches
     internal sealed class PeacefulFormationCache
     {
         public readonly object TerritoryGate = new();
-        public int TerritoryOwnershipRevision = int.MinValue;
+        public ProvinceTopology TerritoryMap;
+        public int TerritoryRegionLayoutRevision = int.MinValue;
         public int TerritoryStateCount = -1;
+        public readonly Dictionary<string, int[]> StaticTerritory = new();
+        public readonly Dictionary<string, HashSet<int>> StaticLandTerritory = new();
         public readonly Dictionary<string, int[]> Territory = new();
         public readonly Dictionary<string, HashSet<int>> LandTerritory = new();
 
         public readonly object RegionGate = new();
-        public int RegionOwnershipRevision = int.MinValue;
+        public ProvinceTopology RegionMap;
+        public int RegionLayoutRevision = int.MinValue;
         public int RegionStateCount = -1;
         public readonly Dictionary<string, int[]> Regions = new();
     }

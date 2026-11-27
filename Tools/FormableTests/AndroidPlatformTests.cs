@@ -1638,11 +1638,12 @@ static class AndroidPlatformTests
 
         var badgeSource = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "SurfaceBattleBadge.cs"));
         Check(!badgeSource.Contains("_plateMaterial?.Dispose()", StringComparison.Ordinal) &&
-              !badgeSource.Contains("_ownedTexture?.Dispose()", StringComparison.Ordinal),
-            "SurfaceBattleBadge._ExitTree avoids manual RefCounted Dispose() on _plateMaterial and _ownedTexture");
-        Check(badgeSource.Contains("_plateMaterial = null;", StringComparison.Ordinal) &&
-              badgeSource.Contains("_ownedTexture = null;", StringComparison.Ordinal),
-            "SurfaceBattleBadge._ExitTree clears _plateMaterial and _ownedTexture references cleanly");
+              !badgeSource.Contains("_ownedTexture?.Dispose()", StringComparison.Ordinal) &&
+              !badgeSource.Contains("new SubViewport", StringComparison.Ordinal),
+            "BattleBadgeGpu eliminates per-battle SubViewports and avoids manual RefCounted Dispose()");
+        Check(badgeSource.Contains("public static class BattleBadgeGpu", StringComparison.Ordinal) &&
+              badgeSource.Contains("CreateSharedMaterial", StringComparison.Ordinal),
+            "BattleBadgeGpu renders battle medallions through a single shared GPU-instanced material");
 
         var bordersSource = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobePresentation.BordersAndOverlays.cs"));
         Check(bordersSource.Contains("FindActiveBattle", StringComparison.Ordinal) &&

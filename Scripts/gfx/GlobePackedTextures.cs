@@ -54,7 +54,7 @@ public sealed partial class GlobePresentation
             }
             else
             {
-                var rgba = (Image)image.Duplicate();
+                using var rgba = (Image)image.Duplicate();
                 rgba.Convert(Image.Format.Rgba8);
                 _packedLookups.UpdateLayer(rgba, layer);
             }
@@ -68,7 +68,7 @@ public sealed partial class GlobePresentation
         {
             if (_packedIds.GetWidth() != 2)
                 throw new InvalidDataException("Geographic ID layers must have identical dimensions.");
-            var blank = Image.CreateEmpty(image.GetWidth(), image.GetHeight(), false, Image.Format.Rg8);
+            using var blank = Image.CreateEmpty(image.GetWidth(), image.GetHeight(), false, Image.Format.Rg8);
             _packedIds = CreateArray(blank, PackedMapShader.Ids.Count);
             _globeMaterial.SetShaderParameter("packed_ids", _packedIds);
         }

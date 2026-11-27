@@ -176,6 +176,7 @@ public sealed partial class StrategicWar
         private readonly int _leader;
         private readonly HashSet<int> _allies;
         internal SideEnumerable(int leader, HashSet<int> allies) { _leader = leader; _allies = allies; }
+        public bool Contains(int nationId) => _leader >= 0 && (nationId == _leader || (_allies is not null && _allies.Contains(nationId)));
         public Enumerator GetEnumerator() => new(_leader, _allies);
         IEnumerator<int> IEnumerable<int>.GetEnumerator() => GetEnumerator();
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
@@ -192,9 +193,9 @@ public sealed partial class StrategicWar
             {
                 _leader = leader;
                 _allies = allies;
-                _hasAllies = allies is { Count: > 0 };
+                _hasAllies = leader >= 0 && allies is { Count: > 0 };
                 _alliesEnum = _hasAllies ? allies.GetEnumerator() : default;
-                _state = 0;
+                _state = leader >= 0 ? 0 : 2;
                 _current = 0;
             }
             public int Current => _current;
@@ -208,7 +209,7 @@ public sealed partial class StrategicWar
             }
             public void Reset()
             {
-                _state = 0;
+                _state = _leader >= 0 ? 0 : 2;
                 _current = 0;
                 _alliesEnum = _hasAllies ? _allies.GetEnumerator() : default;
             }
@@ -220,11 +221,11 @@ public sealed partial class StrategicWar
         new(attacking ? AttackerId : DefenderId, attacking ? AttackerAllies : DefenderAllies);
 
     /// <summary>Everybody this country is fighting, leader first. Empty if it is not in the war.</summary>
-    public IEnumerable<int> EnemiesOf(int nationId)
+    public SideEnumerable EnemiesOf(int nationId)
     {
         if (IsAttacking(nationId)) return Side(false);
         if (IsDefending(nationId)) return Side(true);
-        return Array.Empty<int>();
+        return new(-1, null);
     }
 
     /// <summary>How many countries are in it. Two is the ordinary war.</summary>

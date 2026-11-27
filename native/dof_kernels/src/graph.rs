@@ -71,6 +71,7 @@ pub struct DofGraphScratch {
     land_counts: Vec<i32>,
     held_stamp: Vec<u32>,
     held_counts: Vec<i32>,
+    pair_scratch: Vec<u32>,
 }
 
 const MAX_VERTICES: usize = 1_000_000;
@@ -245,6 +246,7 @@ impl DofGraphScratch {
             land_counts: vec![0; MAX_U16_STATES],
             held_stamp: vec![0; MAX_U16_STATES],
             held_counts: vec![0; MAX_U16_STATES],
+            pair_scratch: Vec::with_capacity(4096),
         })
     }
 
@@ -723,4 +725,248 @@ pub fn owner_components(
     }
 
     Ok((components, tail as i32))
+}
+
+/// Fast CSR border adjacency scan matching `CampaignDiplomacy.Borders`.
+/// Emits sorted unique `(owner << 16) | other` packed u32 pairs where `owner != 0 && other != 0 && owner != other`.
+pub fn border_pairs(
+    graph: &DofProvinceGraph,
+    scratch: &mut DofGraphScratch,
+    controllers: &[u16],
+    out_pairs: &mut [u32],
+) -> Result<usize, i32> {
+    let n = graph.province_count;
+    if controllers.len() < n {
+        return Err(-2);
+    }
+
+    scratch.pair_scratch.clear();
+    let offsets = &graph.csr_offsets;
+    let edges = &graph.csr_edges;
+
+    let mut last_packed = 0u32;
+    for province in 1..n {
+        let owner = unsafe { *controllers.get_unchecked(province) };
+        if owner == 0 {
+            continue;
+        }
+        let begin = unsafe { *offsets.get_unchecked(province) as usize };
+        let end = unsafe { *offsets.get_unchecked(province + 1) as usize };
+        let owner_hi = (owner as u32) << 16;
+        for ei in begin..end {
+            let nb = unsafe { *edges.get_unchecked(ei) as usize };
+            let other = unsafe { *controllers.get_unchecked(nb) };
+            if other == 0 || other == owner {
+                continue;
+            }
+            let packed = owner_hi | (other as u32);
+            if packed != last_packed {
+                scratch.pair_scratch.push(packed);
+                last_packed = packed;
+            }
+        }
+    }
+
+    scratch.pair_scratch.sort_unstable();
+    scratch.pair_scratch.dedup();
+    let count = scratch.pair_scratch.len();
+    if count > out_pairs.len() {
+        return Err(-3);
+    }
+    out_pairs[..count].copy_from_slice(&scratch.pair_scratch);
+    Ok(count)
+}
+
+/// Fast occupation census matching `Warfare.MeasureOccupation`.
+/// Scans `1..=province_count`, returning sorted `(orig, home_count)` and sorted `((orig << 16) | ctrl, occ_count)`.
+#[allow(clippy::too_many_arguments)]
+pub fn occupation_census(
+    scratch: &mut DofGraphScratch,
+    province_to_nation: &[u16],
+    controllers: &[u16],
+    province_count: usize,
+    out_home_keys: &mut [u16],
+    out_home_counts: &mut [i32],
+    out_occ_pairs: &mut [u32],
+    out_occ_counts: &mut [i32],
+) -> Result<(usize, usize), i32> {
+    if province_count + 1 > province_to_nation.len() || province_count + 1 > controllers.len() {
+        return Err(-2);
+    }
+    if out_home_keys.len() != out_home_counts.len() || out_occ_pairs.len() != out_occ_counts.len() {
+        return Err(-2);
+    }
+
+    let gen_id = scratch.bump_log_gen();
+    scratch.pair_scratch.clear();
+    scratch.bfs_queue.clear();
+
+    for p in 1..=province_count {
+        let orig = unsafe { *province_to_nation.get_unchecked(p) };
+        if orig == 0 {
+            continue;
+        }
+        let oi = orig as usize;
+        if scratch.land_stamp[oi] != gen_id {
+            scratch.land_stamp[oi] = gen_id;
+            scratch.land_counts[oi] = 1;
+            scratch.bfs_queue.push(orig as u32);
+        } else {
+            scratch.land_counts[oi] += 1;
+        }
+        let ctrl = unsafe { *controllers.get_unchecked(p) };
+        if ctrl != 0 && ctrl != orig {
+            scratch.pair_scratch.push(((orig as u32) << 16) | (ctrl as u32));
+        }
+    }
+
+    scratch.bfs_queue.sort_unstable();
+    let home_len = scratch.bfs_queue.len();
+    if home_len > out_home_keys.len() {
+        return Err(-3);
+    }
+    for (i, &k) in scratch.bfs_queue.iter().enumerate() {
+        out_home_keys[i] = k as u16;
+        out_home_counts[i] = scratch.land_counts[k as usize];
+    }
+
+    scratch.pair_scratch.sort_unstable();
+    let mut occ_len = 0usize;
+    let mut i = 0usize;
+    let plen = scratch.pair_scratch.len();
+    while i < plen {
+        let key = scratch.pair_scratch[i];
+        let mut cnt = 1i32;
+        i += 1;
+        while i < plen && scratch.pair_scratch[i] == key {
+            cnt += 1;
+            i += 1;
+        }
+        if occ_len >= out_occ_pairs.len() {
+            return Err(-3);
+        }
+        out_occ_pairs[occ_len] = key;
+        out_occ_counts[occ_len] = cnt;
+        occ_len += 1;
+    }
+
+    Ok((home_len, occ_len))
+}
+
+/// Bit-exact CSR BFS vision flood matching `CampaignIntel.FloodVision`.
+/// Applies `(seeds[i], seed_depths[i])` into `reach` and floods outwards along `csr_edges`.
+pub fn flood_vision(
+    graph: &DofProvinceGraph,
+    scratch: &mut DofGraphScratch,
+    reach: &mut [u8],
+    seeds: &[i32],
+    seed_depths: &[u8],
+) -> Result<(), i32> {
+    let n = graph.province_count;
+    if reach.len() < n || seeds.len() != seed_depths.len() {
+        return Err(-2);
+    }
+    scratch.bfs_queue.clear();
+    for i in 0..seeds.len() {
+        let p = seeds[i];
+        if p <= 0 || (p as usize) >= n {
+            continue;
+        }
+        let pu = p as usize;
+        let level = seed_depths[i].saturating_add(1);
+        if reach[pu] < level {
+            reach[pu] = level;
+            scratch.bfs_queue.push(pu as u32);
+        }
+    }
+
+    let offsets = &graph.csr_offsets;
+    let edges = &graph.csr_edges;
+    let mut head = 0usize;
+    while head < scratch.bfs_queue.len() {
+        let u = scratch.bfs_queue[head] as usize;
+        head += 1;
+        let cur = reach[u];
+        if cur < 2 {
+            continue;
+        }
+        let next_level = cur - 1;
+        let begin = unsafe { *offsets.get_unchecked(u) as usize };
+        let end = unsafe { *offsets.get_unchecked(u + 1) as usize };
+        for ei in begin..end {
+            let v = unsafe { *edges.get_unchecked(ei) as usize };
+            if v > 0 && v < n && reach[v] < next_level {
+                reach[v] = next_level;
+                scratch.bfs_queue.push(v as u32);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Clears `reach`, marks `owned_provinces` at `border_depth + 1`, enqueues border tiles only,
+/// and floods outwards in flat CSR matching `CampaignIntel.Vision` territory cache build.
+pub fn seed_territory_vision(
+    graph: &DofProvinceGraph,
+    scratch: &mut DofGraphScratch,
+    owned_provinces: &[i32],
+    border_depth: u8,
+    reach: &mut [u8],
+) -> Result<(), i32> {
+    let n = graph.province_count;
+    if reach.len() < n {
+        return Err(-2);
+    }
+    reach[..n].fill(0);
+    let own_level = border_depth.saturating_add(1);
+    for &p in owned_provinces {
+        if p > 0 && (p as usize) < n {
+            reach[p as usize] = own_level;
+        }
+    }
+    if border_depth == 0 {
+        return Ok(());
+    }
+
+    scratch.bfs_queue.clear();
+    let offsets = &graph.csr_offsets;
+    let edges = &graph.csr_edges;
+    for &p in owned_provinces {
+        if p <= 0 || (p as usize) >= n {
+            continue;
+        }
+        let u = p as usize;
+        let begin = unsafe { *offsets.get_unchecked(u) as usize };
+        let end = unsafe { *offsets.get_unchecked(u + 1) as usize };
+        for ei in begin..end {
+            let v = unsafe { *edges.get_unchecked(ei) as usize };
+            if v > 0 && v < n && reach[v] < own_level {
+                scratch.bfs_queue.push(u as u32);
+                break;
+            }
+        }
+    }
+
+    let mut head = 0usize;
+    while head < scratch.bfs_queue.len() {
+        let u = scratch.bfs_queue[head] as usize;
+        head += 1;
+        let cur = reach[u];
+        if cur < 2 {
+            continue;
+        }
+        let next_level = cur - 1;
+        let begin = unsafe { *offsets.get_unchecked(u) as usize };
+        let end = unsafe { *offsets.get_unchecked(u + 1) as usize };
+        for ei in begin..end {
+            let v = unsafe { *edges.get_unchecked(ei) as usize };
+            if v > 0 && v < n && reach[v] < next_level {
+                reach[v] = next_level;
+                scratch.bfs_queue.push(v as u32);
+            }
+        }
+    }
+
+    Ok(())
 }

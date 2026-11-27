@@ -117,6 +117,249 @@ public static partial class NativeRasterBake
         byte* outPixelsRgba,
         uint outPixelsLen);
 
+    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern unsafe int dof_raster_paint_plate_rect_v1(
+        uint width,
+        uint height,
+        ushort* sourceHolders,
+        ushort* sourceProvinces,
+        byte* sourceGeography,
+        ushort* owners,
+        uint ownersLen,
+        ushort* authoredOwners,
+        uint authoredOwnersLen,
+        uint* paletteRgba,
+        uint paletteLen,
+        float countryShade,
+        float regionShade,
+        float inlandShade,
+        uint rectX0,
+        uint rectY0,
+        uint rectX1,
+        uint rectY1,
+        byte* outPixelsRgba,
+        uint outPixelsLen);
+
+    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern unsafe int dof_raster_bake_frontier_rect_v1(
+        IntPtr bake,
+        ushort* owners,
+        uint ownersLen,
+        ushort* authoredOwners,
+        uint authoredOwnersLen,
+        float cap,
+        float smoothing,
+        uint rectX0,
+        uint rectY0,
+        uint rectX1,
+        uint rectY1,
+        byte* outBytes,
+        uint outLen);
+
+    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern unsafe int dof_raster_mipmap_rgba8_rect_v1(
+        uint width,
+        uint height,
+        uint rectX0,
+        uint rectY0,
+        uint rectX1,
+        uint rectY1,
+        byte* mipBuffer,
+        uint mipLen);
+
+    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern unsafe int dof_raster_mipmap_r8_rect_v1(
+        uint width,
+        uint height,
+        uint rectX0,
+        uint rectY0,
+        uint rectX1,
+        uint rectY1,
+        byte* mipBuffer,
+        uint mipLen);
+
+    /// <summary>Total byte count of a Godot packed mipmap pyramid (level 0 down to 1x1 inclusive).</summary>
+    public static int ComputeMipmapChainBytes(int width, int height, int bytesPerPixel)
+    {
+        if (width <= 0 || height <= 0 || bytesPerPixel <= 0) return 0;
+        long w = width, h = height, total = 0;
+        while (true)
+        {
+            total += w * h * bytesPerPixel;
+            if (w == 1 && h == 1) break;
+            w = Math.Max(1L, w >> 1);
+            h = Math.Max(1L, h >> 1);
+        }
+        return total > int.MaxValue ? 0 : (int)total;
+    }
+
+    public static unsafe bool TryPaintPoliticalPlateRect(
+        int width,
+        int height,
+        ushort[] sourceHolders,
+        ushort[] sourceProvinces,
+        byte[] sourceGeography,
+        ushort[]? owners,
+        ushort[]? authoredOwners,
+        uint[] paletteRgba,
+        float countryShade,
+        float regionShade,
+        float inlandShade,
+        int rectX0,
+        int rectY0,
+        int rectX1,
+        int rectY1,
+        byte[] outPixelsRgba)
+    {
+        if (!NativeKernelsLoader.EnableRasterDefault ||
+            !NativeKernelsLoader.EnableIncrementalRasterDefault ||
+            !NativeKernelsLoader.HasCapability(NativeKernelsLoader.CapIncrementalRaster))
+        {
+            return false;
+        }
+        if (width <= 0 || height <= 0 ||
+            sourceHolders is null || sourceProvinces is null || sourceGeography is null ||
+            paletteRgba is null || outPixelsRgba is null)
+        {
+            return false;
+        }
+        var x0 = Math.Clamp(rectX0, 0, width);
+        var y0 = Math.Clamp(rectY0, 0, height);
+        var x1 = Math.Clamp(rectX1, 0, width);
+        var y1 = Math.Clamp(rectY1, 0, height);
+        if (x0 >= x1 || y0 >= y1) return true;
+        var cellsLong = (long)width * height;
+        var outNeededLong = cellsLong * 4L;
+        if (cellsLong <= 0 || outNeededLong > int.MaxValue) return false;
+        var cells = (int)cellsLong;
+        if (sourceHolders.Length < cells || sourceProvinces.Length < cells ||
+            sourceGeography.Length < cells || outPixelsRgba.Length < (int)outNeededLong)
+        {
+            return false;
+        }
+
+        fixed (ushort* holdersPtr = sourceHolders)
+        fixed (ushort* provPtr = sourceProvinces)
+        fixed (byte* geoPtr = sourceGeography)
+        fixed (ushort* ownersPtr = owners)
+        fixed (ushort* authoredPtr = authoredOwners)
+        fixed (uint* palPtr = paletteRgba)
+        fixed (byte* outPtr = outPixelsRgba)
+        {
+            return dof_raster_paint_plate_rect_v1(
+                (uint)width, (uint)height,
+                holdersPtr, provPtr, geoPtr,
+                ownersPtr, owners is null ? 0u : (uint)owners.Length,
+                authoredPtr, authoredOwners is null ? 0u : (uint)authoredOwners.Length,
+                palPtr, (uint)paletteRgba.Length,
+                countryShade, regionShade, inlandShade,
+                (uint)x0, (uint)y0, (uint)x1, (uint)y1,
+                outPtr, (uint)outPixelsRgba.Length) == 0;
+        }
+    }
+
+    public static unsafe bool TryBakeFrontierRectInto(
+        ushort[] authoredHolders,
+        ushort[]? cellToProvince,
+        int width,
+        int height,
+        ushort[]? owners,
+        ushort[]? authoredOwners,
+        float cap,
+        float smoothing,
+        int rectX0,
+        int rectY0,
+        int rectX1,
+        int rectY1,
+        byte[] output)
+    {
+        if (!NativeKernelsLoader.EnableRasterDefault ||
+            !NativeKernelsLoader.EnableIncrementalRasterDefault ||
+            !NativeKernelsLoader.HasCapability(NativeKernelsLoader.CapIncrementalRaster))
+        {
+            return false;
+        }
+        if (authoredHolders is null || output is null || width <= 0 || height <= 0) return false;
+        var x0 = Math.Clamp(rectX0, 0, width);
+        var y0 = Math.Clamp(rectY0, 0, height);
+        var x1 = Math.Clamp(rectX1, 0, width);
+        var y1 = Math.Clamp(rectY1, 0, height);
+        if (x0 >= x1 || y0 >= y1) return true;
+        var cells = (long)width * height;
+        if (cells <= 0 || cells > int.MaxValue || authoredHolders.Length < (int)cells || output.Length < (int)cells) return false;
+        if (cellToProvince is not null && cellToProvince.Length < (int)cells) return false;
+
+        var entry = GetOrCreateEntry(authoredHolders, cellToProvince, width, height);
+        if (entry is null) return false;
+
+        lock (entry.Gate)
+        {
+            if (entry.Handle.IsInvalid) return false;
+            fixed (ushort* ownersPtr = owners)
+            fixed (ushort* authoredOwnersPtr = authoredOwners)
+            fixed (byte* outPtr = output)
+            {
+                return dof_raster_bake_frontier_rect_v1(
+                    entry.Handle.DangerousGetHandle(),
+                    ownersPtr, owners is null ? 0u : (uint)owners.Length,
+                    authoredOwnersPtr, authoredOwners is null ? 0u : (uint)authoredOwners.Length,
+                    cap, smoothing,
+                    (uint)x0, (uint)y0, (uint)x1, (uint)y1,
+                    outPtr, (uint)output.Length) == 0;
+            }
+        }
+    }
+
+    public static unsafe bool TryMipmapRgba8Rect(
+        int width, int height, int rectX0, int rectY0, int rectX1, int rectY1, byte[] mipBuffer)
+    {
+        if (!NativeKernelsLoader.EnableRasterDefault ||
+            !NativeKernelsLoader.EnableIncrementalRasterDefault ||
+            !NativeKernelsLoader.HasCapability(NativeKernelsLoader.CapIncrementalRaster))
+        {
+            return false;
+        }
+        if (mipBuffer is null || width <= 0 || height <= 0) return false;
+        var needed = ComputeMipmapChainBytes(width, height, 4);
+        if (needed <= 0 || mipBuffer.Length < needed) return false;
+        var x0 = Math.Clamp(rectX0, 0, width);
+        var y0 = Math.Clamp(rectY0, 0, height);
+        var x1 = Math.Clamp(rectX1, 0, width);
+        var y1 = Math.Clamp(rectY1, 0, height);
+        if (x0 >= x1 || y0 >= y1) return true;
+        fixed (byte* ptr = mipBuffer)
+        {
+            return dof_raster_mipmap_rgba8_rect_v1(
+                (uint)width, (uint)height, (uint)x0, (uint)y0, (uint)x1, (uint)y1,
+                ptr, (uint)mipBuffer.Length) == 0;
+        }
+    }
+
+    public static unsafe bool TryMipmapR8Rect(
+        int width, int height, int rectX0, int rectY0, int rectX1, int rectY1, byte[] mipBuffer)
+    {
+        if (!NativeKernelsLoader.EnableRasterDefault ||
+            !NativeKernelsLoader.EnableIncrementalRasterDefault ||
+            !NativeKernelsLoader.HasCapability(NativeKernelsLoader.CapIncrementalRaster))
+        {
+            return false;
+        }
+        if (mipBuffer is null || width <= 0 || height <= 0) return false;
+        var needed = ComputeMipmapChainBytes(width, height, 1);
+        if (needed <= 0 || mipBuffer.Length < needed) return false;
+        var x0 = Math.Clamp(rectX0, 0, width);
+        var y0 = Math.Clamp(rectY0, 0, height);
+        var x1 = Math.Clamp(rectX1, 0, width);
+        var y1 = Math.Clamp(rectY1, 0, height);
+        if (x0 >= x1 || y0 >= y1) return true;
+        fixed (byte* ptr = mipBuffer)
+        {
+            return dof_raster_mipmap_r8_rect_v1(
+                (uint)width, (uint)height, (uint)x0, (uint)y0, (uint)x1, (uint)y1,
+                ptr, (uint)mipBuffer.Length) == 0;
+        }
+    }
+
     /// <summary>
     /// Packs the dense 256x256 RGBA province overlay tables via native <c>dof_kernels</c>.
     /// Returns <c>false</c> cleanly when unavailable or inputs fail validation so callers fall back to C#.

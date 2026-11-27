@@ -109,15 +109,6 @@ public sealed partial class GlobePresentation
     {
         if (!IsInstanceValid(_battleRoot) || !IsInstanceValid(_camera)) return;
         FinishBattleMarkers();
-        if (!_battleRoot.Visible) return;
-        var flatScale = _flatMap ? _counterWorldPixel * _counterFlatFar * BattleMarkerRadius() * 2f : 0f;
-        foreach (var marker in _battleMarkers.Values)
-        {
-            if (!IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
-            var width = _flatMap ? flatScale : SurfaceCounterWidth(marker.Node, "battle");
-            if (MathF.Abs(marker.Node.Scale.X - width) > 1e-6f)
-                marker.Node.Scale = Vector3.One * width;
-        }
     }
 
     private void CullRegionLabelsPastHorizon()

@@ -133,41 +133,163 @@ public static class PoliticalCohorts
         var row = validTable ? known.RowOf(place) : -1;
         double moodPeople = 0, moodLaw = 0, moodGov = 0, moodDiv = 0;
         double blocPeople = 0, b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0;
-        for (var index = 0; index < states.Length; index++)
+
+        // Batched Rust SIMD path when drifting >= 2 non-fresh regions with a valid AlienationTable.
+        if (span > 0 && validTable && states.Length >= 2 &&
+            Kernels.NativeKernelsLoader.EnablePoliticalCohortsDefault &&
+            Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapWartimeGraph))
         {
-            var state = states[index];
-            if (state is null || state.Population <= 0) continue;
-            var fresh = state.PoliticalDivergence < 0f || state.LawApproval < 0f || state.GovernmentApproval < 0f;
-            if (fresh) Seed(n, state);
-            var alienation = row >= 0
-                ? known.Values[row + index]
-                : row == -2 ? 0f : StateIdentity.RegionAlienation(c, n, state);
-            if (state.PoliticalBlocs is not { Length: 5 })
-                SeedBlocs(n, state, atWar, debt, alienation, mil, taxStress, marketAccess);
-            if (span > 0 && !fresh)
+            known.EnsureDriftScratch(states.Length);
+            var driftCount = 0;
+            var baseFlags = (byte)((debt ? 1 : 0) | (losing ? 2 : 0) | (recentPolitics ? 4 : 0) | (atWar ? 16 : 0));
+            for (var index = 0; index < states.Length; index++)
             {
+                var state = states[index];
+                if (state is null || state.Population <= 0) continue;
+                var fresh = state.PoliticalDivergence < 0f || state.LawApproval < 0f || state.GovernmentApproval < 0f;
+                if (fresh) Seed(n, state);
+                var alienation = row >= 0
+                    ? known.Values[row + index]
+                    : row == -2 ? 0f : StateIdentity.RegionAlienation(c, n, state);
+                if (state.PoliticalBlocs is not { Length: 5 })
+                    SeedBlocs(n, state, atWar, debt, alienation, mil, taxStress, marketAccess);
+                if (fresh) continue;
+
+                var di = driftCount++;
+                known.DriftStates[di] = state;
                 var capital = state.MapIndex == capitalMapIndex;
-                Drift(state, step, debt, losing, recentPolitics, shortage, stability, nationalLiving,
-                    capital, alienation);
-                DriftBlocs(state, blocStep, atWar, losing, debt, shortage, stability, nationalLiving,
-                    capital, alienation, mil, taxStress, marketAccess);
+                var bl = state.PoliticalBlocs;
+                var hasBlocs = bl is { Length: BlocCount };
+                known.DriftFlags[di] = (byte)(baseFlags | (capital ? 8 : 0) | (hasBlocs ? 32 : 0));
+                known.DriftStep[di] = step;
+                known.DriftBlocStep[di] = blocStep;
+                known.DriftShortage[di] = shortage;
+                known.DriftStability[di] = stability;
+                known.DriftNationalLiving[di] = nationalLiving;
+                known.DriftAlienation[di] = alienation;
+                known.DriftMil[di] = mil;
+                known.DriftTaxStress[di] = taxStress;
+                known.DriftMarketAccess[di] = marketAccess;
+                known.DriftLiteracy[di] = state.Literacy;
+                known.DriftUrbanization[di] = state.Urbanization;
+                known.DriftSol[di] = state.StandardOfLiving;
+                known.DriftRadicalism[di] = state.Radicalism;
+                known.DriftLaw[di] = state.LawApproval;
+                known.DriftGov[di] = state.GovernmentApproval;
+                known.DriftDiv[di] = state.PoliticalDivergence;
+                if (hasBlocs)
+                {
+                    var bo = di * BlocCount;
+                    known.DriftBlocs[bo] = bl![0];
+                    known.DriftBlocs[bo + 1] = bl[1];
+                    known.DriftBlocs[bo + 2] = bl[2];
+                    known.DriftBlocs[bo + 3] = bl[3];
+                    known.DriftBlocs[bo + 4] = bl[4];
+                }
             }
-            var pop = (double)state.Population;
-            if (state.PoliticalDivergence >= 0f)
+
+            var nativeDone = driftCount == 0 || Kernels.NativePoliticalKernels.TryDriftCohortsBatch(
+                driftCount,
+                known.DriftFlags, known.DriftStep, known.DriftBlocStep,
+                known.DriftShortage, known.DriftStability, known.DriftNationalLiving,
+                known.DriftAlienation, known.DriftMil, known.DriftTaxStress, known.DriftMarketAccess,
+                known.DriftLiteracy, known.DriftUrbanization, known.DriftSol, known.DriftRadicalism,
+                known.DriftLaw, known.DriftGov, known.DriftDiv, known.DriftBlocs);
+            if (nativeDone)
             {
-                moodPeople += pop;
-                moodLaw += pop * (double)M.Clamp01(state.LawApproval);
-                moodGov += pop * (double)M.Clamp01(state.GovernmentApproval);
-                moodDiv += pop * (double)M.Clamp01(state.PoliticalDivergence);
+                for (var di = 0; di < driftCount; di++)
+                {
+                    var state = known.DriftStates[di];
+                    state.LawApproval = known.DriftLaw[di];
+                    state.GovernmentApproval = known.DriftGov[di];
+                    state.PoliticalDivergence = known.DriftDiv[di];
+                    if ((known.DriftFlags[di] & 32) != 0 && state.PoliticalBlocs is { Length: BlocCount } bl)
+                    {
+                        var bo = di * BlocCount;
+                        bl[0] = known.DriftBlocs[bo];
+                        bl[1] = known.DriftBlocs[bo + 1];
+                        bl[2] = known.DriftBlocs[bo + 2];
+                        bl[3] = known.DriftBlocs[bo + 3];
+                        bl[4] = known.DriftBlocs[bo + 4];
+                    }
+                    known.DriftStates[di] = null;
+                }
             }
-            if (state.PoliticalBlocs is { Length: BlocCount } bl)
+            else
             {
-                blocPeople += pop;
-                b0 += pop * bl[0];
-                b1 += pop * bl[1];
-                b2 += pop * bl[2];
-                b3 += pop * bl[3];
-                b4 += pop * bl[4];
+                for (var di = 0; di < driftCount; di++)
+                {
+                    var state = known.DriftStates[di];
+                    var capital = (known.DriftFlags[di] & 8) != 0;
+                    Drift(state, step, debt, losing, recentPolitics, shortage, stability, nationalLiving,
+                        capital, known.DriftAlienation[di]);
+                    DriftBlocs(state, blocStep, atWar, losing, debt, shortage, stability, nationalLiving,
+                        capital, known.DriftAlienation[di], mil, taxStress, marketAccess);
+                    known.DriftStates[di] = null;
+                }
+            }
+
+            for (var index = 0; index < states.Length; index++)
+            {
+                var state = states[index];
+                if (state is null || state.Population <= 0) continue;
+                var pop = (double)state.Population;
+                if (state.PoliticalDivergence >= 0f)
+                {
+                    moodPeople += pop;
+                    moodLaw += pop * (double)M.Clamp01(state.LawApproval);
+                    moodGov += pop * (double)M.Clamp01(state.GovernmentApproval);
+                    moodDiv += pop * (double)M.Clamp01(state.PoliticalDivergence);
+                }
+                if (state.PoliticalBlocs is { Length: BlocCount } bl)
+                {
+                    blocPeople += pop;
+                    b0 += pop * bl[0];
+                    b1 += pop * bl[1];
+                    b2 += pop * bl[2];
+                    b3 += pop * bl[3];
+                    b4 += pop * bl[4];
+                }
+            }
+        }
+        else
+        {
+            for (var index = 0; index < states.Length; index++)
+            {
+                var state = states[index];
+                if (state is null || state.Population <= 0) continue;
+                var fresh = state.PoliticalDivergence < 0f || state.LawApproval < 0f || state.GovernmentApproval < 0f;
+                if (fresh) Seed(n, state);
+                var alienation = row >= 0
+                    ? known.Values[row + index]
+                    : row == -2 ? 0f : StateIdentity.RegionAlienation(c, n, state);
+                if (state.PoliticalBlocs is not { Length: 5 })
+                    SeedBlocs(n, state, atWar, debt, alienation, mil, taxStress, marketAccess);
+                if (span > 0 && !fresh)
+                {
+                    var capital = state.MapIndex == capitalMapIndex;
+                    Drift(state, step, debt, losing, recentPolitics, shortage, stability, nationalLiving,
+                        capital, alienation);
+                    DriftBlocs(state, blocStep, atWar, losing, debt, shortage, stability, nationalLiving,
+                        capital, alienation, mil, taxStress, marketAccess);
+                }
+                var pop = (double)state.Population;
+                if (state.PoliticalDivergence >= 0f)
+                {
+                    moodPeople += pop;
+                    moodLaw += pop * (double)M.Clamp01(state.LawApproval);
+                    moodGov += pop * (double)M.Clamp01(state.GovernmentApproval);
+                    moodDiv += pop * (double)M.Clamp01(state.PoliticalDivergence);
+                }
+                if (state.PoliticalBlocs is { Length: BlocCount } bl)
+                {
+                    blocPeople += pop;
+                    b0 += pop * bl[0];
+                    b1 += pop * bl[1];
+                    b2 += pop * bl[2];
+                    b3 += pop * bl[3];
+                    b4 += pop * bl[4];
+                }
             }
         }
         if (known is not null)
@@ -229,6 +351,52 @@ public static class PoliticalCohorts
         private bool _cleavageValid;
         private CohortMood _cachedMood;
         private PoliticalCleavageSummary _cachedCleavage;
+
+        // Reusable per-campaign scratch buffers for NativePoliticalKernels.TryDriftCohortsBatch (0 static fields).
+        public ScenarioState[] DriftStates = Array.Empty<ScenarioState>();
+        public byte[] DriftFlags = Array.Empty<byte>();
+        public float[] DriftStep = Array.Empty<float>();
+        public float[] DriftBlocStep = Array.Empty<float>();
+        public float[] DriftShortage = Array.Empty<float>();
+        public float[] DriftStability = Array.Empty<float>();
+        public float[] DriftNationalLiving = Array.Empty<float>();
+        public float[] DriftAlienation = Array.Empty<float>();
+        public float[] DriftMil = Array.Empty<float>();
+        public float[] DriftTaxStress = Array.Empty<float>();
+        public float[] DriftMarketAccess = Array.Empty<float>();
+        public float[] DriftLiteracy = Array.Empty<float>();
+        public float[] DriftUrbanization = Array.Empty<float>();
+        public float[] DriftSol = Array.Empty<float>();
+        public float[] DriftRadicalism = Array.Empty<float>();
+        public float[] DriftLaw = Array.Empty<float>();
+        public float[] DriftGov = Array.Empty<float>();
+        public float[] DriftDiv = Array.Empty<float>();
+        public float[] DriftBlocs = Array.Empty<float>();
+
+        public void EnsureDriftScratch(int count)
+        {
+            if (DriftStates.Length >= count) return;
+            var cap = Math.Max(count, Math.Max(32, DriftStates.Length * 2));
+            DriftStates = new ScenarioState[cap];
+            DriftFlags = new byte[cap];
+            DriftStep = new float[cap];
+            DriftBlocStep = new float[cap];
+            DriftShortage = new float[cap];
+            DriftStability = new float[cap];
+            DriftNationalLiving = new float[cap];
+            DriftAlienation = new float[cap];
+            DriftMil = new float[cap];
+            DriftTaxStress = new float[cap];
+            DriftMarketAccess = new float[cap];
+            DriftLiteracy = new float[cap];
+            DriftUrbanization = new float[cap];
+            DriftSol = new float[cap];
+            DriftRadicalism = new float[cap];
+            DriftLaw = new float[cap];
+            DriftGov = new float[cap];
+            DriftDiv = new float[cap];
+            DriftBlocs = new float[cap * BlocCount];
+        }
 
         public void Read(Campaign c)
         {

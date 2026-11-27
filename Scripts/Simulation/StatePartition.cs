@@ -600,6 +600,7 @@ public static class StatePartition
         if (merged > 0)
         {
             RebindArmies(campaign, topology);
+            campaign.BumpRegionLayoutRevision();
             campaign.InvalidateStateIndex();
             campaign.MarkMapChanged();
         }
@@ -647,6 +648,7 @@ public static class StatePartition
             provincesOf.Remove(child.MapIndex);
             owned.Clear();
             (_reunifyIntPool ??= new Stack<List<int>>()).Push(owned);
+            campaign.BumpRegionLayoutRevision();
             campaign.InvalidateStateIndex();
         }
 
@@ -872,6 +874,7 @@ public static class StatePartition
         ParallelAdministrationFootprint.Carve(campaign, parent, carved, piece);
         var topology = campaign.ProvinceMap;
         foreach (var province in piece) topology.ProvinceToState[province] = (ushort)mapIndex;
+        campaign.BumpRegionLayoutRevision();
         campaign.InvalidateStateIndex();
         return carved;
     }

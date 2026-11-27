@@ -264,6 +264,28 @@ public static class StrategicChokepoints
         return count;
     }
 
+    /// <summary>Zero-allocation single-commodity squeezed check for scripted triggers.</summary>
+    internal static bool IsCommoditySqueezed(Campaign c, Nation nation, Commodity good)
+    {
+        if (c is null || nation is null || c.TradeRoutes.Count == 0 || (uint)nation.Id >= (uint)c.Nations.Count)
+            return false;
+        var slot = -1;
+        for (var i = 0; i < TrackedGoods.Length; i++)
+            if (TrackedGoods[i] == good) { slot = i; break; }
+        if (slot < 0) return false;
+
+        var cache = EnsureCache(c);
+        var idx = nation.Id * TrackedGoods.Length + slot;
+        var total = cache.TotalImportValue[idx];
+        if (total <= 0.0001f) return false;
+        var supplierId = cache.TopSupplierId[idx];
+        if (supplierId < 0) return false;
+        var share = M.Clamp01(cache.TopSupplierValue[idx] / total);
+        if (share < ConcentrationThreshold) return false;
+        var sat = nation.Market.TryGetValue(good, out var q) ? M.Clamp01(q.Satisfaction) : 1f;
+        return ClassifyStatus(c, nation.Id, supplierId, sat) == ChokepointStatus.Squeezed;
+    }
+
     /// <summary>
     /// Weekly diplomatic &amp; chronicle pass (called from <see cref="GrandProjects.Tick"/>).
     /// Runs O(N * 11) flat lookups once per week with zero TradeRoutes rescanning.

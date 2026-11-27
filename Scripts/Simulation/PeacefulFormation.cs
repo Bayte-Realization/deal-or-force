@@ -32,22 +32,37 @@ public static class PeacefulFormation
 
     private static int[] TerritoryUnlocked(Campaign campaign, CampaignCaches.PeacefulFormationCache cache, FormableNation definition)
     {
-        // Keyed on the region layout, not on MapRevision: a formable's ground is its provinces and
-        // the regions a border has carved from its named ones, none of which moves when a province
-        // is merely taken in battle - and MapRevision moves dozens of times a day in any war.
-        if (cache.TerritoryOwnershipRevision != campaign.OwnershipRevision || cache.TerritoryStateCount != campaign.States.Count)
+        var map = campaign.ProvinceMap;
+        if (!ReferenceEquals(cache.TerritoryMap, map))
         {
-            cache.TerritoryOwnershipRevision = campaign.OwnershipRevision;
+            cache.TerritoryMap = map;
+            cache.TerritoryRegionLayoutRevision = campaign.RegionLayoutRevision;
+            cache.TerritoryStateCount = campaign.States.Count;
+            cache.StaticTerritory.Clear();
+            cache.StaticLandTerritory.Clear();
+            cache.Territory.Clear();
+            cache.LandTerritory.Clear();
+        }
+        else if (cache.TerritoryRegionLayoutRevision != campaign.RegionLayoutRevision ||
+                 cache.TerritoryStateCount != campaign.States.Count)
+        {
+            cache.TerritoryRegionLayoutRevision = campaign.RegionLayoutRevision;
             cache.TerritoryStateCount = campaign.States.Count;
             cache.Territory.Clear();
             cache.LandTerritory.Clear();
         }
-        if (cache.Territory.TryGetValue(definition.Id, out var cached)) return cached;
+
+        // Definitions with no RequiredRegions depend ONLY on constant RequiredProvinces + RequiredTags
+        // (authored scenario territories) — never invalidated by peace treaties or state partitions!
+        var isStatic = definition.RequiredRegions.Length == 0;
+        var dict = isStatic ? cache.StaticTerritory : cache.Territory;
+        if (dict.TryGetValue(definition.Id, out var cached)) return cached;
 
         var set = _territoryScratch ??= new HashSet<int>();
         set.Clear();
         foreach (var p in definition.RequiredProvinces) set.Add(p);
-        foreach (var p in RegionProvinces(campaign, definition)) set.Add(p);
+        if (!isStatic)
+            foreach (var p in RegionProvinces(campaign, definition)) set.Add(p);
         foreach (var tag in definition.RequiredTags)
         {
             var provinces = campaign.ScenarioId == "2024"
@@ -56,7 +71,7 @@ public static class PeacefulFormation
             foreach (var p in provinces) set.Add(p);
         }
         var result = set.ToArray();
-        cache.Territory[definition.Id] = result;
+        dict[definition.Id] = result;
         return result;
     }
 
@@ -67,7 +82,9 @@ public static class PeacefulFormation
         lock (cache.TerritoryGate)
         {
             var territory = TerritoryUnlocked(campaign, cache, definition);
-            if (cache.LandTerritory.TryGetValue(definition.Id, out var cached)) return cached;
+            var isStatic = definition.RequiredRegions.Length == 0;
+            var landDict = isStatic ? cache.StaticLandTerritory : cache.LandTerritory;
+            if (landDict.TryGetValue(definition.Id, out var cached)) return cached;
             var map = campaign.ProvinceMap;
             var land = new HashSet<int>();
             for (var i = 0; i < territory.Length; i++)
@@ -75,7 +92,7 @@ public static class PeacefulFormation
                 var p = territory[i];
                 if (p > 0 && p <= map.ProvinceCount && !map.WaterByProvince[p]) land.Add(p);
             }
-            cache.LandTerritory[definition.Id] = land;
+            landDict[definition.Id] = land;
             return land;
         }
     }
@@ -89,8 +106,9 @@ public static class PeacefulFormation
     /// The same answer, worked out once per region layout instead of once per question.
     ///
     /// Evaluating one foundation asks for it, every candidate partner's refusal asks for it, and
-    /// each answer walked every province in the world and built two sets of regions. Keyed and
-    /// invalidated exactly as <see cref="Territory"/> is, so the two cannot disagree.
+    /// each answer walked every province in the world and built two sets of regions. Keyed on
+    /// <see cref="Campaign.RegionLayoutRevision"/> and <see cref="Campaign.States"/> count so
+    /// ordinary peace treaties never flush unchanged region shapes.
     /// </summary>
     [ThreadStatic] private static HashSet<int> _regionNamedScratch;
     [ThreadStatic] private static HashSet<int> _regionWantedScratch;
@@ -103,10 +121,13 @@ public static class PeacefulFormation
         var cache = campaign.Caches.PeacefulFormation;
         lock (cache.RegionGate)
         {
-            if (cache.RegionOwnershipRevision != campaign.OwnershipRevision ||
+            var map = campaign.ProvinceMap;
+            if (!ReferenceEquals(cache.RegionMap, map) ||
+                cache.RegionLayoutRevision != campaign.RegionLayoutRevision ||
                 cache.RegionStateCount != campaign.States.Count)
             {
-                cache.RegionOwnershipRevision = campaign.OwnershipRevision;
+                cache.RegionMap = map;
+                cache.RegionLayoutRevision = campaign.RegionLayoutRevision;
                 cache.RegionStateCount = campaign.States.Count;
                 cache.Regions.Clear();
             }
@@ -135,7 +156,6 @@ public static class PeacefulFormation
                 if (named.Contains(st.MapIndex) || named.Contains(st.ParentMapIndex))
                     wanted.Add(st.MapIndex);
             }
-            var map = campaign.ProvinceMap;
             var provinces = _regionProvincesScratch ??= new List<int>();
             provinces.Clear();
             for (var p = 1; p <= map.ProvinceCount; p++)

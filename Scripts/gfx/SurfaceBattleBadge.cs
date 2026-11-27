@@ -4,34 +4,271 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// An owned, cached 128x128 AAA battle progress bubble on a depth-tested surface quad.
-/// Draws a smooth green-to-amber-to-red progress ring, attacker/defender national rim crescents,
-/// clash emblem, momentum arrow, pocket alert rim, and tabular percentage pill.
-/// Only redraws the 2D SubViewport when telemetry changes; subtle combat pulse runs on GPU
-/// (gated by <c>quality_tier</c> so MobileLow skips extra shader work).
+/// Zero-SubViewport GPU-instanced AAA battle progress medallion renderer.
+/// Replaces per-battle 128x128 SubViewport FBOs (which allocated ~1.5-2.25 GB VRAM and triggered
+/// D3D12/GLES3 FBO flushes during large wars) with a single shared <see cref="MultiMeshInstance3D"/>,
+/// one analytical SDF spatial shader, and one 18 KB procedural digit atlas (<c>0-9, %, ?</c>).
+/// All colour accents come from <see cref="Ui.Colour(string, float)"/> tokens.
 /// </summary>
-public partial class SurfaceBattleBadge : Node3D
+public static class BattleBadgeGpu
 {
-    private const int CanvasSize = 128;
+    public const int FloatsPerInstance = 20; // 12 (Transform3D) + 4 (Color) + 4 (CustomData)
+    public const int FlagPocketAlert = 1;
+    public const int FlagThirdPartyInfo = 2;
+    public const int FlagMomentumUp = 4;
+    public const int FlagMomentumDown = 8;
+    public const int FlagKnown = 16;
 
-    private static Shader _pulseShader;
-    private static Shader PulseShader => _pulseShader ??= new Shader
+    private const int GlyphCount = 12; // '0'..'9', '%', '?'
+    private const int GlyphWidth = 32;
+    private const int GlyphHeight = 48;
+
+    private static Shader _shader;
+    private static ImageTexture _glyphAtlas;
+
+    public static Shader Shader => _shader ??= new Shader
     {
         Code = """
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_back, shadows_disabled;
-uniform sampler2D badge_tex : source_color, filter_linear_mipmap;
+
+uniform sampler2D glyph_atlas : filter_linear, repeat_disable;
 uniform float quality_tier = 0.0;
-uniform float pulse_strength = 1.0;
-uniform vec3 pulse_color = vec3(1.0, 0.34, 0.16);
+uniform vec3 col_bg = vec3(0.08, 0.10, 0.14);
+uniform vec3 col_border = vec3(0.76, 0.67, 0.45);
+uniform vec3 col_pos = vec3(0.24, 0.78, 0.42);
+uniform vec3 col_warn = vec3(0.95, 0.68, 0.18);
+uniform vec3 col_neg = vec3(0.90, 0.25, 0.20);
+uniform vec3 col_info = vec3(0.32, 0.68, 0.94);
+uniform vec3 col_muted = vec3(0.55, 0.60, 0.66);
+uniform vec3 col_text = vec3(0.96, 0.97, 0.98);
+
+varying vec4 v_color;
+varying vec4 v_custom;
+
+void vertex() {
+    v_color = COLOR;
+    v_custom = INSTANCE_CUSTOM;
+}
+
+float sd_segment(vec2 p, vec2 a, vec2 b) {
+    vec2 pa = p - a;
+    vec2 ba = b - a;
+    float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+    return length(pa - ba * h);
+}
+
+float sd_box(vec2 p, vec2 b) {
+    vec2 d = abs(p) - b;
+    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+
+float sample_glyph(int glyph_idx, vec2 local_uv) {
+    if (local_uv.x < 0.0 || local_uv.x > 1.0 || local_uv.y < 0.0 || local_uv.y > 1.0) {
+        return 0.0;
+    }
+    float u = (float(glyph_idx) + clamp(local_uv.x, 0.02, 0.98)) / 12.0;
+    float v = clamp(local_uv.y, 0.02, 0.98);
+    return texture(glyph_atlas, vec2(u, v)).r;
+}
+
 void fragment() {
-    vec4 tex = texture(badge_tex, UV);
-    vec2 centered = UV * 2.0 - 1.0;
-    float r = length(centered);
-    float ring = smoothstep(0.76, 0.90, r) * (1.0 - smoothstep(0.90, 0.99, r));
-    float beat = quality_tier < 1.5 ? (0.5 + 0.5 * sin(TIME * 3.8)) * pulse_strength : 0.0;
-    vec3 col = tex.rgb + pulse_color * ring * beat * 0.45;
-    float alpha = max(tex.a, ring * beat * 0.48);
+    if (v_color.a < 0.02) discard;
+
+    // UV (0,0) top-left -> centered p in [-1, 1], +Y down to match 2D badge coordinates.
+    vec2 p = UV * 2.0 - 1.0;
+    float r = length(p);
+    float aa = max(fwidth(r) * 1.15, 0.016);
+
+    float share = clamp(v_custom.x, 0.0, 1.0);
+    float pct_val = floor(v_custom.y + 0.5);
+    int flags = int(floor(v_custom.z + 0.5));
+    bool pocket_alert = (flags & 1) != 0;
+    bool info_tone = (flags & 2) != 0;
+    bool mom_up = (flags & 4) != 0;
+    bool mom_down = (flags & 8) != 0;
+    bool known = (flags & 16) != 0 && v_custom.x >= 0.0;
+
+    // Unpack 15-bit defender RGB from v_custom.w (0..32767, exact in GLES3 + Vulkan).
+    float dp = floor(v_custom.w + 0.5);
+    float db = floor(dp / 1024.0);
+    float rem = dp - db * 1024.0;
+    float dg = floor(rem / 32.0);
+    float dr = rem - dg * 32.0;
+    vec3 def_col = vec3(dr, dg, db) / 31.0;
+    vec3 att_col = v_color.rgb;
+
+    vec3 ring_ink = col_muted;
+    if (known) {
+        if (info_tone) {
+            ring_ink = col_info;
+        } else {
+            ring_ink = share < 0.5
+                ? mix(col_neg, col_warn, share * 2.0)
+                : mix(col_warn, col_pos, (share - 0.5) * 2.0);
+        }
+    }
+
+    vec3 col = vec3(0.0);
+    float alpha = 0.0;
+
+    // 1. Soft drop halo + outer pulse ring (skipped on MobileLow quality_tier >= 1.5).
+    float halo_a = (1.0 - smoothstep(0.86, 0.95, r)) * 0.72;
+    col = vec3(0.01, 0.015, 0.02);
+    alpha = halo_a;
+
+    if (quality_tier < 1.5) {
+        float pulse_ring = smoothstep(0.78, 0.90, r) * (1.0 - smoothstep(0.90, 0.99, r));
+        float pulse_strength = pocket_alert ? 1.35 : 0.90;
+        float beat = (0.5 + 0.5 * sin(TIME * 3.8)) * pulse_strength;
+        vec3 pulse_col = pocket_alert
+            ? vec3(1.0, 0.18, 0.14)
+            : (share >= 0.56 ? vec3(0.28, 0.88, 0.46)
+                : (share <= 0.44 ? vec3(1.0, 0.28, 0.16) : vec3(0.98, 0.68, 0.20)));
+        float pa = pulse_ring * beat * 0.48;
+        col = mix(col, pulse_col, clamp(pa / max(alpha + pa, 0.001), 0.0, 1.0));
+        alpha = max(alpha, pa);
+    }
+
+    // 2. Sculpted dark medallion disc (outer radius 0.875, inner 0.828).
+    float disc_outer = 1.0 - smoothstep(0.875 - aa, 0.875 + aa, r);
+    if (disc_outer > 0.001) {
+        vec3 bg_dark = col_bg * 0.78;
+        col = mix(col, bg_dark, disc_outer);
+        alpha = max(alpha, disc_outer);
+    }
+    float disc_inner = 1.0 - smoothstep(0.828 - aa, 0.828 + aa, r);
+    if (disc_inner > 0.001) {
+        col = mix(col, col_bg, disc_inner);
+        alpha = max(alpha, disc_inner);
+    }
+
+    // 3. Dual faction rim crescents (left = attacker, right = defender) + outer border.
+    float rim_band = smoothstep(0.805 - aa, 0.805 + aa, r) * (1.0 - smoothstep(0.865 - aa, 0.865 + aa, r));
+    if (rim_band > 0.001) {
+        float ang = atan(p.y, p.x); // 0 = right, +-PI = left
+        float left_arc = smoothstep(1.70, 1.80, abs(ang));
+        float right_arc = 1.0 - smoothstep(1.34, 1.44, abs(ang));
+        if (left_arc > 0.001) {
+            col = mix(col, min(att_col + 0.16, 1.0), rim_band * left_arc);
+        }
+        if (right_arc > 0.001) {
+            col = mix(col, min(def_col + 0.16, 1.0), rim_band * right_arc);
+        }
+    }
+
+    float border_w = pocket_alert ? 0.042 : 0.030;
+    float border_ring = smoothstep(0.875 - border_w - aa, 0.875 - border_w + aa, r)
+                      * (1.0 - smoothstep(0.885 - aa, 0.885 + aa, r));
+    vec3 border_col = pocket_alert ? min(col_neg + 0.18, 1.0) : col_border;
+    if (border_ring > 0.001) {
+        col = mix(col, border_col, border_ring);
+        alpha = max(alpha, border_ring);
+    }
+
+    // 4. Progress ring track + green-amber-red progress arc + tip pip (r = 0.74).
+    float track_outer = smoothstep(0.675 - aa, 0.675 + aa, r) * (1.0 - smoothstep(0.805 - aa, 0.805 + aa, r));
+    if (track_outer > 0.001) {
+        col = mix(col, col_bg * 0.45, track_outer);
+    }
+    float track_inner = smoothstep(0.695 - aa, 0.695 + aa, r) * (1.0 - smoothstep(0.785 - aa, 0.785 + aa, r));
+    if (track_inner > 0.001) {
+        col = mix(col, mix(col_bg * 0.45, col_neg, 0.32), track_inner);
+        if (known) {
+            // Clockwise angle from 12 o'clock (0, -1): [0, TAU)
+            float cw = atan(p.x, -p.y);
+            if (cw < 0.0) cw += 6.2831853;
+            float sweep = 6.2831853 * clamp(share, 0.02, 1.0);
+            float arc_mask = 1.0 - smoothstep(sweep - 0.04, sweep + 0.04, cw);
+            col = mix(col, ring_ink, track_inner * arc_mask);
+        }
+    }
+    if (known) {
+        float sweep = 6.2831853 * clamp(share, 0.02, 1.0);
+        vec2 tip = vec2(sin(sweep), -cos(sweep)) * 0.74;
+        float tip_mask = 1.0 - smoothstep(0.052 - aa, 0.052 + aa, length(p - tip));
+        if (tip_mask > 0.001) {
+            col = mix(col, min(ring_ink + 0.32, 1.0), tip_mask);
+        }
+    }
+
+    // 5. Subtle 4-way dial ticks on inner rim.
+    vec2 ap = abs(p);
+    float tick_d = min(
+        sd_segment(ap, vec2(0.67, 0.0), vec2(0.79, 0.0)),
+        sd_segment(ap, vec2(0.0, 0.67), vec2(0.0, 0.79)));
+    float tick_mask = 1.0 - smoothstep(0.015 - aa, 0.015 + aa, tick_d);
+    if (tick_mask > 0.001) {
+        col = mix(col, col_border * 0.72, tick_mask * 0.8);
+    }
+
+    // 6. Crossed-swords clash emblem in upper center (y in [-0.62, -0.14]).
+    float blade1 = sd_segment(p, vec2(-0.24, -0.58), vec2(0.24, -0.16));
+    float blade2 = sd_segment(p, vec2(0.24, -0.58), vec2(-0.24, -0.16));
+    float hilt1 = sd_segment(p, vec2(-0.26, -0.26), vec2(-0.10, -0.12));
+    float hilt2 = sd_segment(p, vec2(0.26, -0.26), vec2(0.10, -0.12));
+    float emblem_d = min(min(blade1, blade2), min(hilt1, hilt2));
+    float emblem_mask = 1.0 - smoothstep(0.036 - aa, 0.036 + aa, emblem_d);
+    if (emblem_mask > 0.001) {
+        col = mix(col, min(ring_ink + 0.22, 1.0), emblem_mask);
+    }
+
+    // 7. Momentum chevron right above the percentage pill when pushing.
+    if (known && (mom_up || mom_down)) {
+        float dir = mom_up ? -1.0 : 1.0;
+        vec2 tip = vec2(0.0, -0.06 + dir * 0.05);
+        vec2 bl = vec2(-0.11, -0.06 - dir * 0.05);
+        vec2 br = vec2(0.11, -0.06 - dir * 0.05);
+        float chev_d = min(sd_segment(p, bl, tip), sd_segment(p, tip, br));
+        float chev_mask = 1.0 - smoothstep(0.028 - aa, 0.028 + aa, chev_d);
+        vec3 mom_col = mom_up ? min(col_pos + 0.15, 1.0) : min(col_neg + 0.15, 1.0);
+        if (chev_mask > 0.001) {
+            col = mix(col, mom_col, chev_mask);
+        }
+    }
+
+    // 8. High-contrast tabular percentage pill (y in [0.06, 0.56]) + atlas digits.
+    int n_chars = 1;
+    int c0 = 11; // '?'
+    int c1 = 10; // '%'
+    int c2 = 10;
+    int c3 = 10;
+    if (known && pct_val >= 0.0) {
+        int ip = clamp(int(pct_val), 0, 100);
+        if (ip >= 100) {
+            n_chars = 4; c0 = 1; c1 = 0; c2 = 0; c3 = 10;
+        } else if (ip >= 10) {
+            n_chars = 3; c0 = ip / 10; c1 = ip - c0 * 10; c2 = 10;
+        } else {
+            n_chars = 2; c0 = ip; c1 = 10;
+        }
+    }
+
+    float char_w = n_chars >= 4 ? 0.24 : 0.27;
+    float total_w = float(n_chars) * char_w;
+    vec2 pill_center = vec2(0.0, 0.31);
+    vec2 pill_half = vec2(total_w * 0.5 + 0.11, 0.24);
+    float pill_d = sd_box(p - pill_center, pill_half) - 0.04;
+    float pill_fill = 1.0 - smoothstep(-aa, aa, pill_d);
+    if (pill_fill > 0.001) {
+        col = mix(col, col_bg * 0.55, pill_fill);
+        float pill_edge = smoothstep(-0.032 - aa, -0.032 + aa, pill_d) * pill_fill;
+        col = mix(col, ring_ink * 0.85, pill_edge);
+
+        float text_x0 = -total_w * 0.5;
+        float text_y0 = pill_center.y - 0.18;
+        float text_h = 0.36;
+        float rel_x = (p.x - text_x0) / char_w;
+        float rel_y = (p.y - text_y0) / text_h;
+        if (rel_x >= 0.0 && rel_x < float(n_chars) && rel_y >= 0.0 && rel_y <= 1.0) {
+            int slot = int(floor(rel_x));
+            int glyph = slot == 0 ? c0 : (slot == 1 ? c1 : (slot == 2 ? c2 : c3));
+            float ink = sample_glyph(glyph, vec2(fract(rel_x), rel_y));
+            col = mix(col, col_text, ink);
+        }
+    }
+
+    alpha *= v_color.a;
     if (alpha < 0.04) discard;
     ALBEDO = col;
     ALPHA = alpha;
@@ -39,230 +276,196 @@ void fragment() {
 """
     };
 
-    public Sprite3D Plate { get; private set; }
-    private SubViewport _canvas;
-    private Node2D _ink;
-    private ShaderMaterial _plateMaterial;
-    private string _text, _tone;
-    private float _share;
-    private float _momentum;
-    private bool _pocketAlert;
-    private Color _attackerColor = new(0.88f, 0.30f, 0.22f);
-    private Color _defenderColor = new(0.28f, 0.62f, 0.88f);
-    private Texture2D _symbol;
-    private ViewportTexture _ownedTexture;
-    private float _qualityTier;
+    public static ImageTexture GlyphAtlas => _glyphAtlas ??= BuildGlyphAtlas();
 
-    public override void _Ready()
+    public static ShaderMaterial CreateSharedMaterial(float qualityTier)
     {
-        _canvas = new SubViewport
+        var mat = new ShaderMaterial
         {
-            Name = "BattleBadgeCanvas",
-            Size = new Vector2I(CanvasSize, CanvasSize),
-            Disable3D = true,
-            TransparentBg = true,
-            RenderTargetUpdateMode = SubViewport.UpdateMode.Once
+            Shader = Shader,
+            RenderPriority = 20
         };
-        AddChild(_canvas);
-        _ink = new Node2D();
-        _canvas.AddChild(_ink);
-        _ink.Draw += Paint;
-        _ownedTexture = _canvas.GetTexture();
-
-        _plateMaterial = new ShaderMaterial { Shader = PulseShader, RenderPriority = 20 };
-        _plateMaterial.SetShaderParameter("badge_tex", _ownedTexture);
-        _plateMaterial.SetShaderParameter("quality_tier", _qualityTier);
-        _plateMaterial.SetShaderParameter("pulse_strength", 1f);
-
-        Plate = new Sprite3D
-        {
-            Name = "BattleSurfacePlate",
-            Texture = _ownedTexture,
-            MaterialOverride = _plateMaterial,
-            PixelSize = 1f / CanvasSize,
-            Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
-            NoDepthTest = false,
-            AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
-            RenderPriority = 20,
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off
-        };
-        AddChild(Plate);
+        mat.SetShaderParameter("glyph_atlas", GlyphAtlas);
+        mat.SetShaderParameter("quality_tier", qualityTier);
+        ApplyThemePalette(mat);
+        return mat;
     }
 
-    public override void _ExitTree()
+    public static void ApplyThemePalette(ShaderMaterial mat)
     {
-        // The generated C# wrapper can outlive a queued node until a later GC.
-        // Release OUR viewport texture now; never dispose the borrowed icon/font.
-        if (IsInstanceValid(_ink)) _ink.Draw -= Paint;
-        if (IsInstanceValid(Plate))
-        {
-            Plate.MaterialOverride = null;
-            Plate.Texture = null;
-        }
-        // ShaderMaterial and ViewportTexture are RefCounted; never manually Dispose() on teardown.
-        _plateMaterial = null;
-        _ownedTexture = null;
-        _symbol = null;
+        if (mat is null) return;
+        mat.SetShaderParameter("col_bg", ToVec3(Ui.Colour("combat.badge_background")));
+        mat.SetShaderParameter("col_border", ToVec3(Ui.Colour("button.primary_border")));
+        mat.SetShaderParameter("col_pos", ToVec3(Ui.Colour("state.positive")));
+        mat.SetShaderParameter("col_warn", ToVec3(Ui.Colour("state.warning")));
+        mat.SetShaderParameter("col_neg", ToVec3(Ui.Colour("state.negative")));
+        mat.SetShaderParameter("col_info", ToVec3(Ui.Colour("state.info")));
+        mat.SetShaderParameter("col_muted", ToVec3(Ui.Colour("text.muted")));
+        mat.SetShaderParameter("col_text", ToVec3(Ui.Colour("text.bright")));
     }
 
-    public void SetQualityTier(float tier)
+    public static float PackDefenderColor(Color defender)
     {
-        if (Mathf.IsEqualApprox(_qualityTier, tier)) return;
-        _qualityTier = tier;
-        _plateMaterial?.SetShaderParameter("quality_tier", tier);
+        var r = Math.Clamp((int)(defender.R * 31f + 0.5f), 0, 31);
+        var g = Math.Clamp((int)(defender.G * 31f + 0.5f), 0, 31);
+        var b = Math.Clamp((int)(defender.B * 31f + 0.5f), 0, 31);
+        return r + g * 32 + b * 1024;
     }
 
-    /// <summary>Park this badge in the reuse pool without tearing down its SubViewport render target.</summary>
-    public void PrepareForPool()
+    public static float PackFlags(bool known, bool pocketAlert, bool thirdPartyInfo, float momentum)
     {
-        Visible = false;
-        if (IsInstanceValid(_canvas))
-            _canvas.RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled;
+        var flags = 0;
+        if (pocketAlert) flags |= FlagPocketAlert;
+        if (thirdPartyInfo) flags |= FlagThirdPartyInfo;
+        if (known && momentum >= 0.08f) flags |= FlagMomentumUp;
+        else if (known && momentum <= -0.08f) flags |= FlagMomentumDown;
+        if (known) flags |= FlagKnown;
+        return flags;
     }
 
-    /// <summary>Re-arm a pooled badge for a newly opened battle.</summary>
-    public void RestoreFromPool(float qualityTier)
-    {
-        Visible = true;
-        _text = null;
-        SetQualityTier(qualityTier);
-    }
-
-    public void SetReadout(string text, float share, string tone, Texture2D symbol) =>
-        SetTelemetryReadout(text, share, tone, symbol, _attackerColor, _defenderColor, 0f, false);
-
-    public void SetTelemetryReadout(
-        string text,
+    public static void WriteInstance(
+        float[] buffer,
+        int instanceIndex,
+        in Transform3D transform,
+        in Color attackerColor,
+        float alpha,
         float share,
-        string tone,
-        Texture2D symbol,
-        Color attackerColor,
-        Color defenderColor,
-        float momentum,
-        bool pocketAlert)
+        float displayPercent,
+        float flags,
+        float packedDefenderColor)
     {
-        if (_text == text &&
-            MathF.Abs(_share - share) <= 0.01f &&
-            _tone == tone &&
-            _symbol == symbol &&
-            _attackerColor == attackerColor &&
-            _defenderColor == defenderColor &&
-            MathF.Abs(_momentum - momentum) <= 0.15f &&
-            _pocketAlert == pocketAlert)
-            return;
-
-        _text = text;
-        _share = share;
-        _tone = tone;
-        _symbol = symbol;
-        _attackerColor = attackerColor;
-        _defenderColor = defenderColor;
-        _momentum = momentum;
-        _pocketAlert = pocketAlert;
-
-        if (_plateMaterial is not null)
-        {
-            var pulseCol = pocketAlert
-                ? new Color(1.0f, 0.18f, 0.14f)
-                : share >= 0.56f
-                    ? new Color(0.28f, 0.88f, 0.46f)
-                    : share <= 0.44f
-                        ? new Color(1.0f, 0.28f, 0.16f)
-                        : new Color(0.98f, 0.68f, 0.20f);
-            _plateMaterial.SetShaderParameter("pulse_color", new Vector3(pulseCol.R, pulseCol.G, pulseCol.B));
-            _plateMaterial.SetShaderParameter("pulse_strength", pocketAlert ? 1.35f : 0.90f);
-        }
-
-        if (_canvas is null) return;
-        _canvas.RenderTargetUpdateMode = SubViewport.UpdateMode.Once;
-        _ink.QueueRedraw();
+        var o = instanceIndex * FloatsPerInstance;
+        var b = transform.Basis;
+        var p = transform.Origin;
+        // Godot MultiMesh Transform3D row-major 3x4 layout
+        buffer[o + 0] = b.X.X; buffer[o + 1] = b.Y.X; buffer[o + 2] = b.Z.X; buffer[o + 3] = p.X;
+        buffer[o + 4] = b.X.Y; buffer[o + 5] = b.Y.Y; buffer[o + 6] = b.Z.Y; buffer[o + 7] = p.Y;
+        buffer[o + 8] = b.X.Z; buffer[o + 9] = b.Y.Z; buffer[o + 10] = b.Z.Z; buffer[o + 11] = p.Z;
+        // COLOR
+        buffer[o + 12] = attackerColor.R;
+        buffer[o + 13] = attackerColor.G;
+        buffer[o + 14] = attackerColor.B;
+        buffer[o + 15] = alpha;
+        // INSTANCE_CUSTOM
+        buffer[o + 16] = share;
+        buffer[o + 17] = displayPercent;
+        buffer[o + 18] = flags;
+        buffer[o + 19] = packedDefenderColor;
     }
 
-    private static Color ProgressRingColor(float share, bool known, string fallbackTone)
+    private static Vector3 ToVec3(Color c) => new(c.R, c.G, c.B);
+
+    /// <summary>
+    /// Generates a crisp 384x48 R8 (18 KB VRAM) anti-aliased bitmap atlas of tabular numerals
+    /// '0'..'9', '%', and '?' using analytical distance-to-segment/circle strokes.
+    /// Zero font/SubViewport dependency, identical on Windows, Linux, and Android GLES3.
+    /// </summary>
+    private static ImageTexture BuildGlyphAtlas()
     {
-        if (!known) return Ui.Colour(fallbackTone ?? "text.muted");
-        var t = Math.Clamp(share, 0f, 1f);
-        var red = Ui.Colour("state.negative");
-        var amber = Ui.Colour("state.warning");
-        var green = Ui.Colour("state.positive");
-        return t < 0.5f
-            ? red.Lerp(amber, t * 2f)
-            : amber.Lerp(green, (t - 0.5f) * 2f);
+        const int w = GlyphCount * GlyphWidth;
+        const int h = GlyphHeight;
+        var data = new byte[w * h];
+
+        for (var g = 0; g < GlyphCount; g++)
+        {
+            var xOff = g * GlyphWidth;
+            for (var py = 0; py < h; py++)
+            {
+                var ny = (py + 0.5f) / h; // [0..1], top to bottom
+                for (var px = 0; px < GlyphWidth; px++)
+                {
+                    var nx = (px + 0.5f) / GlyphWidth; // [0..1], left to right
+                    var d = EvalGlyphDistance(g, nx, ny);
+                    var cov = SmoothCoverage(d, 0.092f, 0.036f);
+                    data[py * w + xOff + px] = (byte)Math.Clamp((int)(cov * 255f + 0.5f), 0, 255);
+                }
+            }
+        }
+
+        using var img = Image.CreateFromData(w, h, false, Image.Format.R8, data);
+        return ImageTexture.CreateFromImage(img);
     }
 
-    private void Paint()
+    private static float SmoothCoverage(float dist, float radius, float feather)
     {
-        var center = new Vector2(64f, 64f);
-        const float outerRadius = 56f;
-        const float ringRadius = 48f;
-        var known = _text is not (null or "?");
-        var background = Ui.Colour("combat.badge_background");
-        var border = _pocketAlert ? Ui.Colour("state.negative").Lightened(0.18f) : Ui.Colour("button.primary_border");
-        var ringInk = ProgressRingColor(_share, known, _tone);
+        var t = Math.Clamp((radius + feather - dist) / (2f * feather), 0f, 1f);
+        return t * t * (3f - 2f * t);
+    }
 
-        // Soft dark cartographic drop-halo + sculpted dark medallion disc.
-        _ink.DrawCircle(center, outerRadius + 4f, new Color(0.01f, 0.015f, 0.02f, 0.72f));
-        _ink.DrawCircle(center, outerRadius, background.Darkened(0.22f));
-        _ink.DrawCircle(center, outerRadius - 3f, background);
+    private static float Seg(float px, float py, float ax, float ay, float bx, float by)
+    {
+        var pax = px - ax;
+        var pay = py - ay;
+        var bax = bx - ax;
+        var bay = by - ay;
+        var denom = bax * bax + bay * bay;
+        var h = denom > 1e-6f ? Math.Clamp((pax * bax + pay * bay) / denom, 0f, 1f) : 0f;
+        var dx = pax - bax * h;
+        var dy = pay - bay * h;
+        return MathF.Sqrt(dx * dx + dy * dy);
+    }
 
-        // Dual faction rim crescents (left = attacker colour, right = defender colour).
-        _ink.DrawArc(center, outerRadius - 1.5f, Mathf.Pi * 0.56f, Mathf.Pi * 1.44f, 20, _attackerColor.Lightened(0.18f), 3.2f, true);
-        _ink.DrawArc(center, outerRadius - 1.5f, -Mathf.Pi * 0.44f, Mathf.Pi * 0.44f, 20, _defenderColor.Lightened(0.18f), 3.2f, true);
-        _ink.DrawArc(center, outerRadius + 0.5f, 0f, Mathf.Tau, 32, border, _pocketAlert ? 2.6f : 1.8f, true);
+    private static float Ring(float px, float py, float cx, float cy, float rx, float ry)
+    {
+        var dx = (px - cx) / rx;
+        var dy = (py - cy) / ry;
+        var len = MathF.Sqrt(dx * dx + dy * dy);
+        return MathF.Abs(len - 1f) * MathF.Min(rx, ry);
+    }
 
-        // Progress ring track + smooth green-amber-red progress arc.
-        _ink.DrawArc(center, ringRadius, -Mathf.Pi * 0.5f, Mathf.Pi * 1.5f, 32, background.Darkened(0.55f), 7.5f, true);
-        _ink.DrawArc(center, ringRadius, -Mathf.Pi * 0.5f, Mathf.Pi * 1.5f, 32, Ui.Colour("state.negative", 0.32f), 5.5f, true);
-        if (known)
+    private static float EvalGlyphDistance(int g, float x, float y)
+    {
+        // Aspect-normalized coordinates inside [0..1]x[0..1] (glyph aspect is 32x48 = 2:3).
+        // Scale y by 1.5 so vertical and horizontal stroke weights match cleanly!
+        var px = x;
+        var py = y * 1.5f;
+        const float L = 0.22f, R = 0.78f, M = 0.50f;
+        const float T = 0.22f, C = 0.75f, B = 1.28f;
+
+        return g switch
         {
-            var sweep = Mathf.Tau * Math.Clamp(_share, 0.02f, 1f);
-            _ink.DrawArc(center, ringRadius, -Mathf.Pi * 0.5f, -Mathf.Pi * 0.5f + sweep, 32, ringInk, 6.2f, true);
-            // Bright leading-edge pip at the end of the progress arc.
-            var tipAngle = -Mathf.Pi * 0.5f + sweep;
-            var tip = center + new Vector2(MathF.Cos(tipAngle), MathF.Sin(tipAngle)) * ringRadius;
-            _ink.DrawCircle(tip, 3.6f, ringInk.Lightened(0.35f));
-        }
-
-        // Subtle 4-way dial ticks on the inner rim.
-        var tickCol = border.Darkened(0.25f);
-        for (var i = 0; i < 4; i++)
-        {
-            var a = i * Mathf.Pi * 0.5f;
-            var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
-            _ink.DrawLine(center + dir * (ringRadius - 4.5f), center + dir * (ringRadius + 3.5f), tickCol, 1.5f, true);
-        }
-
-        // Prominent clash emblem in upper center.
-        if (_symbol is not null)
-        {
-            _ink.DrawTextureRect(_symbol, new Rect2(44f, 20f, 40f, 40f), false, ringInk.Lightened(0.22f));
-        }
-        else
-        {
-            _ink.DrawLine(new Vector2(49f, 26f), new Vector2(79f, 54f), ringInk.Lightened(0.18f), 4f, true);
-            _ink.DrawLine(new Vector2(79f, 26f), new Vector2(49f, 54f), ringInk.Lightened(0.18f), 4f, true);
-        }
-
-        // Momentum chevron right above the percentage pill when a side is clearly pushing.
-        if (known && MathF.Abs(_momentum) >= 0.08f)
-        {
-            var gaining = _momentum > 0f;
-            var momCol = gaining ? Ui.Colour("state.positive").Lightened(0.15f) : Ui.Colour("state.negative").Lightened(0.15f);
-            var tipY = gaining ? 55f : 63f;
-            var baseY = gaining ? 63f : 55f;
-            _ink.DrawPolygon(
-                new[] { new Vector2(64f, tipY), new Vector2(57f, baseY), new Vector2(71f, baseY) },
-                new[] { momCol, momCol, momCol });
-        }
-
-        // High-contrast tabular percentage pill.
-        var font = PresentationFonts.For("ui.default");
-        var text = _text == "?" ? "?" : (_text ?? "?") + "%";
-        const int fontSize = 29;
-        var width = font.GetStringSize(text, HorizontalAlignment.Left, -1, fontSize).X;
-        var pill = new Rect2(64f - width * 0.5f - 9f, 66f, width + 18f, 34f);
-        _ink.DrawRect(pill, background.Darkened(0.45f));
-        _ink.DrawRect(pill, ringInk.Darkened(0.15f), false, 1.8f);
-        _ink.DrawString(font, new Vector2(64f - width * 0.5f, 92f), text, HorizontalAlignment.Left, -1, fontSize, Ui.Colour("text.bright"));
+            0 => Ring(px, py, M, C, 0.28f, 0.52f),
+            1 => MathF.Min(
+                Seg(px, py, M + 0.04f, T, M + 0.04f, B),
+                MathF.Min(Seg(px, py, L + 0.06f, T + 0.16f, M + 0.04f, T), Seg(px, py, L + 0.04f, B, R - 0.02f, B))),
+            2 => MathF.Min(
+                MathF.Min(
+                    py < C - 0.12f ? Ring(px, py, M, T + 0.24f, 0.26f, 0.24f) : 9f,
+                    Seg(px, py, R - 0.02f, T + 0.28f, L, B)),
+                Seg(px, py, L, B, R, B)),
+            3 => MathF.Min(
+                px >= M - 0.18f || py < T + 0.26f || py > C - 0.08f
+                    ? (py <= C ? Ring(px, py, M, (T + C) * 0.5f, 0.26f, 0.26f) : Ring(px, py, M, (C + B) * 0.5f, 0.28f, 0.27f))
+                    : 9f,
+                Seg(px, py, M - 0.06f, C, M + 0.12f, C)),
+            4 => MathF.Min(
+                Seg(px, py, R - 0.08f, T, R - 0.08f, B),
+                MathF.Min(Seg(px, py, R - 0.08f, T, L, C + 0.14f), Seg(px, py, L, C + 0.14f, R + 0.04f, C + 0.14f))),
+            5 => MathF.Min(
+                MathF.Min(Seg(px, py, R - 0.02f, T, L + 0.02f, T), Seg(px, py, L + 0.02f, T, L + 0.02f, C - 0.04f)),
+                MathF.Min(
+                    Seg(px, py, L + 0.02f, C - 0.04f, M + 0.06f, C - 0.04f),
+                    px >= M - 0.18f || py >= B - 0.26f ? Ring(px, py, M, (C + B) * 0.5f - 0.02f, 0.27f, 0.28f) : 9f)),
+            6 => MathF.Min(
+                Ring(px, py, M, (C + B) * 0.5f, 0.27f, 0.26f),
+                MathF.Min(Seg(px, py, L + 0.01f, C + 0.18f, L + 0.08f, T + 0.18f), Seg(px, py, L + 0.08f, T + 0.18f, R - 0.06f, T))),
+            7 => MathF.Min(Seg(px, py, L, T, R, T), Seg(px, py, R, T, M - 0.08f, B)),
+            8 => MathF.Min(
+                Ring(px, py, M, (T + C) * 0.5f, 0.24f, 0.25f),
+                Ring(px, py, M, (C + B) * 0.5f, 0.27f, 0.27f)),
+            9 => MathF.Min(
+                Ring(px, py, M, (T + C) * 0.5f + 0.02f, 0.27f, 0.26f),
+                MathF.Min(Seg(px, py, R - 0.01f, C - 0.12f, R - 0.08f, B - 0.18f), Seg(px, py, R - 0.08f, B - 0.18f, L + 0.06f, B))),
+            10 => MathF.Min( // '%'
+                Seg(px, py, L + 0.02f, B - 0.04f, R - 0.02f, T + 0.04f),
+                MathF.Min(Ring(px, py, L + 0.12f, T + 0.20f, 0.13f, 0.16f), Ring(px, py, R - 0.12f, B - 0.20f, 0.13f, 0.16f))),
+            _ => MathF.Min( // '?'
+                MathF.Min(
+                    py < C - 0.06f && (px >= M - 0.12f || py <= T + 0.26f)
+                        ? Ring(px, py, M, T + 0.23f, 0.25f, 0.23f)
+                        : 9f,
+                    Seg(px, py, M, C - 0.02f, M, C + 0.24f)),
+                MathF.Sqrt((px - M) * (px - M) + (py - (B - 0.04f)) * (py - (B - 0.04f))) * 0.85f)
+        };
     }
 }

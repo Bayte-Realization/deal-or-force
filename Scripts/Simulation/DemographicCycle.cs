@@ -253,7 +253,7 @@ public static class DemographicCycle
             var batchAppliedNative = false;
             var batchLen = last - first;
             if (batchLen >= 16 &&
-                !DemographyRulesHook.Installed &&
+                !DemographyRulesHook.IsCustomInstalled &&
                 Kernels.NativeKernelsLoader.EnableEconomyDemoDefault &&
                 Kernels.NativeKernelsLoader.HasCapability(Kernels.NativeKernelsLoader.CapEconomyDemo))
             {
@@ -416,9 +416,19 @@ public static class DemographicCycle
         }
     }
 
-    [ThreadStatic] private static CoalesceInterner _coalesceCultures;
-    [ThreadStatic] private static CoalesceInterner _coalesceFaiths;
-    [ThreadStatic] private static CoalesceInterner _coalesceTrades;
+    private sealed class CoalesceScratch
+    {
+        public readonly CoalesceInterner Cultures = new();
+        public readonly CoalesceInterner Faiths = new();
+        public readonly CoalesceInterner Trades = new();
+        public readonly Dictionary<long, int> ExactHosts = new(64);
+        public readonly Dictionary<long, int> PairBest = new(32);
+        public readonly List<long> GroupPairs = new(64);
+        public readonly Dictionary<string, long> PeopleHere = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    [ThreadStatic] private static CoalesceScratch _coalesceScratch;
+    private static CoalesceScratch ThreadScratch => _coalesceScratch ??= new CoalesceScratch();
 
     private static void MergeGroupWeighted(PopulationGroup host, PopulationGroup gone)
     {
@@ -452,9 +462,10 @@ public static class DemographicCycle
         var count = groups.Count;
         if (count > 1)
         {
-            var cultureIds = _coalesceCultures ??= new CoalesceInterner();
-            var faithIds = _coalesceFaiths ??= new CoalesceInterner();
-            var tradeIds = _coalesceTrades ??= new CoalesceInterner();
+            var scratch = ThreadScratch;
+            var cultureIds = scratch.Cultures;
+            var faithIds = scratch.Faiths;
+            var tradeIds = scratch.Trades;
             if (cultureIds.Count >= 16384) cultureIds.Reset();
             if (faithIds.Count >= 16384) faithIds.Reset();
             if (tradeIds.Count >= 16384) tradeIds.Reset();
@@ -468,8 +479,8 @@ public static class DemographicCycle
                 }
             }
             changed |= checkMicro
-                ? CoalesceWithMicro(groups, count, cultureIds, faithIds, tradeIds)
-                : CoalesceExactOnly(groups, count, cultureIds, faithIds, tradeIds);
+                ? CoalesceWithMicro(groups, count, scratch)
+                : CoalesceExactOnly(groups, count, scratch);
         }
 
         // And the slivers a century of migration leaves, into their nearest kin (PopulationFolding).
@@ -488,10 +499,13 @@ public static class DemographicCycle
         return changed;
     }
 
-    private static bool CoalesceExactOnly(List<PopulationGroup> groups, int count,
-        CoalesceInterner cultureIds, CoalesceInterner faithIds, CoalesceInterner tradeIds)
+    private static bool CoalesceExactOnly(List<PopulationGroup> groups, int count, CoalesceScratch scratch)
     {
-        using var exactHosts = new HeapSpanDictionary<long, int>(count);
+        var cultureIds = scratch.Cultures;
+        var faithIds = scratch.Faiths;
+        var tradeIds = scratch.Trades;
+        var exactHosts = scratch.ExactHosts;
+        exactHosts.Clear();
         string lastCulture = null, lastFaith = null, lastTrade = null;
         int cultureId = -1, faithId = -1, tradeId = -1;
         var merged = false;
@@ -536,12 +550,17 @@ public static class DemographicCycle
         return merged;
     }
 
-    private static bool CoalesceWithMicro(List<PopulationGroup> groups, int count,
-        CoalesceInterner cultureIds, CoalesceInterner faithIds, CoalesceInterner tradeIds)
+    private static bool CoalesceWithMicro(List<PopulationGroup> groups, int count, CoalesceScratch scratch)
     {
-        using var exactHosts = new HeapSpanDictionary<long, int>(count);
-        using var pairBest = new HeapSpanDictionary<long, int>(Math.Min(count, 64));
-        using var groupPairs = new HeapPooledList<long>(count);
+        var cultureIds = scratch.Cultures;
+        var faithIds = scratch.Faiths;
+        var tradeIds = scratch.Trades;
+        var exactHosts = scratch.ExactHosts;
+        var pairBest = scratch.PairBest;
+        var groupPairs = scratch.GroupPairs;
+        exactHosts.Clear();
+        pairBest.Clear();
+        groupPairs.Clear();
 
         string lastCulture = null, lastFaith = null, lastTrade = null;
         int cultureId = -1, faithId = -1, tradeId = -1;
@@ -610,9 +629,7 @@ public static class DemographicCycle
         return merged;
     }
 
-    // One per thread: regions are worked side by side (Stages).
-    [ThreadStatic] private static Dictionary<string, long> _peopleHere;
-    private static Dictionary<string, long> PeopleHere => _peopleHere ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+    private static Dictionary<string, long> PeopleHere => ThreadScratch.PeopleHere;
 
     /// <summary>
     /// Which countries are for which people, for one campaign's one day: every country under the

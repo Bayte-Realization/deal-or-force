@@ -39,6 +39,8 @@ public static partial class NativeKernelsLoader
     public const uint CapNeon = 1u << 5;
     public const uint CapRenderPrep = 1u << 6;
     public const uint CapEconomyDemo = 1u << 7;
+    public const uint CapIncrementalRaster = 1u << 8;
+    public const uint CapWartimeGraph = 1u << 9;
 
     /// <summary>Allows differential and fallback tests to force the pure-C# path cleanly in-process.</summary>
     public static volatile bool SimulateUnavailableForTests;
@@ -49,17 +51,22 @@ public static partial class NativeKernelsLoader
     /// Env overrides: <c>DOF_NATIVE_RASTER=0|1</c>, <c>DOF_NATIVE_DISTANCE_FIELD=0|1</c>,
     /// <c>DOF_NATIVE_SUPPLY=0|1</c>, <c>DOF_NATIVE_TRADE=0|1</c>,
     /// <c>DOF_NATIVE_DIPLOMACY=0|1</c>, <c>DOF_NATIVE_MARKET=0|1</c>, <c>DOF_NATIVE_DISTANCE=0|1</c>,
-    /// <c>DOF_NATIVE_ECONOMY_DEMO=0|1</c>, <c>DOF_NATIVE_DEMO_AGGREGATE=0|1</c>.
+    /// <c>DOF_NATIVE_ECONOMY_DEMO=0|1</c>, <c>DOF_NATIVE_DEMO_AGGREGATE=0|1</c>,
+    /// <c>DOF_NATIVE_INCREMENTAL_RASTER=0|1</c>, <c>DOF_NATIVE_WARTIME_GRAPH=0|1</c>,
+    /// <c>DOF_NATIVE_POLITICAL_COHORTS=0|1</c>.
     /// </summary>
     public static bool EnableRasterDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_RASTER", defaultValue: true);
     public static bool EnableDistanceFieldDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_DISTANCE_FIELD", defaultValue: true);
-    public static bool EnableSupplyDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_SUPPLY", defaultValue: false);
-    public static bool EnableTradeDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_TRADE", defaultValue: false);
+    public static bool EnableSupplyDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_SUPPLY", defaultValue: OperatingSystem.IsAndroid() || OperatingSystem.IsIOS());
+    public static bool EnableTradeDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_TRADE", defaultValue: OperatingSystem.IsAndroid() || OperatingSystem.IsIOS());
     public static bool EnableDiplomacyDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_DIPLOMACY", defaultValue: true);
     public static bool EnableMarketDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_MARKET", defaultValue: true);
     public static bool EnableDistanceDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_DISTANCE", defaultValue: true);
     public static bool EnableEconomyDemoDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_ECONOMY_DEMO", defaultValue: true);
-    public static bool EnableDemoAggregateDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_DEMO_AGGREGATE", defaultValue: false);
+    public static bool EnableDemoAggregateDefault { get; set; } = ReadEnvFlag("DOF_NATIVE_DEMO_AGGREGATE", defaultValue: OperatingSystem.IsAndroid() || OperatingSystem.IsIOS());
+    public static readonly bool EnableIncrementalRasterDefault = ReadEnvFlag("DOF_NATIVE_INCREMENTAL_RASTER", defaultValue: true);
+    public static readonly bool EnableWartimeGraphDefault = ReadEnvFlag("DOF_NATIVE_WARTIME_GRAPH", defaultValue: true);
+    public static readonly bool EnablePoliticalCohortsDefault = ReadEnvFlag("DOF_NATIVE_POLITICAL_COHORTS", defaultValue: true);
 
     public static bool IsAvailable
     {

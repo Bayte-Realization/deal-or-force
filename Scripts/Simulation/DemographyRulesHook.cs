@@ -19,14 +19,20 @@ internal delegate void DemographyCohortStepper(
 /// </summary>
 internal static class DemographyRulesHook
 {
-    private static DemographyWorkingShareEvaluator? _workingShare;
-    private static DemographyFertilityEvaluator? _fertility;
-    private static DemographyMortalityEvaluator? _mortality;
-    private static DemographyCohortStepper? _stepCohorts;
+    private sealed record HookBundle(
+        DemographyWorkingShareEvaluator? WorkingShare,
+        DemographyFertilityEvaluator? Fertility,
+        DemographyMortalityEvaluator? Mortality,
+        DemographyCohortStepper? StepCohorts,
+        bool BuiltInEquivalent);
+
+    private static HookBundle? _bundle;
 
     internal static bool Installed =>
-        _workingShare is not null && _fertility is not null &&
-        _mortality is not null && _stepCohorts is not null;
+        _bundle is { WorkingShare: not null, Fertility: not null, Mortality: not null, StepCohorts: not null };
+
+    /// <summary>True only when a non-built-in (custom test/mod) demography rules hook is installed.</summary>
+    internal static bool IsCustomInstalled => Installed && _bundle is { BuiltInEquivalent: false };
 
     internal static bool UsingFSharp => Installed;
 
@@ -34,23 +40,22 @@ internal static class DemographyRulesHook
         DemographyWorkingShareEvaluator workingShare,
         DemographyFertilityEvaluator fertility,
         DemographyMortalityEvaluator mortality,
-        DemographyCohortStepper stepCohorts)
+        DemographyCohortStepper stepCohorts,
+        bool builtInEquivalent = false)
     {
-        _workingShare = workingShare;
-        _fertility = fertility;
-        _mortality = mortality;
-        _stepCohorts = stepCohorts;
+        _bundle = new HookBundle(workingShare, fertility, mortality, stepCohorts, builtInEquivalent);
     }
 
     internal static float WorkingShare(float youngShare, float oldShare)
     {
-        var hook = _workingShare;
+        var bundle = _bundle;
+        var hook = bundle?.WorkingShare;
         if (hook is not null)
         {
             try { return hook(youngShare, oldShare); }
             catch (Exception error)
             {
-                _workingShare = null;
+                _bundle = bundle! with { WorkingShare = null };
                 DiagnosticLogs.Write("simulation",
                     $"RULES_BACKEND fallback=managed rule=demography_working reason={error.GetType().Name}");
             }
@@ -60,13 +65,14 @@ internal static class DemographyRulesHook
 
     internal static float FertilityFactor(float youngShare)
     {
-        var hook = _fertility;
+        var bundle = _bundle;
+        var hook = bundle?.Fertility;
         if (hook is not null)
         {
             try { return hook(youngShare); }
             catch (Exception error)
             {
-                _fertility = null;
+                _bundle = bundle! with { Fertility = null };
                 DiagnosticLogs.Write("simulation",
                     $"RULES_BACKEND fallback=managed rule=demography_fertility reason={error.GetType().Name}");
             }
@@ -76,13 +82,14 @@ internal static class DemographyRulesHook
 
     internal static float MortalityFactor(float oldShare, float referenceOldShare, float mortalityOldWeight)
     {
-        var hook = _mortality;
+        var bundle = _bundle;
+        var hook = bundle?.Mortality;
         if (hook is not null)
         {
             try { return hook(oldShare, referenceOldShare, mortalityOldWeight); }
             catch (Exception error)
             {
-                _mortality = null;
+                _bundle = bundle! with { Mortality = null };
                 DiagnosticLogs.Write("simulation",
                     $"RULES_BACKEND fallback=managed rule=demography_mortality reason={error.GetType().Name}");
             }
@@ -96,7 +103,8 @@ internal static class DemographyRulesHook
         float maturationAnnual, float ageingAnnual, float mortalityOldWeight, float interval,
         out float nextYoungShare, out float nextOldShare, out float nextWorkingShare)
     {
-        var hook = _stepCohorts;
+        var bundle = _bundle;
+        var hook = bundle?.StepCohorts;
         if (hook is not null)
         {
             try
@@ -108,7 +116,7 @@ internal static class DemographyRulesHook
             }
             catch (Exception error)
             {
-                _stepCohorts = null;
+                _bundle = bundle! with { StepCohorts = null };
                 DiagnosticLogs.Write("simulation",
                     $"RULES_BACKEND fallback=managed rule=demography_step reason={error.GetType().Name}");
             }

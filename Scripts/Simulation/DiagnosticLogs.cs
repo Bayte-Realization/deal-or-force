@@ -28,6 +28,7 @@ public static class DiagnosticLogs
     private static long _fileLimit = 4 * 1024 * 1024;
     private static bool _configLoaded;
     private static bool _configEnabled = true;
+    private static bool _verboseSimulation;
     public static double SlowScopeMilliseconds { get; private set; } = 40;
     public static long MaxFileBytes => _fileLimit;
     public static int QueueLimit => _queueLimit;
@@ -35,6 +36,13 @@ public static class DiagnosticLogs
     public static string DirectoryPath { get; private set; } = "";
     public static string LastFailure { get; private set; } = "";
     public static bool Enabled => _running;
+    /// <summary>
+    /// High-volume per-battle-round and per-day diagnostic lines (DAY_BEGIN, DAY_END, BATTLE_ROUND,
+    /// SUPPORT_RELOCATE). Disabled by default to prevent multi-MB/min string allocations and disk I/O
+    /// during large wars; opt in via <c>"verbose_simulation": true</c> in <c>common/diagnostics</c>
+    /// or <c>DOF_VERBOSE_SIM_LOG=1</c>.
+    /// </summary>
+    public static bool VerboseSimulation => _running && _verboseSimulation;
     public static long WrittenLines { get; private set; }
 
     /// <summary>
@@ -48,6 +56,7 @@ public static class DiagnosticLogs
     public static bool ResetCatalog()
     {
         _configEnabled = true;
+        _verboseSimulation = string.Equals(Environment.GetEnvironmentVariable("DOF_VERBOSE_SIM_LOG"), "1", StringComparison.Ordinal);
         _fileLimit = 4 * 1024 * 1024;
         _queueLimit = 2048;
         SlowScopeMilliseconds = 40;
@@ -65,6 +74,9 @@ public static class DiagnosticLogs
         if (root.TryGetProperty("enabled", out var enabled) &&
             enabled.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
             _configEnabled = enabled.GetBoolean();
+        if (root.TryGetProperty("verbose_simulation", out var verbose) &&
+            verbose.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+            _verboseSimulation = verbose.GetBoolean();
         if (root.TryGetProperty("max_file_mb", out var mb) && mb.TryGetInt32(out var mbCount))
             _fileLimit = Math.Clamp(mbCount, 1, 32) * 1024L * 1024L;
         if (root.TryGetProperty("queue_limit", out var q) && q.TryGetInt32(out var queueLimit))

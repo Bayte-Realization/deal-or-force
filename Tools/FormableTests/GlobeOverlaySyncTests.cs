@@ -267,22 +267,29 @@ public static class GlobeOverlaySyncTests
         Check(militarySrc.Contains("Speed: >= 4", StringComparison.Ordinal) &&
               militarySrc.Contains("timeSinceLast >= (isMobileOrTouch ? 0.14 : 0.033)", StringComparison.Ordinal) &&
               militarySrc.Contains("bool forceNow = false", StringComparison.Ordinal) &&
-              militarySrc.Contains("BattleBadgePoolCap = 192", StringComparison.Ordinal) &&
+              militarySrc.Contains("_battleBadgeMultiMesh", StringComparison.Ordinal) &&
+              militarySrc.Contains("BattleBadgeGpu.WriteInstance(", StringComparison.Ordinal) &&
               militarySrc.Contains("_counterTextureScratch", StringComparison.Ordinal) &&
-              badgeSrc.Contains("MathF.Abs(_share - share) <= 0.01f", StringComparison.Ordinal),
-            "MilitaryPresentation pools 192 battle badges, reuses counter texture buffers, and widens badge redraw hysteresis");
+              badgeSrc.Contains("public static class BattleBadgeGpu", StringComparison.Ordinal) &&
+              badgeSrc.Contains("PackDefenderColor", StringComparison.Ordinal) &&
+              !militarySrc.Contains("new SubViewport", StringComparison.Ordinal) &&
+              !badgeSrc.Contains("new SubViewport", StringComparison.Ordinal),
+            "MilitaryPresentation uses zero-SubViewport GPU-instanced BattleBadgeGpu MultiMesh and reuses counter texture buffers");
 
-        Check(plateSrc.Contains("PlateRepaintSeconds = 0.75;", StringComparison.Ordinal) &&
-              plateSrc.Contains("FrontierRepaintSeconds = 2.5;", StringComparison.Ordinal) &&
-              plateSrc.Contains("MobilePlateRepaintSeconds = 6.5;", StringComparison.Ordinal) &&
-              plateSrc.Contains("FastSimPlateRepaintSeconds = 2.5;", StringComparison.Ordinal) &&
-              plateSrc.Contains("FastSimFrontierRepaintSeconds = 10.0;", StringComparison.Ordinal) &&
-              plateSrc.Contains("PaintInto(", StringComparison.Ordinal) &&
-              plateSrc.Contains("BuildInto(", StringComparison.Ordinal) &&
+        Check(plateSrc.Contains("PlateRepaintSeconds = 0.25;", StringComparison.Ordinal) &&
+              plateSrc.Contains("FrontierRepaintSeconds = 0.50;", StringComparison.Ordinal) &&
+              plateSrc.Contains("MobilePlateRepaintSeconds = 1.0;", StringComparison.Ordinal) &&
+              plateSrc.Contains("FastSimPlateRepaintSeconds = 0.35;", StringComparison.Ordinal) &&
+              plateSrc.Contains("FastSimFrontierRepaintSeconds = 0.85;", StringComparison.Ordinal) &&
+              plateSrc.Contains("GpuPlateRepaintSeconds = 0.16;", StringComparison.Ordinal) &&
+              plateSrc.Contains("GpuFrontierRepaintSeconds = 0.30;", StringComparison.Ordinal) &&
+              plateSrc.Contains("PaintDirtyMipmappedInto(", StringComparison.Ordinal) &&
+              plateSrc.Contains("FrontierImageDirtyInto(", StringComparison.Ordinal) &&
+              plateSrc.Contains("_gpuMapCompute", StringComparison.Ordinal) &&
               plateSrc.Contains("pendingPlate.Dispose();", StringComparison.Ordinal) &&
               plateSrc.Contains("frontier.Dispose();", StringComparison.Ordinal) &&
               plateSrc.Contains("image.Dispose();", StringComparison.Ordinal),
-            "GlobePlateRepaint reuses LOH raster buffers, throttles Speed 4-5 repaints, and disposes unmanaged Image handles");
+            "GlobePlateRepaint uses GPU compute + incremental dirty-rect mipmaps, reuses LOH buffers, and disposes unmanaged Image handles");
 
         var counterSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "FlatCounterPresentation.cs"));
         var unitsSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobePresentation.UnitsAndMarkers.cs"));

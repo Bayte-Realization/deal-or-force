@@ -71,9 +71,7 @@ public sealed partial class GlobePresentation
 
     private void ApplyBattleVfxQualityTier(float tier)
     {
-        foreach (var marker in _battleMarkers.Values)
-            if (IsInstanceValid(marker.Node))
-                marker.Node.GetNodeOrNull<SurfaceBattleBadge>("SurfaceBadge")?.SetQualityTier(tier);
+        _battleBadgeMaterial?.SetShaderParameter("quality_tier", tier);
     }
 
     private void BeginBattleVfxFrame()

@@ -66,24 +66,37 @@ public sealed partial class GlobePresentation
 {
     internal bool VerificationSurfaceBattleInk(int id)
     {
-        var node = _battleMarkers[id].Node;
-        var plate = node.GetNode<SurfaceBattleBadge>("SurfaceBadge").Plate;
-        using var ink = plate.Texture.GetImage();
+        if (!_battleMarkers.TryGetValue(id, out var marker) ||
+            !marker.Visible ||
+            !IsInstanceValid(_battleBadgeMultiMeshNode) ||
+            _battleBadgeMultiMesh is null ||
+            _battleBadgeMultiMesh.VisibleInstanceCount <= 0)
+            return false;
+        using var ink = BattleBadgeGpu.GlyphAtlas.GetImage();
         var visible = 0;
         for (var y = 0; y < ink.GetHeight(); y++) for (var x = 0; x < ink.GetWidth(); x++)
-            if (ink.GetPixel(x, y).A > .1f) visible++;
-        var screen = _camera.UnprojectPosition(node.GlobalPosition);
-        GD.Print($"BATTLE_PROOF ink={visible} screen={screen} width={node.Scale.X} position={node.GlobalPosition}");
-        return visible > 100 && new Rect2(Vector2.Zero, Size).HasPoint(screen);
+            if (ink.GetPixel(x, y).R > .1f) visible++;
+        var worldPos = _battleRoot.GlobalTransform * marker.LocalPosition;
+        var screen = _camera.UnprojectPosition(worldPos);
+        GD.Print($"BATTLE_PROOF gpu=1 atlasInk={visible} instances={_battleBadgeMultiMesh.VisibleInstanceCount} screen={screen} width={marker.Width} position={worldPos}");
+        return visible > 100 && marker.Width > 0f && new Rect2(Vector2.Zero, Size).HasPoint(screen);
     }
     internal (bool Surface, bool Depth, bool Visible, bool Hit) VerificationSurfaceBattleState(int id)
     {
-        if (!_battleMarkers.TryGetValue(id, out var marker) || marker.Node.GetNodeOrNull<SurfaceBattleBadge>("SurfaceBadge")?.Plate is not { } plate)
+        if (!_battleMarkers.TryGetValue(id, out var marker) ||
+            !IsInstanceValid(_battleBadgeMultiMeshNode) ||
+            _battleBadgeMultiMesh is null ||
+            _battleBadgeMaterial?.Shader is not { } shader)
             return (false, false, false, false);
-        var visible = plate.IsVisibleInTree();
-        var hit = TryPickBattle(_camera.UnprojectPosition(marker.Node.GlobalPosition), out var picked) && picked.Id == id;
-        return (plate.Billboard == BaseMaterial3D.BillboardModeEnum.Disabled &&
-            (_flatMap || marker.Node.Basis.Z.Normalized().Dot(marker.Normal) > .99f), !plate.NoDepthTest, visible, hit);
+        var visible = marker.Visible && _battleRoot.Visible && _battleBadgeMultiMeshNode.IsVisibleInTree() &&
+            _battleBadgeMultiMesh.VisibleInstanceCount > 0;
+        var worldPos = _battleRoot.GlobalTransform * marker.LocalPosition;
+        var hit = TryPickBattle(_camera.UnprojectPosition(worldPos), out var picked) && picked.Id == id;
+        var code = shader.Code ?? string.Empty;
+        var surface = !code.Contains("billboard", StringComparison.OrdinalIgnoreCase) &&
+            (_flatMap || new Basis(marker.LocalRotation).Z.Normalized().Dot(marker.Normal) > .99f);
+        var depth = !code.Contains("depth_test_disabled", StringComparison.OrdinalIgnoreCase);
+        return (surface, depth, visible, hit);
     }
     internal bool VerificationArmyFlagsMatch(string tag)
     {

@@ -5,11 +5,14 @@ using System.Runtime.CompilerServices;
 namespace DealOrForce.Simulation;
 
 /// <summary>Current contacts, not permanent exploration or permission to command.</summary>
-public sealed class ProvinceVision
+public sealed partial class ProvinceVision
 {
     internal byte[] Reach = Array.Empty<byte>();
     internal readonly Queue<int> Frontier = new();
     internal readonly HashSet<int> CombatContacts = new();
+    internal int[] SeedProvinces = Array.Empty<int>();
+    internal byte[] SeedDepths = Array.Empty<byte>();
+    internal int SeedCount;
     internal int Stamp;
 
     // What the country's own ground reveals, kept between rebuilds. It is most of a rebuild
@@ -183,13 +186,20 @@ public static partial class CampaignIntel
             if (view.Revision > 0 && view.Stamp == stamp && ReferenceEquals(view.StampMap, map)) return view;
             view.Stamp = stamp;
             view.StampMap = map;
-            view.Revision++;
             using var timer = SimProfiler.Measure("intel.visibility");
             var nation = c.NationById(viewerId);
-            if (map is null || nation is null) { view.Reach = Array.Empty<byte>(); return view; }
-            if (view.Reach.Length != map.ProvinceCount + 1) view.Reach = new byte[map.ProvinceCount + 1];
-            view.Frontier.Clear();
-            view.CombatContacts.Clear();
+            if (map is null || nation is null)
+            {
+                view.Revision++;
+                view.FullReachValid = false;
+                view.Reach = Array.Empty<byte>();
+                return view;
+            }
+            if (view.Reach.Length != map.ProvinceCount + 1)
+            {
+                view.Reach = new byte[map.ProvinceCount + 1];
+                view.FullReachValid = false;
+            }
             var borderDepth = Math.Clamp(c.Defines.BorderVisionDepth, 0, 6);
             var armyDepth = Math.Clamp(c.Defines.ArmyVisionDepth, 0, 6);
             var controllers = c.ProvinceController ?? map.ProvinceToNation;
@@ -200,49 +210,63 @@ public static partial class CampaignIntel
             var controllerVersion = (uint)nation.MapIndex < (uint)cache.ControllerVersion.Length
                 ? cache.ControllerVersion[nation.MapIndex] : 0;
 
-            if (view.TerritoryMapIndex == nation.MapIndex &&
+            var territoryMatched =
+                view.TerritoryMapIndex == nation.MapIndex &&
                 view.TerritoryDepth == borderDepth &&
                 view.TerritoryGeneration == cache.ControllerGeneration &&
                 view.TerritoryControllerVersion == controllerVersion &&
                 ReferenceEquals(view.TerritoryMap, map) &&
-                view.TerritoryReach.Length == view.Reach.Length)
+                view.TerritoryReach.Length == view.Reach.Length;
+
+            var hasBattles = EnsureActorIndex(c, cache, stamp, map, Math.Clamp(c.Defines.LandingVisionRangeDegrees, .1f, 3f));
+            if (TryReuseViewerVision(c, cache, view, nation, viewerId, territoryMatched, hasBattles,
+                    borderDepth, armyDepth, out var actorSig, out var intelCount, out var intelEnabled))
+                return view;
+
+            view.Revision++;
+            view.Frontier.Clear();
+            view.CombatContacts.Clear();
+            var nativeGraph = Kernels.NativeProvinceGraph.ForMap(map);
+
+            if (territoryMatched)
             {
                 Array.Copy(view.TerritoryReach, view.Reach, view.Reach.Length);
             }
             else
             {
                 var reach = view.Reach;
-                Array.Clear(reach);
-                var ownLevel = (byte)(borderDepth + 1);
-                var reachLen = reach.Length;
-                for (var i = 0; i < owned.Length; i++)
+                if (nativeGraph is null || !nativeGraph.TrySeedTerritoryVision(owned, (byte)borderDepth, reach))
                 {
-                    var p = owned[i];
-                    if (p > 0 && p < reachLen) reach[p] = ownLevel;
-                }
-                if (borderDepth > 0)
-                {
-                    // Only enqueue border provinces (those adjacent to at least one non-owned tile);
-                    // interior tiles have all neighbors at ownLevel and would pop as no-ops in FloodVision.
-                    var neighbors = map.Neighbors;
-                    var frontier = view.Frontier;
+                    Array.Clear(reach);
+                    var ownLevel = (byte)(borderDepth + 1);
+                    var reachLen = reach.Length;
                     for (var i = 0; i < owned.Length; i++)
                     {
                         var p = owned[i];
-                        if (p <= 0 || p >= neighbors.Length) continue;
-                        var adj = neighbors[p];
-                        if (adj is null) continue;
-                        for (var j = 0; j < adj.Length; j++)
+                        if (p > 0 && p < reachLen) reach[p] = ownLevel;
+                    }
+                    if (borderDepth > 0)
+                    {
+                        var neighbors = map.Neighbors;
+                        var frontier = view.Frontier;
+                        for (var i = 0; i < owned.Length; i++)
                         {
-                            var n = adj[j];
-                            if (n > 0 && n < reachLen && reach[n] < ownLevel)
+                            var p = owned[i];
+                            if (p <= 0 || p >= neighbors.Length) continue;
+                            var adj = neighbors[p];
+                            if (adj is null) continue;
+                            for (var j = 0; j < adj.Length; j++)
                             {
-                                frontier.Enqueue(p);
-                                break;
+                                var n = adj[j];
+                                if (n > 0 && n < reachLen && reach[n] < ownLevel)
+                                {
+                                    frontier.Enqueue(p);
+                                    break;
+                                }
                             }
                         }
+                        FloodVision(reach, frontier, map);
                     }
-                    FloodVision(reach, frontier, map);
                 }
                 if (view.TerritoryReach.Length != reach.Length) view.TerritoryReach = new byte[reach.Length];
                 Array.Copy(reach, view.TerritoryReach, reach.Length);
@@ -253,44 +277,11 @@ public static partial class CampaignIntel
                 view.TerritoryControllerVersion = controllerVersion;
                 view.TerritoryMap = map;
             }
-            var hasBattles = EnsureActorIndex(c, cache, stamp, map, Math.Clamp(c.Defines.LandingVisionRangeDegrees, .1f, 3f));
-            if ((uint)viewerId < (uint)cache.ArmiesByNationDense.Length && cache.ArmiesByNationDense[viewerId] is { Count: > 0 } myArmies)
-                for (var i = 0; i < myArmies.Count; i++) RevealProvince(view.Reach, view.Frontier, myArmies[i], armyDepth);
-            if (hasBattles && (uint)viewerId < (uint)cache.BattlesByNationDense.Length && cache.BattlesByNationDense[viewerId] is { Count: > 0 } myBattles)
-            {
-                for (var i = 0; i < myBattles.Count; i++)
-                {
-                    var bi = myBattles[i];
-                    if ((uint)bi >= (uint)c.Battles.Count) continue;
-                    var battle = c.Battles[bi];
-                    RevealProvince(view.Reach, view.Frontier, battle.ProvinceId, armyDepth);
-                    view.CombatContacts.UnionWith(battle.Attackers);
-                    view.CombatContacts.UnionWith(battle.Defenders);
-                }
-            }
-            if (view.CombatContacts.Count > 0)
-            {
-                var denseProv = cache.ArmyProvinceByIdDense;
-                var denseStamp = cache.ArmyProvinceStampDense;
-                var curStamp = cache.ArmyProvinceStamp;
-                foreach (var contactId in view.CombatContacts)
-                {
-                    if ((uint)contactId < (uint)denseProv.Length)
-                    {
-                        if (denseStamp[contactId] == curStamp) RevealProvince(view.Reach, view.Frontier, denseProv[contactId], 0);
-                    }
-                    else if (cache.ArmyProvinceOverflow.TryGetValue(contactId, out var prov))
-                        RevealProvince(view.Reach, view.Frontier, prov, 0);
-                }
-            }
-            // An invasion order alone is NOT reconnaissance across the world. The fleet
-            // must actually have approached its beach, or combat must already have begun.
-            if (cache.InvasionBeachesByNation.TryGetValue(viewerId, out var beaches))
-                for (var i = 0; i < beaches.Count; i++) RevealProvince(view.Reach, view.Frontier, beaches[i], armyDepth);
-            FloodVision(view.Reach, view.Frontier, map);
+            RebuildVisionSeedsAndFlood(c, cache, view, map, nativeGraph, viewerId, hasBattles, armyDepth);
             // What agents report and what reconnaissance flights photograph: seen, not seen past.
             IntelNetworks.RevealInto(c, viewerId, view.Reach);
             AirReconnaissance.RevealInto(c, viewerId, view.Reach);
+            StampViewerVision(view, cache, actorSig, intelCount, intelEnabled);
             return view;
         }
     }

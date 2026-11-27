@@ -452,7 +452,7 @@ public sealed partial class GlobePresentation
         const int size = 32;
         const int scale = 2;
         const int s = size * scale;
-        var image = Image.CreateEmpty(s, s, false, Image.Format.Rgba8);
+        using var image = Image.CreateEmpty(s, s, false, Image.Format.Rgba8);
         var centre = (s - 1) / 2f;
         var gold = new Color(0.99f, 0.85f, 0.38f);
         var ivory = new Color(0.95f, 0.97f, 0.99f);

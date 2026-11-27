@@ -283,7 +283,7 @@ public sealed partial class Campaign
             yield break;
         }
         DiagnosticLogs.SetDay(ElapsedDays);
-        if (DiagnosticLogs.Enabled) DiagnosticLogs.Write("simulation", $"DAY_BEGIN date={Date} pending_commands={Commands.Count}");
+        if (DiagnosticLogs.VerboseSimulation) DiagnosticLogs.Write("simulation", $"DAY_BEGIN date={Date} pending_commands={Commands.Count}");
 
         // Three parts named apart: a quarter of a millisecond every hour was billed to "orders"
         // in a world where nobody was giving any, and the table could not say which part it was.
@@ -1575,7 +1575,7 @@ public sealed partial class Campaign
             Date.Advance(tailHours);
         }
         CampaignIntel.InvalidateActors(this);
-        if (DiagnosticLogs.Enabled)
+        if (DiagnosticLogs.VerboseSimulation)
             DiagnosticLogs.Write("simulation", $"DAY_END date={Date} player={Player?.Tag} divisions={Armies.Count} fleets={Fleets.Count} wars={ActiveWars.Count} battles={Battles.Count(b => !b.Ended)} training={Recruitment.Count} construction={Construction.Count} treasury={DiagnosticLogs.N(Player?.Treasury ?? 0)} gdp={DiagnosticLogs.N(Player?.Gdp ?? 0)} map_revision={MapRevision}");
 
         // The interface redraws what changed when it next draws (FlushInterfaceChanges), not

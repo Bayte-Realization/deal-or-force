@@ -399,6 +399,17 @@ public sealed partial class GlobePresentation
             }
         }
         if (_frontTouchedMapIndices.Count == 0) return;
+        SweepLiveWarFronts(pixels, liveControl, topology);
+    }
+
+    private void SweepLiveWarFronts(byte[] pixels, ushort[] liveControl, Simulation.ProvinceTopology topology)
+    {
+        var provCount = Math.Min(topology.ProvinceCount, Math.Min(liveControl.Length - 1, (256 * 256) - 1));
+        if (provCount <= 0 || topology.Neighbors is not { Length: > 0 } neighbors)
+        {
+            CleanupFrontMapIndices();
+            return;
+        }
 
         for (var p = 1; p <= provCount; p++)
         {
@@ -510,6 +521,11 @@ public sealed partial class GlobePresentation
             }
         }
 
+        CleanupFrontMapIndices();
+    }
+
+    private void CleanupFrontMapIndices()
+    {
         for (var ti = 0; ti < _frontTouchedMapIndices.Count; ti++)
         {
             var idx = _frontTouchedMapIndices[ti];
@@ -533,41 +549,46 @@ public sealed partial class GlobePresentation
         foreach (var id in sideMembers)
         {
             var mapIdx = _campaign.NationById(id)?.MapIndex ?? 0;
-            if (mapIdx <= 0 || mapIdx >= _frontSideByMapIndex.Length) continue;
-            var prevCount = _frontWarCountByMapIndex[mapIdx];
-            if (prevCount == 0)
-            {
-                _frontSideByMapIndex[mapIdx] = sideCode;
-                _frontWarCountByMapIndex[mapIdx] = 1;
-                _frontWarOrderByMapIndex[mapIdx] = warOrder;
-                _frontWarIdByMapIndex[mapIdx] = warId;
-                _frontTouchedMapIndices.Add(mapIdx);
-            }
-            else
-            {
-                if (!_frontMultiWarByMapIndex.TryGetValue(mapIdx, out var list))
-                {
-                    var poolIdx = _frontMultiWarListPool.Count - 1;
-                    if (poolIdx >= 0)
-                    {
-                        list = _frontMultiWarListPool[poolIdx];
-                        _frontMultiWarListPool.RemoveAt(poolIdx);
-                    }
-                    else
-                    {
-                        list = new List<(int Order, int WarId, byte WarCode, byte Side)>(4);
-                    }
-                    var firstOrder = _frontWarOrderByMapIndex[mapIdx];
-                    var firstId = _frontWarIdByMapIndex[mapIdx];
-                    list.Add((firstOrder, firstId, (byte)(firstId % 254 + 1), _frontSideByMapIndex[mapIdx]));
-                    _frontMultiWarByMapIndex[mapIdx] = list;
-                }
-                list.Add((warOrder, warId, warCode, sideCode));
-                _frontWarCountByMapIndex[mapIdx] = prevCount < byte.MaxValue ? (byte)(prevCount + 1) : byte.MaxValue;
-            }
-            any = true;
+            if (RegisterFrontBelligerent(mapIdx, warOrder, warId, warCode, sideCode)) any = true;
         }
         return any;
+    }
+
+    private bool RegisterFrontBelligerent(int mapIdx, int warOrder, int warId, byte warCode, byte sideCode)
+    {
+        if (mapIdx <= 0 || mapIdx >= _frontSideByMapIndex.Length) return false;
+        var prevCount = _frontWarCountByMapIndex[mapIdx];
+        if (prevCount == 0)
+        {
+            _frontSideByMapIndex[mapIdx] = sideCode;
+            _frontWarCountByMapIndex[mapIdx] = 1;
+            _frontWarOrderByMapIndex[mapIdx] = warOrder;
+            _frontWarIdByMapIndex[mapIdx] = warId;
+            _frontTouchedMapIndices.Add(mapIdx);
+        }
+        else
+        {
+            if (!_frontMultiWarByMapIndex.TryGetValue(mapIdx, out var list))
+            {
+                var poolIdx = _frontMultiWarListPool.Count - 1;
+                if (poolIdx >= 0)
+                {
+                    list = _frontMultiWarListPool[poolIdx];
+                    _frontMultiWarListPool.RemoveAt(poolIdx);
+                }
+                else
+                {
+                    list = new List<(int Order, int WarId, byte WarCode, byte Side)>(4);
+                }
+                var firstOrder = _frontWarOrderByMapIndex[mapIdx];
+                var firstId = _frontWarIdByMapIndex[mapIdx];
+                list.Add((firstOrder, firstId, (byte)(firstId % 254 + 1), _frontSideByMapIndex[mapIdx]));
+                _frontMultiWarByMapIndex[mapIdx] = list;
+            }
+            list.Add((warOrder, warId, warCode, sideCode));
+            _frontWarCountByMapIndex[mapIdx] = prevCount < byte.MaxValue ? (byte)(prevCount + 1) : byte.MaxValue;
+        }
+        return true;
     }
 
     private static byte PlanCode(Simulation.FrontLineKind kind) => kind switch

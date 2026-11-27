@@ -383,14 +383,49 @@ public static class StateIdentity
 
         var groups = state.PopulationGroups;
         long total = 0, faithMatch = 0, cultureMatch = 0;
+        var declaredReligion = nation.DeclaredReligion;
+        var declaredCulture = nation.DeclaredCulture;
+        string[] seen = null;
+        bool[] answers = null;
+        var next = 0;
+        if (hasReligion)
+        {
+            seen = _faithSeen ??= new string[FaithMemo];
+            answers = _faithAnswer ??= new bool[FaithMemo];
+            Array.Clear(seen, 0, FaithMemo);
+        }
+        var declaredCanon = hasReligion ? CanonicalFaith(declaredReligion) : null;
         for (var i = 0; i < groups.Count; i++)
         {
             var group = groups[i];
             if (group.Size <= 0) continue;
             total += group.Size;
-            if (hasReligion && SameFaith(group.Religion, nation.DeclaredReligion))
-                faithMatch += group.Size;
-            if (hasCulture && string.Equals(group.Culture, nation.DeclaredCulture, StringComparison.OrdinalIgnoreCase))
+            if (hasReligion)
+            {
+                var rel = group.Religion;
+                if (ReferenceEquals(rel, declaredReligion) ||
+                    string.Equals(rel, declaredReligion, StringComparison.OrdinalIgnoreCase))
+                {
+                    faithMatch += group.Size;
+                }
+                else
+                {
+                    var key = rel ?? "";
+                    var slot = 0;
+                    while (slot < FaithMemo && !ReferenceEquals(seen![slot], key)) slot++;
+                    if (slot == FaithMemo)
+                    {
+                        slot = next;
+                        next = (next + 1) % FaithMemo;
+                        seen![slot] = key;
+                        answers![slot] = string.Equals(CanonicalFaith(key), declaredCanon, StringComparison.OrdinalIgnoreCase);
+                    }
+                    if (answers![slot]) faithMatch += group.Size;
+                }
+            }
+            if (hasCulture &&
+                (ReferenceEquals(group.Culture, declaredCulture) ||
+                 string.Equals(group.Culture, declaredCulture, StringComparison.OrdinalIgnoreCase)))
                 cultureMatch += group.Size;
         }
         if (total <= 0) return 0f;

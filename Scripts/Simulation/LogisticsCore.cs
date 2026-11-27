@@ -1115,7 +1115,7 @@ public static class LogisticsSystem
         var floor = campaign.Defines.SupplyAttackCoverageFloor;
         if (!float.IsFinite(floor) || floor <= 0f) return false;
         var nation = campaign.NationById(army.NationId);
-        if (nation is null) return false;
+        if (nation is null || nation.StockpileCoverage.Count == 0) return false;
         foreach (var good in AttackCoverGoods)
         {
             if (!nation.StockpileCoverage.TryGetValue(good, out var met) || !float.IsFinite(met)) continue;

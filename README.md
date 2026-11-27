@@ -5,9 +5,9 @@
 **A grand strategy game about the whole world, from the morning of 1 January 2024.**
 Every country on the map is yours to play, and the computer runs the others with the same
 commands for most actions; the [differences that remain](docs/PLAYER_AI_PARITY_2026_11_18_RU.md)
-are being closed one at a time, peace first. Version **PortAlpha 0.8.8.2**.
+are being closed one at a time, peace first. Version **PortAlpha 0.8.8.6**.
 
-[![PortAlpha 0.8.8.2](https://img.shields.io/badge/PortAlpha-0.8.8.2-2f6fb3)](docs/CHANGELOG_0.8.8.2_EN.md)
+[![PortAlpha 0.8.8.6](https://img.shields.io/badge/PortAlpha-0.8.8.6-2f6fb3)](docs/CHANGELOG_0.8.8.6_EN.md)
 [![Engine](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED.md)
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-3a7f3a)](LICENSE)
@@ -30,22 +30,48 @@ are being closed one at a time, peace first. Version **PortAlpha 0.8.8.2**.
   [itch.io](https://bayte-realization.itch.io/deal-or-force).
   Extract the whole archive and run `Deal or Force Launcher.exe`.
 - **From source** — see [Building and running](#building-and-running) below.
-- The [PortAlpha 0.8.8.2 changelog](docs/CHANGELOG_0.8.8.2_EN.md) adds Rust SIMD native kernels
-  (`dof_kernels` AVX2 + Android ARM64 NEON), staggered weekly simulation stages, Mobile Turbo Sim,
-  Two-Tier AI Distance LOD, half-res/ETC2 mobile VRAM cuts, and map overlay / Observer UI fixes;
-  earlier notes live in [0.8.7.3](docs/CHANGELOG_0.8.7.3_EN.md) and [0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md).
+- The [PortAlpha 0.8.8.6 changelog](docs/CHANGELOG_0.8.8.6_EN.md) adds lock-free triple-buffered
+  `WorldVisualSnapshot` Frame-0 clock/map sync, Forward+ GLSL 450 `1+JFA` GPU compute + dirty-rect
+  incremental `PoliticalPlate`/`FrontierField` mipmaps, zero-`SubViewport` GPU-instanced battle
+  badges (`BattleBadgeGpu`), anti-burst time pacing, wartime Rust SIMD graph/political kernels
+  (`Caps=0x3DF`), and GC/simulation hotspot cuts; earlier notes live in
+  [0.8.8.2](docs/CHANGELOG_0.8.8.2_EN.md) and [0.8.7.3](docs/CHANGELOG_0.8.7.3_EN.md).
 - It is built by one person, openly with the help of AI.
 
 Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [devlog](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## New in PortAlpha 0.8.8.2
+## New in PortAlpha 0.8.8.6
 
 Built on **Godot 4.8 Beta 3 .NET** and **.NET 10** (active publication branch **PortAlpha**, preserving
 historical `EntertAlpha` and `ReimAlpha`). Full release notes are in
-[PortAlpha 0.8.8.2 changelog](docs/CHANGELOG_0.8.8.2_EN.md),
-[0.8.7.3](docs/CHANGELOG_0.8.7.3_EN.md), and [0.8.5.3](docs/CHANGELOG_0.8.5.3_EN.md).
+[PortAlpha 0.8.8.6 changelog](docs/CHANGELOG_0.8.8.6_EN.md),
+[0.8.8.2](docs/CHANGELOG_0.8.8.2_EN.md), and [0.8.7.3](docs/CHANGELOG_0.8.7.3_EN.md).
+
+- **Lock-free triple-buffered `WorldVisualSnapshot` & Frame-0 Clock/Map Lockstep.** Eliminated
+  `CampaignAccessGate` contention between `DoF-Sim` and `GlobePresentation` via a wait-free
+  `LockFreeTripleBuffer<WorldVisualState>` (`GlobeLockFreeSync`), publishing province controllers,
+  live war fronts, GPU battle badges, country labels, and the clock plate atomically on completed
+  step boundaries with soft render backpressure (`NotifyVisualFramePresented`) and anti-burst Speed
+  1–4 pacing so map elements never lag behind in-game time.
+- **Forward+ GLSL 450 Compute Shaders (`1+JFA` frontier) + Incremental Dirty-Rect Mipmaps.**
+  `GpuMapCompute` runs `PoliticalPlate` and 6-pass `1+JFA` `FrontierField` directly in VRAM via
+  Godot 4.8 `RenderingDevice` + zero-copy `Texture2Drd` (`DataFormat.R32Uint`, antimeridian wrap),
+  while Android/GLES3 and CPU fallbacks use bit-exact dirty-rect `PaintDirtyMipmappedInto` /
+  `BuildDirtyMipmappedInto` (`22.8×` vs Rust full-planet / `83×` vs C# full-planet plate, `8.7×`
+  frontier, zero full-planet `Image.GenerateMipmaps()` stall).
+- **Zero-`SubViewport` GPU-instanced battle badges (`BattleBadgeGpu`) & unmanaged `Image` leak fixes.**
+  Replaced per-battle `128×128` `SubViewport` FBOs with a single `MultiMeshInstance3D` analytical SDF
+  + 18 KB R8 digit-atlas shader (`-1.5–2.25 GB` peak VRAM, `-960` scene nodes), and closed remaining
+  undisposed temporary `Image` handles across minimap, movements, cities, fleets, and packed textures.
+- **Expanded Rust SIMD kernels (`dof_kernels` `Caps=0x3DF`, `17/17 BIT-EXACT`) & Simulation/GC cuts.**
+  Added wartime CSR graph kernels (`graph_occupation` `30.2×`, `graph_vision_seed` `5.0×`,
+  `AdjacencyRevision`-safe CSR rebuilds), `political_cohorts` (`1.84×`), unlocked production
+  `econ_vital_rates` (`15.4×`) and `demo_step_cohorts` (`6.7×`) under `DemographyRulesFSharpBoot`,
+  eliminated `SideEnumerable` / `HeapSpanDictionary` / `TerritorialDisputeIndex` / `ProvinceVision`
+  / `PeacefulFormationCache` / `simulation.log` bottlenecks — cutting `SimBench 120d` worst step
+  `-27%`, worst 24-step burst `-28%`, and `intel.visibility` GC `-46%` with bit-exact determinism.
 
 - **Native Rust SIMD kernels (`dof_kernels`, Win64 AVX2 + Android ARM64 NEON).** Extended
   `native/dof_kernels/` with bit-exact diplomacy opinion decay/pair scoring, market clearing/pricing,

@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using DealOrForce.Simulation;
 using DealOrForce.Simulation.Kernels;
 
 namespace DealOrForce.Tools.KernelBench;
@@ -39,6 +40,10 @@ internal static class DofKernelsBench
         failures += BenchDemoAggregateNations(samples, warmup);
         failures += BenchEconHouseholdGroups(samples, warmup);
         failures += BenchEconVitalRates(samples, warmup);
+        failures += BenchPoliticalPlateDirtyRect(samples, warmup);
+        failures += BenchFrontierDirtyRect(samples, warmup);
+        failures += BenchPoliticalCohortsDrift(samples, warmup);
+        failures += BenchGraphWartimeKernels(samples, warmup);
         return failures == 0 ? 0 : 1;
     }
 
@@ -551,5 +556,354 @@ internal static class DofKernelsBench
                   csRd.AsSpan().SequenceEqual(nvRd);
         Report($"econ_vital_rates ({n} states)", cs, nv, ok ? "BIT-EXACT" : "MISMATCH");
         return ok ? 0 : 1;
+    }
+
+    private static int BenchPoliticalPlateDirtyRect(int samples, int warmup)
+    {
+        const int w = 1920, h = 960;
+        var cells = w * h;
+        var holders = new ushort[cells];
+        var provs = new ushort[cells];
+        var geo = new byte[cells];
+        var rng = new Random(8001);
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                holders[i] = (ushort)(1 + ((x / 64) + (y / 64) * 30) % 240);
+                provs[i] = (ushort)(1 + ((x / 16) + (y / 16) * 120) % 32000);
+                geo[i] = (byte)rng.Next(0, 4);
+            }
+        }
+        var pal = new uint[65536];
+        for (int i = 1; i < 300; i++)
+            pal[i] = 0xFF000000u | ((uint)((i * 53) & 255) << 16) | ((uint)((i * 97) & 255) << 8) | (uint)((i * 193) & 255);
+        var authored = new ushort[32001];
+        var owners = new ushort[32001];
+        for (int p = 1; p < authored.Length; p++) authored[p] = owners[p] = (ushort)(1 + (p % 240));
+        var shades = MapBorderStyles.PlateShades();
+
+        var fullChainLen = NativeRasterBake.ComputeMipmapChainBytes(w, h, 4);
+        var fullBuf = new byte[fullChainLen];
+        var rectBuf = new byte[fullChainLen];
+        NativeRasterBake.TryPaintPoliticalPlate(w, h, holders, provs, geo, owners, authored, pal,
+            shades.Country, shades.Region, shades.Inland, fullBuf);
+        NativeRasterBake.TryMipmapRgba8Rect(w, h, 0, 0, w, h, fullBuf);
+        Array.Copy(fullBuf, rectBuf, fullChainLen);
+
+        // Mutate a realistic war-front cluster aligned to 16x16 provinces (128x128 rect inside 1920x960); pad by 1px for 4-neighbor border shading.
+        const int x0 = 608, y0 = 320, x1 = 736, y1 = 448;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+                owners[provs[y * w + x]] = 77;
+        const int rx0 = x0 - 1, ry0 = y0 - 1, rx1 = x1 + 1, ry1 = y1 + 1;
+
+        var full = Measure(warmup, samples, () =>
+        {
+            NativeRasterBake.TryPaintPoliticalPlate(w, h, holders, provs, geo, owners, authored, pal,
+                shades.Country, shades.Region, shades.Inland, fullBuf);
+            NativeRasterBake.TryMipmapRgba8Rect(w, h, 0, 0, w, h, fullBuf);
+        });
+        var rect = Measure(warmup, samples, () =>
+        {
+            NativeRasterBake.TryPaintPoliticalPlateRect(w, h, holders, provs, geo, owners, authored, pal,
+                shades.Country, shades.Region, shades.Inland, rx0, ry0, rx1, ry1, rectBuf);
+            NativeRasterBake.TryMipmapRgba8Rect(w, h, rx0, ry0, rx1, ry1, rectBuf);
+        });
+
+        bool ok = fullBuf.AsSpan().SequenceEqual(rectBuf);
+        Report($"plate_dirty_rect+mip (128x128)", full, rect, ok ? "BIT-EXACT" : "MISMATCH");
+        return ok ? 0 : 1;
+    }
+
+    private static int BenchFrontierDirtyRect(int samples, int warmup)
+    {
+        const int w = 1920, h = 960;
+        var cells = w * h;
+        var holders = new ushort[cells];
+        var provs = new ushort[cells];
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                holders[i] = (ushort)(1 + ((x / 96) + (y / 96) * 20) % 180);
+                provs[i] = (ushort)(1 + ((x / 16) + (y / 16) * 120) % 32000);
+            }
+        }
+        var authored = new ushort[32001];
+        var owners = new ushort[32001];
+        for (int p = 1; p < authored.Length; p++) authored[p] = owners[p] = (ushort)(1 + (p % 180));
+        var fullChainLen = NativeRasterBake.ComputeMipmapChainBytes(w, h, 1);
+        var fullBuf = new byte[fullChainLen];
+        var rectBuf = new byte[fullChainLen];
+        NativeRasterBake.TryBakeInto(holders, provs, w, h, owners, authored, FrontierField.Cap, FrontierField.Smoothing, fullBuf);
+        NativeRasterBake.TryMipmapR8Rect(w, h, 0, 0, w, h, fullBuf);
+        Array.Copy(fullBuf, rectBuf, fullChainLen);
+
+        const int x0 = 600, y0 = 320, x1 = 728, y1 = 448;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+                owners[provs[y * w + x]] = 55;
+
+        int pad = FrontierField.DirtyPadCells;
+        int rx0 = Math.Max(0, x0 - pad), ry0 = Math.Max(0, y0 - pad);
+        int rx1 = Math.Min(w, x1 + pad), ry1 = Math.Min(h, y1 + pad);
+
+        var full = Measure(warmup, samples, () =>
+        {
+            NativeRasterBake.TryBakeInto(holders, provs, w, h, owners, authored, FrontierField.Cap, FrontierField.Smoothing, fullBuf);
+            NativeRasterBake.TryMipmapR8Rect(w, h, 0, 0, w, h, fullBuf);
+        });
+        var rect = Measure(warmup, samples, () =>
+        {
+            NativeRasterBake.TryBakeFrontierRectInto(holders, provs, w, h, owners, authored, FrontierField.Cap, FrontierField.Smoothing,
+                rx0, ry0, rx1, ry1, rectBuf);
+            NativeRasterBake.TryMipmapR8Rect(w, h, rx0, ry0, rx1, ry1, rectBuf);
+        });
+
+        bool ok = fullBuf.AsSpan().SequenceEqual(rectBuf);
+        Report($"frontier_dirty_rect+mip (128^2)", full, rect, ok ? "BIT-EXACT" : "MISMATCH");
+        return ok ? 0 : 1;
+    }
+
+    private static int BenchPoliticalCohortsDrift(int samples, int warmup)
+    {
+        const int n = 1_847;
+        var rng = new Random(8002);
+        var flags = new byte[n];
+        var step = new float[n]; var blocStep = new float[n];
+        var shortage = new float[n]; var stability = new float[n]; var natLiv = new float[n];
+        var alien = new float[n]; var mil = new float[n]; var tax = new float[n]; var ma = new float[n];
+        var lit = new float[n]; var urb = new float[n]; var sol = new float[n]; var rad = new float[n];
+        var initLaw = new float[n]; var initGov = new float[n]; var initDiv = new float[n];
+        var initBlocs = new float[n * 5];
+        for (int i = 0; i < n; i++)
+        {
+            flags[i] = (byte)((i & 31) | 32);
+            step[i] = 0.0012f; blocStep[i] = 0.0018f;
+            shortage[i] = (float)rng.NextDouble() * 0.4f;
+            stability[i] = 0.25f + (float)rng.NextDouble() * 0.7f;
+            natLiv[i] = 0.3f + (float)rng.NextDouble() * 0.6f;
+            alien[i] = (float)rng.NextDouble() * 0.8f;
+            mil[i] = (float)rng.NextDouble();
+            tax[i] = (float)rng.NextDouble();
+            ma[i] = 0.3f + (float)rng.NextDouble() * 0.7f;
+            lit[i] = 0.2f + (float)rng.NextDouble() * 0.8f;
+            urb[i] = 0.1f + (float)rng.NextDouble() * 0.85f;
+            sol[i] = 0.2f + (float)rng.NextDouble() * 0.75f;
+            rad[i] = (float)rng.NextDouble() * 0.7f;
+            initLaw[i] = 0.5f; initGov[i] = 0.5f; initDiv[i] = 0.12f;
+            for (int b = 0; b < 5; b++) initBlocs[i * 5 + b] = 0.2f;
+        }
+        var csLaw = new float[n]; var csGov = new float[n]; var csDiv = new float[n]; var csBl = new float[n * 5];
+        var nvLaw = new float[n]; var nvGov = new float[n]; var nvDiv = new float[n]; var nvBl = new float[n * 5];
+        var tgtArr = new float[5];
+
+        static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
+        static float Move(float v, float t, float a) => v < t ? MathF.Min(t, v + a) : MathF.Max(t, v - a);
+        void RunManaged()
+        {
+            Array.Copy(initLaw, csLaw, n); Array.Copy(initGov, csGov, n); Array.Copy(initDiv, csDiv, n); Array.Copy(initBlocs, csBl, n * 5);
+            for (int i = 0; i < n; i++)
+            {
+                var f = flags[i];
+                bool debt = (f & 1) != 0, losing = (f & 2) != 0, recent = (f & 4) != 0, cap = (f & 8) != 0, war = (f & 16) != 0;
+                float dp = debt ? 0.12f : 0f;
+                float r = Clamp01(rad[i]);
+                float law = Clamp01(0.40f + sol[i] * 0.40f + stability[i] * 0.15f - shortage[i] * 0.40f - dp * 0.5f - r * 0.25f);
+                float gov = 0.42f + stability[i] * 0.35f + sol[i] * 0.18f - shortage[i] * 0.35f - dp - r * 0.22f - alien[i] * 0.14f;
+                if (losing) gov -= 0.10f;
+                if (recent) gov -= 0.08f;
+                gov = Clamp01(gov);
+                csLaw[i] = Move(Clamp01(csLaw[i]), law, step[i]);
+                csGov[i] = Move(Clamp01(csGov[i]), gov, step[i]);
+                float rej = Clamp01((1f - gov) * 0.55f + (1f - law) * 0.35f + r * 0.25f);
+                float poorer = natLiv[i] > sol[i] ? MathF.Min(1f, natLiv[i] - sol[i]) : 0f;
+                float div = Clamp01(rej + poorer * 0.20f + alien[i] * 0.16f);
+                if (cap) div *= 0.45f;
+                csDiv[i] = Move(Clamp01(csDiv[i]), div, step[i] * 0.65f);
+                if ((f & 32) != 0)
+                {
+                    float lv = Clamp01(lit[i]), uv = Clamp01(urb[i]), sv = Clamp01(sol[i]);
+                    float solGap = MathF.Max(0f, natLiv[i] - sv);
+                    float t0 = 0.14f + lv * 0.24f + uv * 0.14f + sv * 0.12f - (war ? 0.08f : 0f);
+                    float t1 = 0.12f + mil[i] * 0.22f + (war ? 0.20f : 0f) + (losing ? 0.10f : 0f) + r * 0.08f;
+                    float t2 = 0.14f + uv * 0.22f + ma[i] * 0.14f - tax[i] * 0.10f - (debt ? 0.06f : 0f);
+                    float t3 = 0.14f + (1f - uv) * 0.22f + (1f - lv) * 0.14f + stability[i] * 0.10f;
+                    float t4 = 0.06f + alien[i] * 0.34f + solGap * 0.45f + r * 0.20f + shortage[i] * 0.18f + (debt ? 0.08f : 0f) + tax[i] * 0.08f;
+                    if (cap) t4 *= 0.40f;
+                    tgtArr[0] = MathF.Max(0.03f, t0);
+                    tgtArr[1] = MathF.Max(0.03f, t1);
+                    tgtArr[2] = MathF.Max(0.03f, t2);
+                    tgtArr[3] = MathF.Max(0.03f, t3);
+                    tgtArr[4] = MathF.Max(0.02f, t4);
+                    float sum = tgtArr[0] + tgtArr[1] + tgtArr[2] + tgtArr[3] + tgtArr[4];
+                    float inv = sum > 0f ? 1f / sum : 0.20f;
+                    for (int b = 0; b < 5; b++) tgtArr[b] *= inv;
+                    int bo = i * 5;
+                    sum = 0f;
+                    for (int b = 0; b < 5; b++)
+                    {
+                        float v = Move(csBl[bo + b], tgtArr[b], blocStep[i]);
+                        v = float.IsFinite(v) ? MathF.Max(0.02f, v) : 0.20f;
+                        csBl[bo + b] = v; sum += v;
+                    }
+                    inv = 1f / sum;
+                    float run = 0f;
+                    for (int b = 0; b < 4; b++) { csBl[bo + b] *= inv; run += csBl[bo + b]; }
+                    csBl[bo + 4] = MathF.Max(0.001f, 1f - run);
+                }
+            }
+        }
+        void RunNative()
+        {
+            Array.Copy(initLaw, nvLaw, n); Array.Copy(initGov, nvGov, n); Array.Copy(initDiv, nvDiv, n); Array.Copy(initBlocs, nvBl, n * 5);
+            NativePoliticalKernels.TryDriftCohortsBatch(n, flags, step, blocStep, shortage, stability, natLiv, alien,
+                mil, tax, ma, lit, urb, sol, rad, nvLaw, nvGov, nvDiv, nvBl);
+        }
+
+        var cs = Measure(warmup, samples, RunManaged);
+        var nv = Measure(warmup, samples, RunNative);
+        bool ok = BitEqual(csLaw, nvLaw) && BitEqual(csGov, nvGov) && BitEqual(csDiv, nvDiv) && BitEqual(csBl, nvBl);
+        Report($"political_cohorts ({n} states)", cs, nv, ok ? "BIT-EXACT" : "MISMATCH");
+        return ok ? 0 : 1;
+    }
+
+    private static int BenchGraphWartimeKernels(int samples, int warmup)
+    {
+        // Build a synthetic ~3,200-province topology via ProvinceTopology.Build.
+        const int gw = 1024, gh = 512;
+        var states = new ushort[gw * gh];
+        var control = new ushort[gw * gh];
+        for (int y = 0; y < gh; y++)
+        {
+            for (int x = 0; x < gw; x++)
+            {
+                ushort nation = (ushort)(1 + ((x / 64) + (y / 64) * 16) % 128);
+                states[y * gw + x] = nation;
+                control[y * gw + x] = nation;
+            }
+        }
+        var topo = ProvinceTopology.Build(states, control, gw, gh, static _ => false);
+        var provCount = topo.ProvinceCount;
+        var ptn = topo.ProvinceToNation;
+        var neighbors = topo.Neighbors;
+        var ctrl = (ushort[])ptn.Clone();
+        for (int p = 1; p <= provCount; p++)
+            if (p % 17 == 0) ctrl[p] = (ushort)(1 + (ptn[p] % 128));
+
+        var graph = NativeProvinceGraph.ForMap(topo);
+        if (graph is null)
+        {
+            Console.WriteLine("  FAIL: NativeProvinceGraph.ForMap returned null");
+            return 1;
+        }
+
+        int failures = 0;
+        // 1. Border pairs
+        var csPairs = new HashSet<uint>();
+        var csBorder = Measure(warmup, samples, () =>
+        {
+            csPairs.Clear();
+            for (int p = 1; p <= provCount; p++)
+            {
+                ushort ow = ctrl[p];
+                if (ow == 0) continue;
+                var nb = neighbors[p];
+                for (int k = 0; k < nb.Length; k++)
+                {
+                    ushort ot = ctrl[nb[k]];
+                    if (ot != 0 && ot != ow) csPairs.Add(((uint)ow << 16) | ot);
+                }
+            }
+        });
+        int nvPairCount = 0;
+        var nvPairs = new HashSet<uint>();
+        var nvBorder = Measure(warmup, samples, () =>
+        {
+            if (graph.TryBorderPairs(ctrl, out var span)) nvPairCount = span.Length;
+        });
+        graph.TryBorderPairs(ctrl, out var checkPairs);
+        for (int i = 0; i < checkPairs.Length; i++) nvPairs.Add(checkPairs[i]);
+        bool borderOk = nvPairCount == csPairs.Count && csPairs.SetEquals(nvPairs);
+        Report($"graph_border_pairs ({provCount:N0}p)", csBorder, nvBorder, borderOk ? "BIT-EXACT" : "MISMATCH");
+        if (!borderOk) failures++;
+
+        // 2. Occupation census
+        var csHomes = new Dictionary<ushort, int>();
+        var csOcc = new Dictionary<uint, int>();
+        var csCensus = Measure(warmup, samples, () =>
+        {
+            csHomes.Clear(); csOcc.Clear();
+            for (int p = 1; p <= provCount; p++)
+            {
+                ushort o = ptn[p];
+                if (o == 0) continue;
+                csHomes[o] = csHomes.GetValueOrDefault(o) + 1;
+                ushort c = ctrl[p];
+                if (c != 0 && c != o)
+                {
+                    uint k = ((uint)o << 16) | c;
+                    csOcc[k] = csOcc.GetValueOrDefault(k) + 1;
+                }
+            }
+        });
+        int nvH = 0, nvO = 0;
+        var nvCensus = Measure(warmup, samples, () =>
+        {
+            if (graph.TryOccupationCensus(ptn, ctrl, provCount, out var hk, out _, out var op, out _))
+            { nvH = hk.Length; nvO = op.Length; }
+        });
+        bool occOk = nvH == csHomes.Count && nvO == csOcc.Count;
+        if (occOk && graph.TryOccupationCensus(ptn, ctrl, provCount, out var hk2, out var hc2, out var op2, out var oc2))
+        {
+            for (int i = 0; i < hk2.Length; i++)
+                if (csHomes.GetValueOrDefault(hk2[i]) != hc2[i]) { occOk = false; break; }
+            for (int i = 0; occOk && i < op2.Length; i++)
+                if (csOcc.GetValueOrDefault(op2[i]) != oc2[i]) { occOk = false; break; }
+        }
+        Report($"graph_occupation ({provCount:N0}p)", csCensus, nvCensus, occOk ? "BIT-EXACT" : "MISMATCH");
+        if (!occOk) failures++;
+
+        // 3. Seed territory vision (owned = ~1,200 provinces, depth = 2)
+        var ownedList = new List<int>();
+        for (int p = 1; p <= provCount; p++) if (ctrl[p] <= 10) ownedList.Add(p);
+        var ownedArr = ownedList.ToArray();
+        var csReach = new byte[provCount + 1];
+        var nvReach = new byte[provCount + 1];
+        var q = new Queue<int>();
+        var csVis = Measure(warmup, samples, () =>
+        {
+            Array.Clear(csReach); q.Clear();
+            const byte ownLvl = 3;
+            for (int i = 0; i < ownedArr.Length; i++) csReach[ownedArr[i]] = ownLvl;
+            for (int i = 0; i < ownedArr.Length; i++)
+            {
+                int p = ownedArr[i];
+                var nb = neighbors[p];
+                for (int k = 0; k < nb.Length; k++)
+                    if (csReach[nb[k]] < ownLvl) { q.Enqueue(p); break; }
+            }
+            while (q.Count > 0)
+            {
+                int u = q.Dequeue();
+                int nextLvl = csReach[u] - 1;
+                if (nextLvl < 1) continue;
+                var nb = neighbors[u];
+                for (int k = 0; k < nb.Length; k++)
+                {
+                    int v = nb[k];
+                    if (v > 0 && csReach[v] < nextLvl) { csReach[v] = (byte)nextLvl; q.Enqueue(v); }
+                }
+            }
+        });
+        var nvVis = Measure(warmup, samples, () => graph.TrySeedTerritoryVision(ownedArr, 2, nvReach));
+        bool visOk = csReach.AsSpan().SequenceEqual(nvReach);
+        Report($"graph_vision_seed ({ownedArr.Length} own)", csVis, nvVis, visOk ? "BIT-EXACT" : "MISMATCH");
+        if (!visOk) failures++;
+
+        return failures;
     }
 }

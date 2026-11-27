@@ -407,13 +407,14 @@ static class MapBootCacheTests
               battleMapSrc.Contains("using var img = Image.CreateFromData", StringComparison.Ordinal),
             "BattleMapPresentation bounds _conditionTextures LRU<=256 at 128x64 with using-disposed Image");
 
-        // 2. Pooled SurfaceBattleBadge SubViewports.
+        // 2. Zero-SubViewport GPU-instanced battle badges (replaces per-battle SubViewport pool).
         var milSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "MilitaryPresentation.cs"));
         var badgeSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "SurfaceBattleBadge.cs"));
-        Check(milSrc.Contains("_battleBadgePool", StringComparison.Ordinal) &&
-              badgeSrc.Contains("PrepareForPool", StringComparison.Ordinal) &&
-              badgeSrc.Contains("RestoreFromPool", StringComparison.Ordinal),
-            "SurfaceBattleBadge SubViewports are pooled via PrepareForPool/RestoreFromPool");
+        Check(milSrc.Contains("_battleBadgeMultiMesh", StringComparison.Ordinal) &&
+              badgeSrc.Contains("public static class BattleBadgeGpu", StringComparison.Ordinal) &&
+              !milSrc.Contains("new SubViewport", StringComparison.Ordinal) &&
+              !badgeSrc.Contains("new SubViewport", StringComparison.Ordinal),
+            "Battle badges render via zero-SubViewport GPU-instanced BattleBadgeGpu MultiMesh");
 
         // 3. Compact R8 hydrology_map (-47.5 MiB VRAM) + BuildLakeSdf equivalence check.
         var hydroPixels = new byte[16 * 8 * 2];

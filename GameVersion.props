@@ -1,7 +1,7 @@
 <Project>
   <!-- Shared by the game, production rules library and standalone launcher. -->
   <PropertyGroup>
-    <Version>0.8.8.2</Version>
+    <Version>0.8.8.6</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>

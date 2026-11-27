@@ -233,7 +233,7 @@ pub(crate) fn pack_bytes_only(dist: &[f32], cells: usize, cap: f32, out_bytes: &
 }
 
 #[inline(always)]
-fn pack_byte(value: f32) -> u8 {
+pub(crate) fn pack_byte(value: f32) -> u8 {
     if value <= 0.0 {
         0
     } else if value >= 255.0 {

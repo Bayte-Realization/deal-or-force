@@ -328,15 +328,10 @@ public sealed class ScriptedTrigger
                 if (!HasGrandProject(campaign, nation.Id, _completedGrandProjects[i], completedOnly: true)) return false;
             if (_squeezedChokepoints.Count > 0)
             {
-                var exposures = StrategicChokepoints.ReadForNation(campaign, nation);
                 for (var i = 0; i < _squeezedChokepoints.Count; i++)
                 {
                     if (!CommodityCatalog.TryParse(_squeezedChokepoints[i], out var good)) return false;
-                    var squeezed = false;
-                    for (var e = 0; e < exposures.Count; e++)
-                        if (exposures[e].Commodity == good && exposures[e].Status == ChokepointStatus.Squeezed)
-                        { squeezed = true; break; }
-                    if (!squeezed) return false;
+                    if (!StrategicChokepoints.IsCommoditySqueezed(campaign, nation, good)) return false;
                 }
             }
         }

@@ -2,10 +2,13 @@
 mod diplomacy;
 mod distance;
 mod economy_demo;
+mod ffi_v2;
 mod graph;
 mod market;
+mod political;
 mod raster;
 mod raster_blur;
+mod raster_incremental;
 mod simd;
 mod trade;
 
@@ -58,9 +61,11 @@ pub extern "C" fn dof_kernels_simd_level() -> u32 {
 ///   bit 5 (32):  ARM64 NEON detected
 ///   bit 6 (64):  render-prep raster pack & political plate paint
 ///   bit 7 (128): economy & demography batched kernels
+///   bit 8 (256): incremental dirty-rect raster plate/frontier & mipmaps
+///   bit 9 (512): wartime CSR border/occupation/vision & political cohorts kernels
 #[no_mangle]
 pub extern "C" fn dof_kernels_capabilities() -> u32 {
-    let mut caps = 1u32 | 2u32 | 4u32 | 8u32 | 64u32 | 128u32;
+    let mut caps = 1u32 | 2u32 | 4u32 | 8u32 | 64u32 | 128u32 | 256u32 | 512u32;
     let simd = dof_kernels_simd_level();
     if simd == 2 {
         caps |= 16;

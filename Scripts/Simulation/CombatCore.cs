@@ -454,6 +454,20 @@ public static partial class Warfare
         if (topology is null || controllers is null) return;
         var homeToNation = topology.ProvinceToNation;
         var count = topology.ProvinceCount;
+        if (Kernels.NativeProvinceGraph.ForMap(topology)?.TryOccupationCensus(
+                homeToNation, controllers, count,
+                out var homeKeys, out var homeCounts, out var occPairs, out var occCounts) == true)
+        {
+            for (var i = 0; i < homeKeys.Length; i++)
+                index.HomeProvinces[homeKeys[i]] = homeCounts[i];
+            for (var i = 0; i < occPairs.Length; i++)
+            {
+                var pair = occPairs[i];
+                var key = ((long)(pair >> 16) << 32) | (pair & 0xFFFFu);
+                index.OccupiedPairs[key] = occCounts[i];
+            }
+            return;
+        }
         var maxOrig = 0;
         for (var p = 1; p <= count; p++)
         {
@@ -881,125 +895,87 @@ public static partial class Warfare
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null) yield break;
-        using (SimProfiler.Measure("  war:advances"))
-        using (SimProfiler.Measure("    adv:resolve"))
-        {
-            UseBattleBuckets(campaign);
-
-            // Whose ground counts as the enemy's, per side. In a war with allies in it this is
-            // a set rather than one country, and it is the same set for every formation on a
-            // side, so it is built once per war rather than once per formation. The sets belong
-            // to this campaign; the next war reuses them, and another campaign does not.
-            IndexSideMaps(campaign, war);
-        }
-        var attackerMaps = IndexOf(campaign).AttackerMaps;
-        var defenderMaps = IndexOf(campaign).DefenderMaps;
-
-        // One war's resolve used to be a single 38 ms stage, the heaviest piece of a fighting
-        // day. The seams sit between armies, so captures still land in the order the
-        // formations made them and the scopes stay closed across every seam.
-        var seen = 0;
         var warArmies = InWar(war.Id);
-        for (var ai = 0; ai < warArmies.Count; ai++)
+        HashSet<ushort> attackerMaps = null;
+        HashSet<ushort> defenderMaps = null;
+        var ai = 0;
+        var initialized = false;
+        while (!initialized || ai < warArmies.Count)
         {
-            var army = warArmies[ai];
-            // A formation with nothing to resolve - holding, in reserve, marching, fighting, not
-            // yet ready - is passed before the measuring starts and without bouncing the iterator.
-            if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
-                army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays)
-                continue;
-            if (++seen % 12 == 0 || Campaign.StageOverdue()) yield return 0;
             using (SimProfiler.Measure("  war:advances"))
             using (SimProfiler.Measure("    adv:resolve"))
             {
-            if (!war.Involves(army.NationId)) continue;
+                if (!initialized)
+                {
+                    UseBattleBuckets(campaign);
+                    IndexSideMaps(campaign, war);
+                    var idx = IndexOf(campaign);
+                    attackerMaps = idx.AttackerMaps;
+                    defenderMaps = idx.DefenderMaps;
+                    initialized = true;
+                }
+                var seenInChunk = 0;
+                for (; ai < warArmies.Count; ai++)
+                {
+                    var army = warArmies[ai];
+                    if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
+                        army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays)
+                        continue;
+                    if (++seenInChunk > 1 && (seenInChunk & 15) == 0 && Campaign.StageOverdue())
+                        break;
+                    ResolveSingleAdvance(campaign, topology, controllers, war, attackerMaps, defenderMaps, army);
+                }
+            }
+            if (ai < warArmies.Count) yield return 0;
+        }
+    }
+
+    private static void ResolveSingleAdvance(Campaign campaign, ProvinceTopology topology, ushort[] controllers,
+        StrategicWar war, HashSet<ushort> attackerMaps, HashSet<ushort> defenderMaps, Army army)
+    {
+            if (!war.Involves(army.NationId)) return;
             var armyNation = campaign.NationById(army.NationId);
-            if (armyNation is null || army.ProvinceId <= 0) continue;
-            // Fast path: a formation on its own ground cannot trigger MilitaryAccess.MustReturn.
+            if (armyNation is null || army.ProvinceId <= 0) return;
             if (army.ProvinceId < controllers.Length)
             {
                 var standingOn = controllers[army.ProvinceId];
                 if (standingOn != 0 && standingOn != armyNation.MapIndex && MilitaryAccess.MustReturn(campaign, army))
-                    continue;
+                    return;
             }
             else if (MilitaryAccess.MustReturn(campaign, army))
-                continue;
-            // A cut-off or stranded formation does not begin an attack on its own (StaffReasons),
-            // but it still marches into ground nobody holds: that is how a pocket breaks out, and
-            // holding it still there froze its escape.
+                return;
             var heldBack = StaffReasons.SupplyHoldsAttack(campaign, army);
 
             var enemyMaps = war.IsAttacking(army.NationId) ? defenderMaps : attackerMaps;
             var friendlyMaps = war.IsAttacking(army.NationId) ? attackerMaps : defenderMaps;
             var enemyId = war.EnemyLeaderOf(army.NationId);
             var enemy = campaign.NationById(enemyId);
-            if (enemy is null || army.ProvinceId <= 0) continue;
+            if (enemy is null || army.ProvinceId <= 0) return;
             bool routed;
             using (SimProfiler.Measure("      adv:route"))
                 routed = !heldBack && PrepareOperationalRoute(campaign, war, army, controllers, friendlyMaps);
-            if (routed) continue;
+            if (routed) return;
             var target = ChooseAssaultTarget(campaign, topology, war, army, controllers, enemyMaps);
-            if (target < 0) continue;
-            // Everyone standing in the target province, including anyone already fighting
-            // there. Excluding divisions that were in a battle meant a province being
-            // actively defended looked empty to the next attacker, which walked into it
-            // unopposed while the defenders were busy holding it. Ten province captures in
-            // eleven came through that hole rather than through winning anything.
+            if (target < 0) return;
             Present.Clear();
             foreach (var other in InProvince(target))
                 if (war.Opposes(army.NationId, other.NationId) && other.Divisions >= 0.1f) Present.Add(other);
-            if (heldBack && Present.Count > 0) continue;
+            if (heldBack && Present.Count > 0) return;
 
             if (Present.Count == 0)
             {
-                // Support fire does not occupy empty ground. Wait for an actual battle;
-                // an ordinary RMB order can turn this into a march explicitly.
-                if (army.SupportOnly) continue;
-                // Ground nobody stands on is still on the far side of the water: a strait is
-                // crossed at the bridge's or the ferry's pace whether or not anyone is shooting.
+                if (army.SupportOnly) return;
                 var riverAdvance = WaterConditions.MovementMultiplier(campaign, army.ProvinceId, target) *
                     LandCrossings.MarchMultiplier(campaign, army.ProvinceId, target);
-                // An empty province is not open ground. The divisions holding the provinces
-                // around it cover the gap by fire, which is what keeps a front a front rather
-                // than a race: a breach has to be widened and held, not strolled through
-                // because nobody happened to be standing in it.
-                //
-                // Letting cover merely slow an advance instead of stopping it, and flooring
-                // that slowdown at a third, is what turned this front into a walkover: over
-                // two years with nobody playing, Ukraine went from losing eight provinces to
-                // losing a hundred and nineteen, and gap captures on the front went from six
-                // to sixty-one. Cover is a wall to a force smaller than what covers the gap,
-                // and no obstacle at all to one that is larger - which is the difference
-                // between an offensive and a walk.
                 var coveringPower = 0f;
                 var covering = 0f;
                 Cover(campaign, topology, target, war, army.NationId, ref coveringPower, ref covering);
-                // ...but the formation that refuses is one advancing on its own judgement.
-                // A player who marched a division here by hand has already decided, with the
-                // map in front of them, that this attack is worth making. The simulation gets
-                // to make that expensive and slow. It does not get to quietly decline: an
-                // order that produces no movement, no battle and no explanation is the single
-                // worst thing a strategy game can do, and this one did it every day forever.
-                //
-                // The measurement that produced the rule above was of the front planner
-                // exploiting gaps with nobody playing, so leaving it in force for exactly
-                // that case keeps what it bought.
                 var ordered = army.DirectOrder;
                 var urgent = war.IsDefending(army.NationId) && (war.DefenderOccupiedValue > 0.005f || war.WarScore < -2f);
                 var advantage = urgent ? campaign.Defines.GapExploitAdvantage * 2.0f : campaign.Defines.GapExploitAdvantage;
-                if (!ordered && coveringPower > PushingOn(campaign, topology, war, army, target) * advantage) continue;
+                if (!ordered && coveringPower > PushingOn(campaign, topology, war, army, target) * advantage) return;
                 var contested = 1f / (1f + covering * campaign.Defines.ZoneOfControlResistance);
-                // Covered ground still costs: an ordered advance into a fully covered gap runs
-                // at a fraction of the pace of one into open country, and the floor is what
-                // makes it a fraction rather than a standstill. Without it the resistance term
-                // alone turns a week into four months, which the player cannot tell apart from
-                // the refusal this replaces.
                 if (ordered) contested = M.Max(contested, campaign.Defines.OrderedAdvanceFloor);
-                // Ground nobody is within reach to cover is not a gap in a line - it is the
-                // country behind one. It is taken at the pace of a march, on the stores and
-                // roads it is taken with, rather than at the crawl a covered gap costs: an
-                // army through the line used to spend three weeks on each empty district
-                // behind it, which read as the whole army stuck.
                 var open = covering <= 0f;
                 var pace = open
                     ? MathF.Max(campaign.Defines.UnopposedCapturePerDay, campaign.Defines.OpenCountryCapturePerDay)
@@ -1009,8 +985,6 @@ public static partial class Warfare
                     ? MathF.Max(campaign.Defines.MarchSupplyFloor, campaign.Defines.OpenCountrySupplyFloor)
                     : campaign.Defines.MarchSupplyFloor;
                 if (ordered) supplyFloor = MathF.Max(supplyFloor, campaign.Defines.OrderedCaptureSupplyFloor);
-                // Progress belongs to the division, not a pooled province counter: a
-                // hundred divisions must not teleport one another across the border.
                 army.MoveProgress += pace * campaign.TickScale *
                     UnitTypeCatalog.Get(army.TemplateId).Speed * Researched(campaign, army, "army_speed") *
                     MilitaryDoctrine.Movement(army.Stance, campaign.Defines) *
@@ -1023,18 +997,11 @@ public static partial class Warfare
                     Capture(campaign, war, target, army.NationId, SingleAdvancing, Array.Empty<Army>(), "walked into a gap");
                     SingleAdvancing[0] = null;
                 }
-                continue;
+                return;
             }
 
-            // Reinforcements already waited for organisation and stores; the formation
-            // initiating the same assault did not. Apply one live minimum to both paths.
-            // This comes after empty-ground movement so a hungry formation can still
-            // march out of a pocket or take undefended ground. Explicit direct orders
-            // keep the player's choice to accept risk, rather than silently refusing it.
-            if (!AssaultReadiness.Assess(campaign, army).Ready) continue;
+            if (!AssaultReadiness.Assess(campaign, army).Ready) return;
 
-            // Found via campaign-scoped O(1) active battle index rather than walking all
-            // campaign.Battles on every division advance.
             var activeBattles = EnsureActiveBattles(campaign);
             activeBattles.TryGetValue((war.Id, target), out var battle);
             if (battle is null)
@@ -1055,8 +1022,6 @@ public static partial class Warfare
                 foreach (var defending in Present) Join(battle, defending, false);
             }
             Join(battle, army, true);
-            }
-        }
     }
 
     /// <summary>
@@ -1670,7 +1635,7 @@ public static partial class Warfare
 
             var attackerOrg = AverageOrganisation(AttackerLine);
             var defenderOrg = AverageOrganisation(DefenderLine);
-            if (DiagnosticLogs.Enabled)
+            if (DiagnosticLogs.VerboseSimulation)
                 DiagnosticLogs.Write("simulation", $"BATTLE_ROUND battle={battle.Id} war={battle.WarId} province={battle.ProvinceId} attacker={battle.AttackerId} defender={battle.DefenderId} attack_power={DiagnosticLogs.N(attackerOffence)} defense_power={DiagnosticLogs.N(defenderProtection)} attack_org={DiagnosticLogs.N(attackerOrg)} defense_org={DiagnosticLogs.N(defenderOrg)} attack_losses={DiagnosticLogs.N(attackerLoss)} defense_losses={DiagnosticLogs.N(defenderLoss)} river={DiagnosticLogs.N(battle.RiverCrossingStrength)} planning={DiagnosticLogs.N(attackerPlanning)}");
             battle.Rounds.Add(new LandBattle.Round
             {

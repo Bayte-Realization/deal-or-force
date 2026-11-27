@@ -348,6 +348,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _frontRevision = -1;
         _frontWarRevision = -1;
         _lastCombatSyncHours = -1;
+        _lastLockFreeVisualVersion = -1;
+        _lastLockFreeBattleHours = -1;
+        _lastLockFreeBattleCount = -1;
+        _lastLockFreeNationPaletteHash = 0;
     }
 
     internal bool NeedsFencedSync(bool fastSim)
@@ -456,6 +460,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             // A queued tap holds a priority request on the gate; never leave one behind.
             CancelPendingMapSelection();
+            DisposeGpuMapCompute();
             _lastSelectedRegionLive = int.MinValue;
             _lastSelectedRegionCampaign = null;
             _lastSelectedRegionMap = null;
@@ -904,6 +909,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 ApplyFrontier(result.Frontier);
                 result.Frontier?.Dispose();
                 result.Frontier = null;
+                TryStartGpuMapCompute(_provinceTopology, result.PlateOwners);
                 WakeGlobeRendering();
                 break;
             }

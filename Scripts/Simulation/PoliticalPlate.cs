@@ -25,6 +25,11 @@ public sealed class PoliticalPlateSource
 
     /// <summary><see cref="PoliticalPlate.Coast"/> and <see cref="PoliticalPlate.RegionLine"/>, per cell.</summary>
     public byte[] Geography;
+
+    private ProvinceRasterBounds _bounds;
+
+    /// <summary>Lazy cached per-province bounding boxes for incremental dirty-rect repaints.</summary>
+    public ProvinceRasterBounds Bounds => _bounds ??= ProvinceRasterBounds.Build(Provinces, Width, Height);
 }
 
 /// <summary>
@@ -106,6 +111,140 @@ public static class PoliticalPlate
 
     [ThreadStatic]
     private static uint[] _paletteScratch;
+    [ThreadStatic]
+    private static List<RasterDirtyRect> _dirtyRectScratch;
+
+    /// <summary>
+    /// Incrementally repaints ONLY the dirty rectangles around provinces whose owners changed since
+    /// <paramref name="prevOwners"/> into a persistent Godot-packed RGBA8 mipmap chain, then updates
+    /// only the dirty mipmap sub-rects. Bit-exact with full <see cref="Paint"/> on level 0.
+    /// </summary>
+    public static byte[] PaintDirtyMipmappedInto(
+        PoliticalPlateSource source,
+        ushort[] prevOwners,
+        ushort[] owners,
+        ushort[] authoredOwners,
+        IReadOnlyDictionary<int, uint> colours,
+        MapPlateShades shades,
+        bool forceFull,
+        ref byte[] mipBuffer,
+        out bool usedIncremental)
+    {
+        var width = source.Width;
+        var height = source.Height;
+        var mipBytes = Kernels.NativeRasterBake.ComputeMipmapChainBytes(width, height, 4);
+        var needFull = forceFull || mipBuffer is null || mipBuffer.Length != mipBytes || prevOwners is null;
+        if (mipBuffer is null || mipBuffer.Length != mipBytes)
+            mipBuffer = new byte[mipBytes];
+
+        var rects = _dirtyRectScratch ??= new List<RasterDirtyRect>(16);
+        rects.Clear();
+        if (!needFull)
+        {
+            var any = source.Bounds.ComputeDirtyRects(prevOwners, owners, padCells: 1, rects, out needFull);
+            if (!any && !needFull)
+            {
+                usedIncremental = true;
+                return mipBuffer;
+            }
+        }
+
+        var palette = FillPalette(colours, _paletteScratch ??= new uint[65536]);
+
+        if (!needFull && rects.Count > 0)
+        {
+            for (var i = 0; i < rects.Count; i++)
+            {
+                var r = rects[i];
+                if (!Kernels.NativeRasterBake.TryPaintPoliticalPlateRect(
+                        width, height, source.Holders, source.Provinces, source.Geography,
+                        owners, authoredOwners, palette,
+                        shades.Country, shades.Region, shades.Inland,
+                        r.X0, r.Y0, r.X1, r.Y1, mipBuffer))
+                {
+                    PaintManagedRectInto(source, owners, authoredOwners, palette, shades, r.X0, r.Y0, r.X1, r.Y1, mipBuffer);
+                }
+                if (!Kernels.NativeRasterBake.TryMipmapRgba8Rect(width, height, r.X0, r.Y0, r.X1, r.Y1, mipBuffer))
+                    ProvinceRasterBounds.MipmapRgba8RectManaged(width, height, r.X0, r.Y0, r.X1, r.Y1, mipBuffer);
+            }
+            usedIncremental = true;
+            return mipBuffer;
+        }
+
+        // Full repaint + full mipmap rebuild
+        if (!Kernels.NativeRasterBake.TryPaintPoliticalPlate(
+                width, height, source.Holders, source.Provinces, source.Geography,
+                owners, authoredOwners, palette,
+                shades.Country, shades.Region, shades.Inland, mipBuffer))
+        {
+            Array.Clear(mipBuffer, 0, width * height * 4);
+            PaintManagedInto(source, owners, authoredOwners, palette, shades, mipBuffer);
+        }
+        if (!Kernels.NativeRasterBake.TryMipmapRgba8Rect(width, height, 0, 0, width, height, mipBuffer))
+            ProvinceRasterBounds.MipmapRgba8RectManaged(width, height, 0, 0, width, height, mipBuffer);
+        usedIncremental = false;
+        return mipBuffer;
+    }
+
+    private static void PaintManagedRectInto(
+        PoliticalPlateSource source, ushort[] owners, ushort[] authoredOwners,
+        uint[] palette, MapPlateShades shades, int x0, int y0, int x1, int y1, byte[] pixels)
+    {
+        var width = source.Width;
+        var height = source.Height;
+        var srcHolders = source.Holders;
+        var srcProvs = source.Provinces;
+        var srcGeo = source.Geography;
+        for (var y = y0; y < y1; y++)
+        {
+            var row = y * width;
+            var hasUp = y > 0;
+            var hasDown = y + 1 < height;
+            for (var x = x0; x < x1; x++)
+            {
+                var cell = row + x;
+                var write = cell * 4;
+                var authored = srcHolders[cell];
+                var holder = authored == MapBorders.Sea
+                    ? MapBorders.Sea
+                    : MapBorders.CurrentHolder(authored, srcProvs[cell], owners, authoredOwners);
+                if (holder == MapBorders.Sea)
+                {
+                    pixels[write] = 0; pixels[write + 1] = 0; pixels[write + 2] = 0; pixels[write + 3] = 0;
+                    continue;
+                }
+                var geo = srcGeo[cell];
+                float shade;
+                if ((geo & Coast) != 0)
+                {
+                    shade = shades.Country;
+                }
+                else
+                {
+                    var eastCell = row + (x + 1 == width ? 0 : x + 1);
+                    var westCell = row + (x == 0 ? width - 1 : x - 1);
+                    var east = CellHolder(srcHolders, srcProvs, eastCell, owners, authoredOwners);
+                    var west = CellHolder(srcHolders, srcProvs, westCell, owners, authoredOwners);
+                    var foreign = (east != MapBorders.Sea && east != holder) ||
+                                  (west != MapBorders.Sea && west != holder) ||
+                                  (hasUp && CellHolder(srcHolders, srcProvs, cell - width, owners, authoredOwners) is var n && n != MapBorders.Sea && n != holder) ||
+                                  (hasDown && CellHolder(srcHolders, srcProvs, cell + width, owners, authoredOwners) is var s && s != MapBorders.Sea && s != holder);
+                    shade = foreign ? shades.Country : (geo & RegionLine) != 0 ? shades.Region : shades.Inland;
+                }
+                var packed = palette[holder];
+                pixels[write] = (byte)(((packed >> 24) & 0xFF) * shade);
+                pixels[write + 1] = (byte)(((packed >> 16) & 0xFF) * shade);
+                pixels[write + 2] = (byte)(((packed >> 8) & 0xFF) * shade);
+                pixels[write + 3] = 255;
+            }
+        }
+    }
+
+    private static ushort CellHolder(ushort[] srcHolders, ushort[] srcProvs, int cell, ushort[] owners, ushort[] authoredOwners)
+    {
+        var a = srcHolders[cell];
+        return a == MapBorders.Sea ? MapBorders.Sea : MapBorders.CurrentHolder(a, srcProvs[cell], owners, authoredOwners);
+    }
 
     /// <summary>
     /// Paint the whole plate: RGBA, one cell after another, water left transparent for the

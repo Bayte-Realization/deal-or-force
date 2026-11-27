@@ -47,12 +47,22 @@ public sealed partial class NativeProvinceGraph
         internal int[] OutProvinces;
         internal float[] OutDistances;
         internal int[] SrcBuffer;
+        internal uint[] BorderPairsBuffer;
+        internal ushort[] HomeKeysBuffer;
+        internal int[] HomeCountsBuffer;
+        internal uint[] OccPairsBuffer;
+        internal int[] OccCountsBuffer;
 
         internal ThreadWorkspace(int provinceCount)
         {
             OutProvinces = new int[provinceCount];
             OutDistances = new float[provinceCount];
             SrcBuffer = new int[Math.Min(provinceCount, 1024)];
+            BorderPairsBuffer = new uint[4096];
+            HomeKeysBuffer = new ushort[2048];
+            HomeCountsBuffer = new int[2048];
+            OccPairsBuffer = new uint[4096];
+            OccCountsBuffer = new int[4096];
         }
     }
 
@@ -60,14 +70,16 @@ public sealed partial class NativeProvinceGraph
 
     private readonly SafeGraphHandle _graph;
     private readonly int _provinceCount;
+    private readonly int _adjacencyRevision;
     private readonly ThreadLocal<ThreadWorkspace> _workspace;
 
     public int ProvinceCount => _provinceCount;
 
-    private NativeProvinceGraph(SafeGraphHandle graph, int provinceCount)
+    private NativeProvinceGraph(SafeGraphHandle graph, int provinceCount, int adjacencyRevision)
     {
         _graph = graph;
         _provinceCount = provinceCount;
+        _adjacencyRevision = adjacencyRevision;
         _workspace = new ThreadLocal<ThreadWorkspace>(() => CreateWorkspace(provinceCount), trackAllValues: false);
     }
 
@@ -164,6 +176,52 @@ public sealed partial class NativeProvinceGraph
         int* outComponentCount,
         int* outMemberCount);
 
+    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern unsafe int dof_graph_border_pairs_v1(
+        IntPtr graph,
+        IntPtr scratch,
+        ushort* controllers,
+        uint controllerCount,
+        uint* outPairs,
+        uint outCapacity,
+        uint* outCount);
+
+    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern unsafe int dof_graph_occupation_census_v1(
+        IntPtr scratch,
+        ushort* provinceToNation,
+        ushort* controllers,
+        uint arrayLen,
+        uint provinceCount,
+        ushort* outHomeKeys,
+        int* outHomeCounts,
+        uint homeCapacity,
+        uint* outHomeLen,
+        uint* outOccPairs,
+        int* outOccCounts,
+        uint occCapacity,
+        uint* outOccLen);
+
+    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern unsafe int dof_graph_flood_vision_v1(
+        IntPtr graph,
+        IntPtr scratch,
+        byte* reach,
+        uint reachLen,
+        int* seeds,
+        byte* seedDepths,
+        uint seedCount);
+
+    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern unsafe int dof_graph_seed_territory_vision_v1(
+        IntPtr graph,
+        IntPtr scratch,
+        int* ownedProvinces,
+        uint ownedCount,
+        byte borderDepth,
+        byte* reach,
+        uint reachLen);
+
     private static ThreadWorkspace CreateWorkspace(int provinceCount)
     {
         var ws = new ThreadWorkspace(provinceCount);
@@ -180,20 +238,23 @@ public sealed partial class NativeProvinceGraph
     public static NativeProvinceGraph? ForMap(ProvinceTopology? map)
     {
         if (map is null || !NativeKernelsLoader.IsAvailable) return null;
-        if (Table.TryGetValue(map, out var existing)) return existing;
+        var rev = map.AdjacencyRevision;
+        if (Table.TryGetValue(map, out var existing) && existing._adjacencyRevision == rev)
+            return existing;
 
-        var created = TryBuildFromTopology(map);
+        var created = TryBuildFromTopology(map, rev);
         if (created is null) return null;
 
         lock (Table)
         {
-            if (Table.TryGetValue(map, out existing)) return existing;
-            Table.Add(map, created);
+            if (Table.TryGetValue(map, out existing) && existing._adjacencyRevision == rev)
+                return existing;
+            Table.AddOrUpdate(map, created);
             return created;
         }
     }
 
-    private static unsafe NativeProvinceGraph? TryBuildFromTopology(ProvinceTopology map)
+    private static unsafe NativeProvinceGraph? TryBuildFromTopology(ProvinceTopology map, int adjacencyRevision)
     {
         var neighbors = map.Neighbors;
         if (neighbors is null || neighbors.Length < 1) return null;
@@ -324,7 +385,7 @@ public sealed partial class NativeProvinceGraph
             if (raw == IntPtr.Zero) return null;
             var handle = new SafeGraphHandle();
             handle.Init(raw);
-            return new NativeProvinceGraph(handle, n);
+            return new NativeProvinceGraph(handle, n, adjacencyRevision);
         }
     }
 
@@ -526,5 +587,160 @@ public sealed partial class NativeProvinceGraph
         componentCount = cc;
         memberCount = mc;
         return true;
+    }
+
+    /// <summary>
+    /// Scans the persistent CSR province graph in native Rust to collect sorted unique
+    /// <c>(owner &lt;&lt; 16) | other</c> border pairs for <c>CampaignDiplomacy.Borders</c>.
+    /// </summary>
+    public unsafe bool TryBorderPairs(ushort[] controllers, out ReadOnlySpan<uint> pairs)
+    {
+        pairs = ReadOnlySpan<uint>.Empty;
+        if (!NativeKernelsLoader.EnableWartimeGraphDefault ||
+            !NativeKernelsLoader.HasCapability(NativeKernelsLoader.CapWartimeGraph) ||
+            _graph.IsInvalid || controllers is null || controllers.Length < _provinceCount)
+        {
+            return false;
+        }
+        var ws = _workspace.Value;
+        if (ws?.Scratch is null || ws.Scratch.IsInvalid) return false;
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            uint count = 0;
+            fixed (ushort* pCtrl = controllers)
+            fixed (uint* pOut = ws.BorderPairsBuffer)
+            {
+                var status = dof_graph_border_pairs_v1(
+                    _graph.DangerousGetHandle(),
+                    ws.Scratch.DangerousGetHandle(),
+                    pCtrl, (uint)controllers.Length,
+                    pOut, (uint)ws.BorderPairsBuffer.Length, &count);
+                if (status == 0)
+                {
+                    pairs = ws.BorderPairsBuffer.AsSpan(0, (int)count);
+                    return true;
+                }
+                if (status == -3)
+                {
+                    ws.BorderPairsBuffer = new uint[ws.BorderPairsBuffer.Length * 2];
+                    continue;
+                }
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Native Rust occupation census matching <c>Warfare.MeasureOccupation</c>.
+    /// Returns spans into thread-local reusable scratch buffers (consume before next call on same thread).
+    /// </summary>
+    public unsafe bool TryOccupationCensus(
+        ushort[] provinceToNation,
+        ushort[] controllers,
+        int provinceCount,
+        out ReadOnlySpan<ushort> homeKeys,
+        out ReadOnlySpan<int> homeCounts,
+        out ReadOnlySpan<uint> occPairs,
+        out ReadOnlySpan<int> occCounts)
+    {
+        homeKeys = ReadOnlySpan<ushort>.Empty;
+        homeCounts = ReadOnlySpan<int>.Empty;
+        occPairs = ReadOnlySpan<uint>.Empty;
+        occCounts = ReadOnlySpan<int>.Empty;
+        if (!NativeKernelsLoader.EnableWartimeGraphDefault ||
+            !NativeKernelsLoader.HasCapability(NativeKernelsLoader.CapWartimeGraph) ||
+            _graph.IsInvalid || provinceToNation is null || controllers is null ||
+            provinceCount < 0 || provinceCount + 1 > provinceToNation.Length || provinceCount + 1 > controllers.Length)
+        {
+            return false;
+        }
+        var ws = _workspace.Value;
+        if (ws?.Scratch is null || ws.Scratch.IsInvalid) return false;
+
+        var arrayLen = (uint)Math.Min(provinceToNation.Length, controllers.Length);
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            uint hLen = 0, oLen = 0;
+            fixed (ushort* pPtn = provinceToNation)
+            fixed (ushort* pCtrl = controllers)
+            fixed (ushort* pHk = ws.HomeKeysBuffer)
+            fixed (int* pHc = ws.HomeCountsBuffer)
+            fixed (uint* pOp = ws.OccPairsBuffer)
+            fixed (int* pOc = ws.OccCountsBuffer)
+            {
+                var status = dof_graph_occupation_census_v1(
+                    ws.Scratch.DangerousGetHandle(),
+                    pPtn, pCtrl, arrayLen, (uint)provinceCount,
+                    pHk, pHc, (uint)ws.HomeKeysBuffer.Length, &hLen,
+                    pOp, pOc, (uint)ws.OccPairsBuffer.Length, &oLen);
+                if (status == 0)
+                {
+                    homeKeys = ws.HomeKeysBuffer.AsSpan(0, (int)hLen);
+                    homeCounts = ws.HomeCountsBuffer.AsSpan(0, (int)hLen);
+                    occPairs = ws.OccPairsBuffer.AsSpan(0, (int)oLen);
+                    occCounts = ws.OccCountsBuffer.AsSpan(0, (int)oLen);
+                    return true;
+                }
+                if (status == -3)
+                {
+                    ws.HomeKeysBuffer = new ushort[ws.HomeKeysBuffer.Length * 2];
+                    ws.HomeCountsBuffer = new int[ws.HomeCountsBuffer.Length * 2];
+                    ws.OccPairsBuffer = new uint[ws.OccPairsBuffer.Length * 2];
+                    ws.OccCountsBuffer = new int[ws.OccCountsBuffer.Length * 2];
+                    continue;
+                }
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Native CSR BFS matching <c>CampaignIntel.FloodVision</c>.</summary>
+    public unsafe bool TryFloodVision(byte[] reach, ReadOnlySpan<int> seeds, ReadOnlySpan<byte> depths)
+    {
+        if (!NativeKernelsLoader.EnableWartimeGraphDefault ||
+            !NativeKernelsLoader.HasCapability(NativeKernelsLoader.CapWartimeGraph) ||
+            _graph.IsInvalid || reach is null || reach.Length < _provinceCount || seeds.Length != depths.Length)
+        {
+            return false;
+        }
+        var ws = _workspace.Value;
+        if (ws?.Scratch is null || ws.Scratch.IsInvalid) return false;
+
+        fixed (byte* pReach = reach)
+        fixed (int* pSeeds = seeds)
+        fixed (byte* pDepths = depths)
+        {
+            return dof_graph_flood_vision_v1(
+                _graph.DangerousGetHandle(),
+                ws.Scratch.DangerousGetHandle(),
+                pReach, (uint)reach.Length,
+                pSeeds, pDepths, (uint)seeds.Length) == 0;
+        }
+    }
+
+    /// <summary>Native CSR territory vision clear + border seed + flood matching <c>CampaignIntel.Vision</c>.</summary>
+    public unsafe bool TrySeedTerritoryVision(ReadOnlySpan<int> ownedProvinces, byte borderDepth, byte[] reach)
+    {
+        if (!NativeKernelsLoader.EnableWartimeGraphDefault ||
+            !NativeKernelsLoader.HasCapability(NativeKernelsLoader.CapWartimeGraph) ||
+            _graph.IsInvalid || reach is null || reach.Length < _provinceCount)
+        {
+            return false;
+        }
+        var ws = _workspace.Value;
+        if (ws?.Scratch is null || ws.Scratch.IsInvalid) return false;
+
+        fixed (int* pOwned = ownedProvinces)
+        fixed (byte* pReach = reach)
+        {
+            return dof_graph_seed_territory_vision_v1(
+                _graph.DangerousGetHandle(),
+                ws.Scratch.DangerousGetHandle(),
+                pOwned, (uint)ownedProvinces.Length,
+                borderDepth, pReach, (uint)reach.Length) == 0;
+        }
     }
 }

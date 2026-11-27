@@ -5,9 +5,9 @@
 **Глобальная стратегия про весь мир — с утра 1 января 2024 года.**
 Играть можно за любую страну на карте. Остальными управляет компьютер, и в большинстве действий
 он отдаёт те же команды, что и игрок; [оставшиеся различия](docs/PLAYER_AI_PARITY_2026_11_18_RU.md)
-убираются по одному, и первыми — те, что касаются мира. Версия **PortAlpha 0.8.8.2**.
+убираются по одному, и первыми — те, что касаются мира. Версия **PortAlpha 0.8.8.6**.
 
-[![PortAlpha 0.8.8.2](https://img.shields.io/badge/PortAlpha-0.8.8.2-2f6fb3)](docs/CHANGELOG_0.8.8.2_RU.md)
+[![PortAlpha 0.8.8.6](https://img.shields.io/badge/PortAlpha-0.8.8.6-2f6fb3)](docs/CHANGELOG_0.8.8.6_RU.md)
 [![Движок](https://img.shields.io/badge/Godot-4.8%20.NET-478cbf?logo=godotengine&logoColor=white)](docs/GETTING_STARTED_RU.md)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)](docs/GETTING_STARTED_RU.md)
 [![Лицензия](https://img.shields.io/badge/лицензия-GPL--3.0--or--later-3a7f3a)](LICENSE)
@@ -30,23 +30,47 @@
   [itch.io](https://bayte-realization.itch.io/deal-or-force).
   Распакуйте архив целиком и запустите `Deal or Force Launcher.exe`.
 - **Из исходников** — см. [Сборка и запуск](#сборка-и-запуск) ниже.
-- [Список изменений PortAlpha 0.8.8.2](docs/CHANGELOG_0.8.8.2_RU.md) добавляет нативные Rust SIMD
-  ядра (`dof_kernels` AVX2 + Android ARM64 NEON), разнесение недельных этапов симуляции, Android
-  Turbo Sim, двухуровневый LOD дипломатии ИИ, половинное разрешение / выборочный ETC2/ASTC для
-  снижения VRAM и исправления линий атаки, оверлеев карты и интерфейса наблюдателя; история прошлых
-  релизов — в [0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md) и [0.8.5.3](docs/CHANGELOG_0.8.5.3_RU.md).
+- [Список изменений PortAlpha 0.8.8.6](docs/CHANGELOG_0.8.8.6_RU.md) добавляет lock-free
+  тройную буферизацию `WorldVisualSnapshot` с Frame-0 синхронизацией карты и часов, GPU-шейдеры
+  GLSL 450 (`1+JFA`) + инкрементальные dirty-rect мипмапы `PoliticalPlate`/`FrontierField`,
+  инстансированные на GPU значки боёв без `SubViewport` (`BattleBadgeGpu`), плавный анти-рывок темпа
+  времени, военные Rust SIMD-ядра (`Caps=0x3DF`) и снижение GC/CPU; история прошлых релизов — в
+  [0.8.8.2](docs/CHANGELOG_0.8.8.2_RU.md) и [0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md).
 - Игру делает один человек — открыто, с помощью ИИ.
 
 Следить за проектом: [YouTube](https://www.youtube.com/@BayteRealization) ·
 [X](https://x.com/Bayte_R) · [TikTok](https://www.tiktok.com/@bayte_realization) ·
 [Telegram](https://t.me/+39SNXyA92aBmYzhi) · [девлог](https://bayte-realization.itch.io/deal-or-force/devlog)
 
-## Новое в PortAlpha 0.8.8.2
+## Новое в PortAlpha 0.8.8.6
 
 Выпуск собран на **Godot 4.8 Beta 3 .NET** и **.NET 10** (активная ветка публикации **PortAlpha**,
 с сохранением исторических `EntertAlpha` и `ReimAlpha`). Подробный разбор изменений — в
-[списке изменений PortAlpha 0.8.8.2](docs/CHANGELOG_0.8.8.2_RU.md),
-[0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md) и архиве [0.8.5.3](docs/CHANGELOG_0.8.5.3_RU.md).
+[списке изменений PortAlpha 0.8.8.6](docs/CHANGELOG_0.8.8.6_RU.md),
+[0.8.8.2](docs/CHANGELOG_0.8.8.2_RU.md) и [0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md).
+
+- **Lock-free тройная буферизация `WorldVisualSnapshot` и Frame-0 синхронизация карты и времени.**
+  Убрана конкуренция замков `CampaignAccessGate` между `DoF-Sim` и `GlobePresentation` через
+  `LockFreeTripleBuffer<WorldVisualState>` (`GlobeLockFreeSync`): провинции, фронты, значки боёв,
+  подписи стран и часы публикуются атомарно на чистых границах шагов с мягким backpressure рендера
+  (`NotifyVisualFramePresented`) и анти-рывковым сглаживанием скоростей 1–4.
+- **Вычислительные GPU-шейдеры GLSL 450 (`1+JFA`) + инкрементальные dirty-rect мипмапы.**
+  `GpuMapCompute` переносит `PoliticalPlate` и 6-проходный `1+JFA` `FrontierField` прямо в VRAM
+  через `RenderingDevice` + zero-copy `Texture2Drd` (`R32Uint`, сшивка по антимеридиану), а на
+  Android/GLES3 и CPU-фолбэке работают побитово-точные dirty-rect `PaintDirtyMipmappedInto` /
+  `BuildDirtyMipmappedInto` (`22.8×` против полного Rust / `83×` против C# для пластины, `8.7×` для
+  поля границ, без фризов `Image.GenerateMipmaps()`).
+- **GPU-инстансинг значков боёв без `SubViewport` (`BattleBadgeGpu`) и закрытие утечек `Image`.**
+  Отдельные `128×128` `SubViewport` FBO заменены на один `MultiMeshInstance3D` с аналитическим SDF и
+  18 КБ атласом цифр (`-1.5–2.25 ГБ` пиковой VRAM, `-960` узлов сцены); закрыты утечки временных
+  `Image` в миникарте, движениях, городах, флотах и упакованных текстурах.
+- **Расширенные Rust SIMD-ядра (`dof_kernels` `Caps=0x3DF`, `17/17 BIT-EXACT`) и разгрузка CPU/GC.**
+  Добавлены военные CSR-ядра графа (`graph_occupation` `30.2×`, `graph_vision_seed` `5.0×`,
+  авто-пересборка при смене `AdjacencyRevision`), `political_cohorts` (`1.84×`), разблокированы в
+  бою `econ_vital_rates` (`15.4×`) и `demo_step_cohorts` (`6.7×`) под `DemographyRulesFSharpBoot`,
+  устранены боксинг `SideEnumerable`, `HeapSpanDictionary`, лишние обходы `TerritorialDisputeIndex`
+  / `ProvinceVision` / `PeacefulFormationCache` и спам `simulation.log` (пик тяжёлого шага `-27%`,
+  всплеск 24 шагов `-28%`, GC `intel.visibility` `-46%`, побитово-точный `CampaignFingerprint`).
 
 - **Нативные Rust SIMD-ядра (`dof_kernels`: Win64 AVX2 + Android ARM64 NEON).** Крейт
   `native/dof_kernels/` расширен побитово-идентичными ядрами расчёта мнений (`OpinionCore`),

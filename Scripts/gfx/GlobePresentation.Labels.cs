@@ -168,8 +168,8 @@ public sealed partial class GlobePresentation
             _labelOwner = snapshot;
             var fastForward = campaign is { IsPaused: false, Speed: >= 4 };
             _nextCountryLabelPlaceMsec = nowMsec + (Platform.PlatformProfile.Current?.IsTouchPrimary == true
-                ? 1200UL
-                : (fastForward ? 1500UL : 500UL));
+                ? 850UL
+                : (fastForward ? 650UL : 400UL));
             var cells = _provinceTopology.CellToProvince;
             var width = _provinceTopology.Width;
             var height = _provinceTopology.Height;

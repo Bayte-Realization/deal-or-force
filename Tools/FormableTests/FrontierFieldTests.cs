@@ -157,8 +157,8 @@ static class FrontierFieldTests
         Check(full.Contains("float frontier_weight = frontier_ready * smoothstep(") &&
               full.Contains("nation_edge_pixels = mix(nation_edge_pixels, frontier_pixels, frontier_weight);"),
             "the far stroke and everything drawn off the frontier distance read the field by the same weight");
-        Check(plate.Contains("Simulation.FrontierField.BuildInto(authored, topology.CellToProvince, width, height, owners, authoredOwners, ref scratch)") &&
-              plate.Contains("FrontierImageInto(frontierAuthored, topology, owners, authoredOwners, ref _frontierPixelScratch)") &&
+        Check(plate.Contains("Simulation.FrontierField.BuildDirtyMipmappedInto(") &&
+              plate.Contains("FrontierImageDirtyInto(") &&
               plate.Contains("var frontier = done.Result.Frontier;") &&
               plate.Contains("ApplyFrontier(frontier);"),
             "every plate repaint builds the field from the same owners and swaps both in together");

@@ -540,7 +540,7 @@ public static class HouseholdEconomy
 
         var wantRb = !outReviewBirths.IsEmpty;
         var wantRd = !outReviewDeaths.IsEmpty;
-        if (DemographyRulesHook.Installed)
+        if (DemographyRulesHook.IsCustomInstalled)
         {
             for (var i = 0; i < count; i++)
             {

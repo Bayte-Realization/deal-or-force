@@ -14,9 +14,14 @@ public sealed partial class GlobePresentation
 
     private void OrientSurfaceCounter(Node3D node, Vector3 normal)
     {
-        if (_flatMap) { node.Quaternion = Quaternion.Identity; return; }
+        node.Quaternion = SurfaceCounterQuaternion(normal);
+    }
+
+    private Quaternion SurfaceCounterQuaternion(Vector3 normal)
+    {
+        if (_flatMap) return Quaternion.Identity;
         var geo = GeographicFromNormal(normal);
-        node.Quaternion = CountryLabelSurfaceBasis(geo.Latitude, geo.Longitude, 1f, 0f).GetRotationQuaternion();
+        return CountryLabelSurfaceBasis(geo.Latitude, geo.Longitude, 1f, 0f).GetRotationQuaternion();
     }
 
     private void SizeSurfaceArmyCounter(ArmyStackMarker marker)
@@ -70,6 +75,9 @@ public sealed partial class GlobePresentation
     // One world footprint and one screen ceiling for all military cards. Individual
     // arms may override these limits in gui without adding another billboard shader.
     private float SurfaceCounterWidth(Node3D node, string prefix = "map")
+        => SurfaceCounterWidthAt(node.IsInsideTree() ? node.GlobalPosition : node.Position, prefix);
+
+    private float SurfaceCounterWidthAt(Vector3 globalPos, string prefix = "map")
     {
         if (!IsInstanceValid(_camera)) return .06f;
         var frame = Engine.GetProcessFrames();
@@ -85,8 +93,7 @@ public sealed partial class GlobePresentation
             _surfaceCamForward = camTransform.Basis.Z;
             _surfaceUnitsPerPixelScale = 2f * MathF.Tan(Mathf.DegToRad(fov * 0.5f)) / viewportH;
         }
-        var pos = node.IsInsideTree() ? node.GlobalPosition : node.Position;
-        var rel = pos - _surfaceCamOrigin;
+        var rel = globalPos - _surfaceCamOrigin;
         var depth = Math.Max(.001f, -rel.Dot(_surfaceCamForward));
         var unitsPerPixel = depth * _surfaceUnitsPerPixelScale;
         var (pixelLimit, worldLimit) = SurfaceLimitsForPrefix(prefix);
@@ -102,9 +109,17 @@ public sealed partial class GlobePresentation
     {
         distance = float.MaxValue;
         if (!plate.IsVisibleInTree() || plate.Texture is null) return false;
-        // Intersect the actual tilted quad in its own texture plane. A circular
+        var half = plate.Texture.GetSize() * plate.PixelSize * .5f;
+        return TryHitSurfaceQuad(plate.GlobalTransform, half, pixel, out distance);
+    }
+
+    private bool TryHitSurfaceQuad(Transform3D globalTransform, Vector2 half, Vector2 pixel, out float distance)
+    {
+        distance = float.MaxValue;
+        if (!IsInstanceValid(_camera)) return false;
+        // Intersect the actual tilted quad in its own local plane. A circular
         // billboard hit target would steal clicks on the ground beside the card.
-        var inverse = plate.GlobalTransform.AffineInverse();
+        var inverse = globalTransform.AffineInverse();
         var origin = _camera.ProjectRayOrigin(pixel);
         var localOrigin = inverse * origin;
         var localDirection = inverse.Basis * _camera.ProjectRayNormal(pixel);
@@ -112,9 +127,8 @@ public sealed partial class GlobePresentation
         var travel = -localOrigin.Z / localDirection.Z;
         if (travel < 0f) return false;
         var hit = localOrigin + localDirection * travel;
-        var half = plate.Texture.GetSize() * plate.PixelSize * .5f;
         if (Math.Abs(hit.X) > half.X || Math.Abs(hit.Y) > half.Y) return false;
-        distance = origin.DistanceSquaredTo(plate.ToGlobal(hit));
+        distance = origin.DistanceSquaredTo(globalTransform * hit);
         return true;
     }
 }
