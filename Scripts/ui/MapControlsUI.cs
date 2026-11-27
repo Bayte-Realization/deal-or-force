@@ -19,6 +19,7 @@ public partial class DealOrForceGame
     private GridContainer _mapModeDrawerGrid;
     private readonly List<(string Setting, Button Button)> _mapVisualToggleButtons = new();
     private bool _mapControlsLayoutQueued;
+    private bool _mapControlsLayoutInProgress;
 
     private void BuildMapControls()
     {
@@ -184,47 +185,65 @@ public partial class DealOrForceGame
 
     private void QueueMapControlsLayout()
     {
-        if (_mapControlsLayoutQueued || IsNewShellActive) return;
+        if (_mapControlsLayoutQueued || _mapControlsLayoutInProgress || IsNewShellActive) return;
         _mapControlsLayoutQueued = true;
         Callable.From(() => { _mapControlsLayoutQueued = false; LayoutMapControls(); }).CallDeferred();
     }
 
     private void LayoutMapControls()
     {
-        if (IsNewShellActive || _mapControlsPanel is null || _mapControlsFlow is null) return;
-        var rect = InterfaceSkin.Layout("hud.map_controls");
-        var left = rect.AnchorLeft * Size.X + rect.OffsetLeft;
-        var right = rect.AnchorRight * Size.X + rect.OffsetRight;
-        var bottom = rect.AnchorBottom * Size.Y + rect.OffsetBottom;
-        var height = Mathf.Max(44, _mapControlsFlow.GetCombinedMinimumSize().Y + 10);
-        var bounds = ResponsiveHudLayout.Fit(new(left, bottom - height, Mathf.Max(180, right - left), height), Size.X, Size.Y);
-        PlaceHudBounds(_mapControlsPanel, bounds);
-        LayoutMapSelectionCards();
-        if (_mapModeDrawerPanel is not null)
+        if (_mapControlsLayoutInProgress || IsNewShellActive || _mapControlsPanel is null || _mapControlsFlow is null) return;
+        if (!float.IsFinite(Size.X) || !float.IsFinite(Size.Y) || Size.X <= 0f || Size.Y <= 0f) return;
+        _mapControlsLayoutInProgress = true;
+        try
         {
-            var drawerWidth = Mathf.Clamp(Ui.Metric("map_controls.drawer_width", 480), 200, 720);
-            var columns = ResponsiveHudLayout.DrawerColumns(drawerWidth - 28,
-                Ui.Metric("map_controls.drawer_cell_width", 190));
-            _mapModeDrawerGrid.Columns = columns;
-            var buttonHeight = Ui.Metric("map.controls_button_height", 34);
-            var modeCount = System.Enum.GetValues<StrategicMapMode>().Length;
-            var rowCount = Mathf.CeilToInt(modeCount / (float)Math.Max(1, columns));
-            var gridHeight = rowCount * buttonHeight + Math.Max(0, rowCount - 1) * 6f;
-            var guideHeight = Mathf.Max(MapLayerGuideHeight, _mapLayerGuide?.CustomMinimumSize.Y ?? MapLayerGuideHeight);
-            var baseHeight = Mathf.Max(Ui.Metric("map_controls.drawer_height", 304), gridHeight + 102f);
-            var drawerHeight = Mathf.Clamp(baseHeight + guideHeight, 200, Mathf.Max(200, Size.Y * .7f));
-            var drawer = ResponsiveHudLayout.Fit(new(bounds.X + bounds.Width - drawerWidth,
-                bounds.Y - drawerHeight - 6, drawerWidth, drawerHeight), Size.X, Size.Y);
-            PlaceHudBounds(_mapModeDrawerPanel, drawer);
+            var rect = InterfaceSkin.Layout("hud.map_controls");
+            var left = rect.AnchorLeft * Size.X + rect.OffsetLeft;
+            var right = rect.AnchorRight * Size.X + rect.OffsetRight;
+            var bottom = rect.AnchorBottom * Size.Y + rect.OffsetBottom;
+            var height = Mathf.Max(44, _mapControlsFlow.GetCombinedMinimumSize().Y + 10);
+            var bounds = ResponsiveHudLayout.Fit(new(left, bottom - height, Mathf.Max(180, right - left), height), Size.X, Size.Y);
+            PlaceHudBounds(_mapControlsPanel, bounds);
+            LayoutMapSelectionCards();
+            if (_mapModeDrawerPanel is not null)
+            {
+                var drawerWidth = Mathf.Clamp(Ui.Metric("map_controls.drawer_width", 480), 200, 720);
+                var columns = ResponsiveHudLayout.DrawerColumns(drawerWidth - 28,
+                    Ui.Metric("map_controls.drawer_cell_width", 190));
+                _mapModeDrawerGrid.Columns = columns;
+                var buttonHeight = Ui.Metric("map.controls_button_height", 34);
+                var modeCount = System.Enum.GetValues<StrategicMapMode>().Length;
+                var rowCount = Mathf.CeilToInt(modeCount / (float)Math.Max(1, columns));
+                var gridHeight = rowCount * buttonHeight + Math.Max(0, rowCount - 1) * 6f;
+                var guideHeight = Mathf.Max(MapLayerGuideHeight, _mapLayerGuide?.CustomMinimumSize.Y ?? MapLayerGuideHeight);
+                var baseHeight = Mathf.Max(Ui.Metric("map_controls.drawer_height", 304), gridHeight + 102f);
+                var drawerHeight = Mathf.Clamp(baseHeight + guideHeight, 200, Mathf.Max(200, Size.Y * .7f));
+                var drawer = ResponsiveHudLayout.Fit(new(bounds.X + bounds.Width - drawerWidth,
+                    bounds.Y - drawerHeight - 6, drawerWidth, drawerHeight), Size.X, Size.Y);
+                PlaceHudBounds(_mapModeDrawerPanel, drawer);
+            }
+            RefreshMapVisualToggles();
         }
-        RefreshMapVisualToggles();
+        finally { _mapControlsLayoutInProgress = false; }
     }
+
+    private static bool AnchorsAtOrigin(Control p) =>
+        p.AnchorLeft == 0f && p.AnchorTop == 0f && p.AnchorRight == 0f && p.AnchorBottom == 0f;
+
+    private static bool BoundsEqual(Control p, float x, float y, float right, float bottom) =>
+        MathF.Abs(p.OffsetLeft - x) < 0.25f && MathF.Abs(p.OffsetTop - y) < 0.25f &&
+        MathF.Abs(p.OffsetRight - right) < 0.25f && MathF.Abs(p.OffsetBottom - bottom) < 0.25f;
 
     private static void PlaceHudBounds(Control panel, ResponsiveHudLayout.Bounds bounds)
     {
-        panel.SetAnchorsPreset(LayoutPreset.TopLeft);
+        if (!float.IsFinite(bounds.X + bounds.Y + bounds.Width + bounds.Height)) return;
+        var right = bounds.X + bounds.Width;
+        var bottom = bounds.Y + bounds.Height;
+        var atOrigin = AnchorsAtOrigin(panel);
+        if (atOrigin && BoundsEqual(panel, bounds.X, bounds.Y, right, bottom)) return;
+        if (!atOrigin) panel.SetAnchorsPreset(LayoutPreset.TopLeft);
         panel.OffsetLeft = bounds.X; panel.OffsetTop = bounds.Y;
-        panel.OffsetRight = bounds.X + bounds.Width; panel.OffsetBottom = bounds.Y + bounds.Height;
+        panel.OffsetRight = right; panel.OffsetBottom = bottom;
     }
 
     // No dependency on a particular weather implementation: data declares availability,

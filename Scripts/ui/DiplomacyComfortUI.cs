@@ -22,8 +22,7 @@ public partial class DealOrForceGame
     private void FitDiplomacyComfort(bool full = true)
     {
         if (_diplomacyLayer is not { Visible: true } || _diplomacyCountryColumn is null) return;
-        var pixels = GetViewport().GetStretchTransform() * _diplomacyLayer.GetGlobalTransformWithCanvas();
-        var scale = MathF.Max(.01f, MathF.Min(MathF.Abs(pixels.Scale.X), MathF.Abs(pixels.Scale.Y)));
+        var scale = Ui.PixelScale(_diplomacyLayer);
         var preference = Math.Clamp(SettingsCatalog.Number("interface_scale"), .5f, 2.5f);
         var changed = MathF.Abs(scale - _diplomacyComfortPixels) > .001f ||
                       MathF.Abs(preference - _diplomacyComfortPreference) > .001f;

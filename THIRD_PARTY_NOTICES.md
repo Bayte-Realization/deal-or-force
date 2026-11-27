@@ -14,7 +14,7 @@ permits unrestricted reuse of the project's own artwork and audio as stated in
 
 ## Engine, Physics & .NET Runtimes
 
-### Godot Engine 4.8 (`Godot.NET.Sdk/4.8.0-beta.3`)
+### Godot Engine 4.8 (`Godot.NET.Sdk/4.8.0-beta.5`)
 - **Authors**: Juan Linietsky, Ariel Manzur, and the Godot Engine contributors
 - **Website**: https://godotengine.org · https://github.com/godotengine/godot
 - **Licence**: MIT License (`Copyright (c) 2014-present Godot Engine contributors`, `Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur`)

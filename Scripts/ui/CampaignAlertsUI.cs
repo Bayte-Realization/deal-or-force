@@ -152,10 +152,14 @@ public partial class DealOrForceGame
         }
         if (_campaignAlertPopup is null) return;
         // The full list opens beside the short one, to its left, top-aligned: under it is the report.
-        var width = MathF.Min(440f, MathF.Max(300f, _alertListPanel.Position.X - 120f));
-        var x = MathF.Max(8f, _alertListPanel.Position.X - DatePlateGap - width);
-        _campaignAlertPopup.Position = new Vector2(x, _alertListPanel.Position.Y);
-        _campaignAlertPopup.Size = new Vector2(width, MathF.Min(460f, MathF.Max(260f, Size.Y - _campaignAlertPopup.Position.Y - 70f)));
+        var alertPos = _alertListPanel.Position;
+        var alertX = float.IsFinite(alertPos.X) ? alertPos.X : 1558f;
+        var alertY = float.IsFinite(alertPos.Y) ? alertPos.Y : 88f;
+        var viewHeight = float.IsFinite(Size.Y) && Size.Y > 0f ? Size.Y : 1080f;
+        var width = MathF.Min(440f, MathF.Max(300f, alertX - 120f));
+        var x = MathF.Max(8f, alertX - DatePlateGap - width);
+        _campaignAlertPopup.Position = new Vector2(x, alertY);
+        _campaignAlertPopup.Size = new Vector2(width, MathF.Min(460f, MathF.Max(260f, viewHeight - alertY - 70f)));
     }
 
     /// <summary>

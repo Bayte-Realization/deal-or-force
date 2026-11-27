@@ -17,8 +17,8 @@ Windows-поля `product_name` и `file_description` должны содерж�
 материалах сохраняются в `THIRD_PARTY_NOTICES.md`, корневые LICENSE и
 LICENSE-EXCEPTIONS.md остаются. Проверка упаковки: `Tools/Test-PlayerNotices.ps1`.
 
-Для сборки 16 ноября используется Godot `4.8.beta3.mono` из `C:\GodotEngineNet 4.8-Beta3`.
-Нужны шаблоны **4.8.beta3.mono**. SDK задаётся в `DealOrForce.csproj`.
+Для актуальной сборки используется Godot `4.8.beta5.mono` из `C:\GodotEngineNet 4.8-Beta5`.
+Нужны шаблоны **4.8.beta5.mono**. SDK задаётся в `DealOrForce.csproj`.
 
 Godot умеет запускать проект в редакторе без всякой подготовки, но собрать самостоятельный
 `.exe` он может только из **шаблонов экспорта** — это отдельная загрузка, около гигабайта.
@@ -26,19 +26,19 @@ Godot умеет запускать проект в редакторе без в
 В редакторе: **Editor → Manage Export Templates… → Download and Install**.
 
 Важно, чтобы версия совпала **точно**, включая слово `mono`: движок здесь
-`C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe`, значит нужны шаблоны
-`4.8.beta3.mono`. Эта экспериментальная ветка требует .NET 10; SDK объявлен в проекте.
+`C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe`, значит нужны шаблоны
+`4.8.beta5.mono`. Эта экспериментальная ветка требует .NET 10; SDK объявлен в проекте.
 Для отдельной копии 4.7 нужны её собственные шаблоны. Шаблоны от обычной сборки к .NET-сборке не подойдут, и ошибка при этом
 будет невнятной.
 
 Проверить, что встали: папка
-`C:\Users\<имя>\AppData\Roaming\Godot\export_templates\4.8.beta3.mono\` должна появиться и
+`C:\Users\<имя>\AppData\Roaming\Godot\export_templates\4.8.beta5.mono\` должна появиться и
 быть непустой.
 
 ## Каждый раз: собрать
 
 ```powershell
-pwsh -File Tools\build.ps1 -Godot "C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe" -VerifyRenderers
+pwsh -File Tools\build.ps1 -Godot "C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe" -VerifyRenderers
 ```
 
 Скрипт сначала проверяет C#, затем экспортирует из изолированной копии в
@@ -58,7 +58,7 @@ pwsh -File Tools\build.ps1 -Godot "C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_
 То же самое руками, если скрипт почему-то не подходит:
 
 ```powershell
-& "C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe" --headless `
+& "C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe" --headless `
     --path "D:\Godot Projects\deal-or-force-godot-4-8\build\<staging-копия>" `
     --export-release "Windows Desktop" "D:\Godot Projects\deal-or-force-godot-4-8\build\<новый-билд>\Deal or Force\Deal or Force.exe"
 ```

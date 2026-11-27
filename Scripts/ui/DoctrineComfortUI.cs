@@ -15,12 +15,7 @@ public partial class DealOrForceGame
     private float _doctrineSummaryWeekly = float.NaN;
     private string _doctrineSummaryCountryName = "";
 
-    private float DoctrinePixelScale()
-    {
-        var host = _doctrineLayer is { Visible: true } ? _doctrineLayer : _hudLayer;
-        var pixels = (GetViewport().GetStretchTransform() * host.GetGlobalTransformWithCanvas()).Scale.Abs();
-        return MathF.Max(.01f, MathF.Min(pixels.X, pixels.Y));
-    }
+    private float DoctrinePixelScale() => Ui.PixelScale(_doctrineLayer is { Visible: true } ? _doctrineLayer : _hudLayer);
 
     private float DoctrineUnits(float pixels) => pixels * MathF.Max(1, SettingsCatalog.Number("interface_scale")) / DoctrinePixelScale();
 

@@ -134,7 +134,7 @@ if ($androidSdk) {
     if ($hasPlatformTools -and $buildTools.Count -gt 0 -and $platforms.Count -gt 0 -and $hasBt36) {
         Add-Check -Area 'Host' -Name 'Android SDK' -Status 'PASS' -Detail "$androidSdk (build-tools=$($buildTools -join ','); platforms=$($platforms -join ','))"
     } elseif ($hasPlatformTools -and $buildTools.Count -gt 0 -and $platforms.Count -gt 0) {
-        Add-Check -Area 'Host' -Name 'Android SDK' -Status 'WARN' -Detail "$androidSdk present (build-tools=$($buildTools -join ',')), but Godot 4.8-beta3 requires build-tools;36.1.0."
+        Add-Check -Area 'Host' -Name 'Android SDK' -Status 'WARN' -Detail "$androidSdk present (build-tools=$($buildTools -join ',')), but Godot 4.8-beta5 requires build-tools;36.1.0."
         Add-NextStep 'sdkmanager "build-tools;36.1.0" "platforms;android-36"'
     } else {
         Add-Check -Area 'Host' -Name 'Android SDK' -Status 'WARN' -Detail "$androidSdk exists but incomplete (adb=$hasPlatformTools, build-tools=$($buildTools.Count), platforms=$($platforms.Count))"

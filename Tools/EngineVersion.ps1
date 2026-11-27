@@ -1,13 +1,13 @@
 # The Godot build that DealOrForce.csproj was written against, as `godot --version` prints it.
 #
-#   Godot.NET.Sdk/4.8.0-beta.3  ->  4.8.beta3.
+#   Godot.NET.Sdk/4.8.0-beta.5  ->  4.8.beta5.
 #   Godot.NET.Sdk/4.8.0-rc.1    ->  4.8.rc1.
 #   Godot.NET.Sdk/4.8.0         ->  4.8.stable.
 #   Godot.NET.Sdk/4.8.1         ->  4.8.1.stable.
 #
-# Comparing only `4.8.` let a beta2 editor export a project whose C# was built against
-# beta3's GodotSharp. The export templates folder carries the same name
-# (`export_templates\4.8.beta3.mono`), so this is also the template version the engine wants.
+# Comparing only `4.8.` let an older beta editor export a project whose C# was built against
+# beta5's GodotSharp. The export templates folder carries the same name
+# (`export_templates\4.8.beta5.mono`), so this is also the template version the engine wants.
 # Windows PowerShell 5.1 dot-sources this too: keep it free of 7-only syntax.
 
 function Get-ExpectedEngineVersionPrefix([string]$CsprojPath) {

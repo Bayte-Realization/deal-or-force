@@ -174,10 +174,7 @@ public partial class DealOrForceGame
             Ui.Place(panel, key);
             var gutter = 12f;
             if (key == "modal.diplomacy")
-            {
-                var pixels = (GetViewport().GetStretchTransform() * layer.GetGlobalTransformWithCanvas()).Scale.Abs();
-                gutter /= MathF.Max(.01f, MathF.Min(pixels.X, pixels.Y));
-            }
+                gutter /= Ui.PixelScale(layer);
             var shift = MathF.Max(0, railEnd.X + gutter - panel.Position.X);
             panel.OffsetLeft += shift;
             if (key == "hud.support_panel")
@@ -191,7 +188,7 @@ public partial class DealOrForceGame
 
     private void LayoutCampaignShell()
     {
-        if (_hudLayer is null) return;
+        if (_hudLayer is null || !float.IsFinite(Size.X) || !float.IsFinite(Size.Y) || Size.X <= 0f || Size.Y <= 0f) return;
         LayoutHudReadability();
         if (IsNewShellActive) LayoutNewShell();
         LayoutCampaignAlerts();

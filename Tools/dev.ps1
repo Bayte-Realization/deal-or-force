@@ -56,7 +56,7 @@ function Find-Godot {
             if ($path -and (Test-Path -LiteralPath $path)) { return $path }
         } catch { }
     }
-    return 'C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe'
+    return 'C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe'
 }
 
 function Invoke-Build {
@@ -81,7 +81,7 @@ function Find-MatchingGodot {
     $wanted = Get-ExpectedEngineVersionPrefix (Join-Path $project 'DealOrForce.csproj')
     if ($wanted) {
         if (-not $version.StartsWith($wanted, [StringComparison]::Ordinal)) {
-            $fallback = 'C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe'
+            $fallback = 'C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe'
             if (-not (Test-Path -LiteralPath $fallback)) {
                 throw "Godot $version does not match the project's $wanted SDK, and no matching fallback exists."
             }

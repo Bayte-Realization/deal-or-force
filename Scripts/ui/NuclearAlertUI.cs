@@ -152,7 +152,8 @@ public partial class DealOrForceGame
     {
         if (_nuclearAlert is null) return;
         var view = _hudLayer.Size;
-        var pixels = (GetViewport().GetStretchTransform() * _hudLayer.GetGlobalTransformWithCanvas()).Scale.Abs();
+        var scale = Ui.PixelScale(_hudLayer);
+        var pixels = new Vector2(scale, scale);
         var preference = Math.Clamp(SettingsCatalog.Number("interface_scale"), .5f, 2.5f);
         if (view != _nuclearAlertCanvas || !pixels.IsEqualApprox(_nuclearAlertPixels) || Math.Abs(preference - _nuclearAlertPreference) > .001f)
         {
@@ -161,7 +162,6 @@ public partial class DealOrForceGame
         }
         if (_nuclearAlertReflowFrames <= 0) return;
         _nuclearAlertReflowFrames--;
-        var scale = MathF.Max(.01f, MathF.Min(pixels.X, pixels.Y));
         void Font(Label label, int authored, float floor)
         {
             var size = DecisionReadability.FontSize(authored, scale, preference, floor);

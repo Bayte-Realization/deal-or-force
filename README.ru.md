@@ -44,7 +44,7 @@
 
 ## Новое в PortAlpha 0.8.8.6
 
-Выпуск собран на **Godot 4.8 Beta 3 .NET** и **.NET 10** (активная ветка публикации **PortAlpha**,
+Выпуск собран на **Godot 4.8 Beta 5 .NET** и **.NET 10** (активная ветка публикации **PortAlpha**,
 с сохранением исторических `EntertAlpha` и `ReimAlpha`). Подробный разбор изменений — в
 [списке изменений PortAlpha 0.8.8.6](docs/CHANGELOG_0.8.8.6_RU.md),
 [0.8.8.2](docs/CHANGELOG_0.8.8.2_RU.md) и [0.8.7.3](docs/CHANGELOG_0.8.7.3_RU.md).
@@ -285,7 +285,7 @@ mods/my_mod/
 **Полный разбор — в [docs/GETTING_STARTED_RU.md](docs/GETTING_STARTED_RU.md)**, написанный для
 того, кто этот проект никогда не открывал. Коротко:
 
-Нужны **Godot 4.8 Beta 3 именно в сборке .NET** (`Godot.NET.Sdk/4.8.0-beta.3`) — обычная откроет проект и не
+Нужны **Godot 4.8 Beta 5 именно в сборке .NET** (`Godot.NET.Sdk/4.8.0-beta.5`) — обычная откроет проект и не
 найдёт в нём ни одного скрипта — и **.NET SDK 10**.
 
 ```bash
@@ -388,7 +388,7 @@ Deal or Force опирается на труд множества талантл
 
 | Компонент / Набор данных | Авторы и создатели | Роль в Deal or Force | Лицензия |
 |---|---|---|---|
-| **Godot Engine 4.8** (`4.8.0-beta.3` .NET) | Хуан Линецки, Ариэль Мансур и контрибьюторы Godot | Отрисовка, 3D-глобус, шейдеры, дерево сцен, среда ПК и Android | MIT |
+| **Godot Engine 4.8** (`4.8.0-beta.5` .NET) | Хуан Линецки, Ариэль Мансур и контрибьюторы Godot | Отрисовка, 3D-глобус, шейдеры, дерево сцен, среда ПК и Android | MIT |
 | **Jolt Physics / Godot Jolt** | Йоррит Рауэ, Микаэль Херманссон (`mihe`) и контрибьюторы | Движок 3D-физики для сборок ПК (`project.godot`) | MIT |
 | **.NET 10**, **WPF**, **`System.IO.Hashing`**, **`System.Numerics.Tensors`**, **`RecyclableMemoryStream`** | Microsoft Corporation и .NET Foundation | Среда симуляции, лаунчер, быстрое хэширование `XxHash3`, SIMD-тензоры и пулы потоков | MIT |
 | **F# и `FSharp.Core`** (10.1.402) | Дон Сайм, Microsoft и F# Software Foundation | Чистая библиотека правил (`DealOrForce.Rules`) | MIT |

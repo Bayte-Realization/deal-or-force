@@ -7,7 +7,7 @@
   "simulationStaticMutable": 1405,
   "deadCandidates": 169,
   "totalFiles": 1012,
-  "totalLines": 354452,
+  "totalLines": 354480,
   "files": {
     "Scripts/AudioAssets.cs": {
       "lines": 46,
@@ -4693,15 +4693,15 @@
       "magicNumbers": 0
     },
     "Scripts/ui/BattleDossierComfortUI.cs": {
-      "lines": 87,
+      "lines": 83,
       "maxMethodLines": 28,
       "maxCyclomatic": 8,
       "staticMutable": 0,
       "magicNumbers": 0
     },
     "Scripts/ui/BattleDossierUI.cs": {
-      "lines": 688,
-      "maxMethodLines": 216,
+      "lines": 686,
+      "maxMethodLines": 214,
       "maxCyclomatic": 65,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -4763,7 +4763,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/CampaignAlertsUI.cs": {
-      "lines": 648,
+      "lines": 652,
       "maxMethodLines": 59,
       "maxCyclomatic": 20,
       "staticMutable": 0,
@@ -4798,7 +4798,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/CampaignShellUI.cs": {
-      "lines": 329,
+      "lines": 326,
       "maxMethodLines": 43,
       "maxCyclomatic": 19,
       "staticMutable": 1,
@@ -5001,7 +5001,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/CountrySelectionUI.cs": {
-      "lines": 890,
+      "lines": 898,
       "maxMethodLines": 279,
       "maxCyclomatic": 22,
       "staticMutable": 0,
@@ -5134,8 +5134,8 @@
       "magicNumbers": 0
     },
     "Scripts/ui/DiplomacyComfortUI.cs": {
-      "lines": 110,
-      "maxMethodLines": 62,
+      "lines": 109,
+      "maxMethodLines": 61,
       "maxCyclomatic": 21,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -5176,7 +5176,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/DoctrineComfortUI.cs": {
-      "lines": 99,
+      "lines": 94,
       "maxMethodLines": 37,
       "maxCyclomatic": 16,
       "staticMutable": 0,
@@ -5484,7 +5484,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/MapControlsUI.cs": {
-      "lines": 416,
+      "lines": 435,
       "maxMethodLines": 61,
       "maxCyclomatic": 12,
       "staticMutable": 0,
@@ -5855,7 +5855,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/RecruitmentDepotUI.cs": {
-      "lines": 55,
+      "lines": 54,
       "maxMethodLines": 28,
       "maxCyclomatic": 4,
       "staticMutable": 0,
@@ -5876,7 +5876,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/RecruitmentWorkbenchUI.cs": {
-      "lines": 288,
+      "lines": 287,
       "maxMethodLines": 197,
       "maxCyclomatic": 16,
       "staticMutable": 0,
@@ -6443,7 +6443,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/UiTheme.cs": {
-      "lines": 305,
+      "lines": 319,
       "maxMethodLines": 30,
       "maxCyclomatic": 9,
       "staticMutable": 5,

@@ -23,19 +23,19 @@ they are not installed by default.
 In the editor: **Editor → Manage Export Templates… → Download and Install**.
 
 The version has to match **exactly**, the word `mono` included: the current engine is
-`C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe`, so the templates must be
-`4.8.beta3.mono`. Use the SDK declared by `DealOrForce.csproj`.
+`C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe`, so the templates must be
+`4.8.beta5.mono`. Use the SDK declared by `DealOrForce.csproj`.
 The separate 4.7 checkout needs its own matching templates. Templates from a plain build will not do for a .NET build, and the
 error when they do not will be unhelpful.
 
 To check they arrived: the folder
-`C:\Users\<name>\AppData\Roaming\Godot\export_templates\4.8.beta3.mono\` should exist and
+`C:\Users\<name>\AppData\Roaming\Godot\export_templates\4.8.beta5.mono\` should exist and
 not be empty.
 
 ## Every time: build
 
 ```powershell
-pwsh -File Tools\build.ps1 -Godot "C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe" -VerifyRenderers
+pwsh -File Tools\build.ps1 -Godot "C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe" -VerifyRenderers
 ```
 
 The script checks C#, exports a separate staging copy to `build\<timestamp>\Deal or Force\`,
@@ -54,7 +54,7 @@ and its subsequent checks; it does not skip verification.
 The same thing by hand, if the script does not suit for some reason:
 
 ```powershell
-& "C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe" --headless `
+& "C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe" --headless `
     --path "D:\Godot Projects\deal-or-force-godot-4-8\build\<staging-copy>" `
     --export-release "Windows Desktop" "D:\Godot Projects\deal-or-force-godot-4-8\build\<new-build>\Deal or Force\Deal or Force.exe"
 ```

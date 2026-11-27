@@ -239,8 +239,7 @@ public partial class DealOrForceGame
     private void FitRecruitmentWorkbench()
     {
         if (_recruitmentLayer is not { Visible: true } || _recruitmentTemplateSearch is null) return;
-        var pixels = (GetViewport().GetStretchTransform() * _recruitmentLayer.GetGlobalTransformWithCanvas()).Scale.Abs();
-        var scale = MathF.Max(.01f, MathF.Min(pixels.X, pixels.Y));
+        var scale = Ui.PixelScale(_recruitmentLayer);
         var preference = Math.Clamp(SettingsCatalog.Number("interface_scale"), .5f, 2.5f);
         Fit(_recruitmentLayer);
         var width = _recruitmentTemplateCards.Size.X;

@@ -45,11 +45,11 @@ public partial class DecisionDialogLayout : Node
     {
         if (Panel?.GetParent() is not Control parent || !Panel.IsVisibleInTree()) return;
         var canvas = parent.Size;
-        var pixelScale = (GetViewport().GetStretchTransform() * parent.GetGlobalTransformWithCanvas()).Scale.Abs();
+        var scale = Ui.PixelScale(parent);
+        var pixelScale = new Vector2(scale, scale);
         var preference = Math.Clamp(SettingsCatalog.Number("interface_scale"), .5f, 2.5f);
         if (canvas == _canvas && pixelScale.IsEqualApprox(_pixelScale) && Math.Abs(preference - _interfaceScale) < .001f) return;
         _canvas = canvas; _pixelScale = pixelScale; _interfaceScale = preference;
-        var scale = MathF.Min(pixelScale.X, pixelScale.Y);
         var authored = InterfaceSkin.Layout(LayoutKey ?? "modal.ultimatum");
         var left = canvas.X * authored.AnchorLeft + authored.OffsetLeft;
         var top = canvas.Y * authored.AnchorTop + authored.OffsetTop;

@@ -44,7 +44,7 @@ Follow the project: [YouTube](https://www.youtube.com/@BayteRealization) ·
 
 ## New in PortAlpha 0.8.8.6
 
-Built on **Godot 4.8 Beta 3 .NET** and **.NET 10** (active publication branch **PortAlpha**, preserving
+Built on **Godot 4.8 Beta 5 .NET** and **.NET 10** (active publication branch **PortAlpha**, preserving
 historical `EntertAlpha` and `ReimAlpha`). Full release notes are in
 [PortAlpha 0.8.8.6 changelog](docs/CHANGELOG_0.8.8.6_EN.md),
 [0.8.8.2](docs/CHANGELOG_0.8.8.2_EN.md), and [0.8.7.3](docs/CHANGELOG_0.8.7.3_EN.md).
@@ -281,7 +281,7 @@ ordinary data-mod authors do not need six toolchains.
 **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) is the full account**, written for
 somebody who has never opened this project. The short version:
 
-You need **Godot 4.8 Beta 3 in its .NET build** (`Godot.NET.Sdk/4.8.0-beta.3`) — the plain download will open
+You need **Godot 4.8 Beta 5 in its .NET build** (`Godot.NET.Sdk/4.8.0-beta.5`) — the plain download will open
 the project and find no scripts — and the **.NET SDK 10**.
 
 ```bash
@@ -385,7 +385,7 @@ sincerely to every creator and maintainer! Full copyright texts and licence term
 
 | Component / Dataset | Creators & Maintainers | Role in Deal or Force | Licence |
 |---|---|---|---|
-| **Godot Engine 4.8** (`4.8.0-beta.3` .NET) | Juan Linietsky, Ariel Manzur & Godot Engine contributors | Rendering, 3D globe, shaders, scene tree, cross-platform PC & Android runtime | MIT |
+| **Godot Engine 4.8** (`4.8.0-beta.5` .NET) | Juan Linietsky, Ariel Manzur & Godot Engine contributors | Rendering, 3D globe, shaders, scene tree, cross-platform PC & Android runtime | MIT |
 | **Jolt Physics / Godot Jolt** | Jorrit Rouwe, Mikael Hermansson (`mihe`) & contributors | 3D physics engine configured for desktop builds (`project.godot`) | MIT |
 | **.NET 10**, **WPF**, **`System.IO.Hashing`**, **`System.Numerics.Tensors`**, **`RecyclableMemoryStream`** | Microsoft Corporation & .NET Foundation contributors | Managed simulation runtime, Launcher UI, `XxHash3` hashing, SIMD tensor math, pooled save/cache streams | MIT |
 | **F# & `FSharp.Core`** (10.1.402) | Don Syme, Microsoft & F# Software Foundation | Pure functional rules assembly (`DealOrForce.Rules`) | MIT |

@@ -40,7 +40,7 @@ function Find-Godot {
             if ($path -and (Test-Path -LiteralPath $path)) { return $path }
         } catch { }
     }
-    return 'C:\GodotEngineNet 4.8-Beta3\Godot_v4.8-beta3_mono_win64_console.exe'
+    return 'C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe'
 }
 
 function Count-Files([string]$path) {

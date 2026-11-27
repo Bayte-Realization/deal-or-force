@@ -12,11 +12,7 @@ public partial class DealOrForceGame
     private int _battleLayoutRevision;
     private int? _battleRosterScrollToRestore;
 
-    private float BattlePixelScale()
-    {
-        var scale = (GetViewport().GetStretchTransform() * _hudLayer.GetGlobalTransformWithCanvas()).Scale.Abs();
-        return MathF.Max(.01f, MathF.Min(scale.X, scale.Y));
-    }
+    private float BattlePixelScale() => Ui.PixelScale(_hudLayer);
 
     private void FitBattleReading()
     {

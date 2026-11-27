@@ -253,9 +253,7 @@ public partial class DealOrForceGame
             var combatNote = BattleText(Tr(latest.Note), 12, "text.accent_dim");
             if (latest.Note == PocketResistance.BattleNote)
             {
-                var pixelScale = (GetViewport().GetStretchTransform() *
-                    _battleDetailControls.GetGlobalTransformWithCanvas()).Scale.Abs();
-                var fontSize = DecisionReadability.FontSize(12, MathF.Min(pixelScale.X, pixelScale.Y),
+                var fontSize = DecisionReadability.FontSize(12, Ui.PixelScale(_battleDetailControls),
                     Math.Clamp(SettingsCatalog.Number("interface_scale"), .5f, 2.5f),
                     Ui.Metric("decision.minimum_font_pixels", 14));
                 combatNote.AddThemeFontSizeOverride("font_size", fontSize);

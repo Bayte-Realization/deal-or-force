@@ -9,7 +9,7 @@
 #
 # Examples:
 #   powershell -ExecutionPolicy Bypass -File Tools\build-android.ps1 -DryRun
-#   powershell -ExecutionPolicy Bypass -File Tools\build-android.ps1 -Godot "C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta3_mono_win64.exe" -Install
+#   powershell -ExecutionPolicy Bypass -File Tools\build-android.ps1 -Godot "C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64.exe" -Install
 
 param(
     [string]$Godot = $env:GODOT_EXECUTABLE,

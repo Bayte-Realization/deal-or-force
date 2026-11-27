@@ -368,17 +368,23 @@ public partial class DealOrForceGame
         return FlagTexture(tag) ?? (ResourceLoader.Exists(flagPath) ? GD.Load<Texture2D>(flagPath) : null);
     }
 
+    private bool _pickerActionsLayoutInProgress;
+
     private void QueuePickerActionsLayout()
     {
-        if (_pickerActionsLayoutQueued) return;
+        if (_pickerActionsLayoutQueued || _pickerActionsLayoutInProgress) return;
         _pickerActionsLayoutQueued = true;
         Callable.From(() => { _pickerActionsLayoutQueued = false; LayoutPickerActions(); }).CallDeferred();
     }
 
     private void LayoutPickerActions()
     {
-        if (_pickerActionsPanel is null || _pickerActionsStack is null) return;
+        if (_pickerActionsLayoutInProgress || _pickerActionsPanel is null || _pickerActionsStack is null) return;
+        _pickerActionsLayoutInProgress = true;
+        try
+        {
         var view = Size.X > 100 && Size.Y > 100 ? Size : GetViewportRect().Size;
+        if (!float.IsFinite(view.X) || !float.IsFinite(view.Y) || view.X <= 0f || view.Y <= 0f) return;
 
         if (_pickerCountryPanel is not null)
         {
@@ -415,6 +421,8 @@ public partial class DealOrForceGame
             _pickerActionsStack.GetCombinedMinimumSize().Y + 16));
         var bounds = ResponsiveHudLayout.Fit(new(left, bottom - height, Mathf.Max(180, rightEdge - left), height), view.X, view.Y);
         PlaceHudBounds(_pickerActionsPanel, bounds);
+        }
+        finally { _pickerActionsLayoutInProgress = false; }
     }
 
     /// <summary>What the seed field says, if it says a number at all.</summary>

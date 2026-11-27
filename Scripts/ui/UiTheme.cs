@@ -41,6 +41,20 @@ internal static class Ui
     internal static float Metric(string token, float fallback) => InterfaceSkin.Metric(token, fallback);
 
     /// <summary>
+    /// Physical canvas-to-viewport scale for readability floors. Returns 1 when the viewport is
+    /// zero-sized (Godot 4.8-beta5 headless or a minimized desktop window), instead of 0.01 which
+    /// blows up gutters, flags, and minimum row heights by 100x.
+    /// </summary>
+    internal static float PixelScale(Control control)
+    {
+        var viewport = control?.GetViewport();
+        if (viewport is null) return 1f;
+        var scale = (viewport.GetStretchTransform() * control.GetGlobalTransformWithCanvas()).Scale.Abs();
+        var min = MathF.Min(scale.X, scale.Y);
+        return float.IsFinite(min) && min > 1e-4f ? MathF.Max(.01f, min) : 1f;
+    }
+
+    /// <summary>
     /// The steps the interface is allowed to set text in.
     ///
     /// Read from the skin's own type tokens rather than hard-coded, so a mod that retunes the

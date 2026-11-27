@@ -56,6 +56,14 @@ var _overlay: CanvasLayer
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# Godot 4.8-beta5 DisplayServerHeadless reports root.size = (0, 0). With
+	# window/stretch/aspect="expand", Window::_update_viewport_size divides 0/0 -> NaN
+	# and poisons every UI Control's Size/Position. Switching headless root to IGNORE
+	# keeps the authored 1920x1080 canvas finite without affecting any real display window.
+	if DisplayServer.get_name() == "headless":
+		var root_window := get_window()
+		if root_window != null and root_window.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND:
+			root_window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
 	_start_autopilot()
 	# Automated headless runs have no visible frame. A black dummy viewport is
 	# expected, not a broken GPU; never persist a renderer fallback or restart here.

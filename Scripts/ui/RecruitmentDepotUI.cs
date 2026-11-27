@@ -40,8 +40,7 @@ public partial class DealOrForceGame
 
     private void FitRecruitmentDepotReading()
     {
-        var pixels = (GetViewport().GetStretchTransform() * _recruitmentStockpileHost.GetGlobalTransformWithCanvas()).Scale.Abs();
-        var font = DecisionReadability.FontSize(14, MathF.Max(.01f, MathF.Min(pixels.X, pixels.Y)),
+        var font = DecisionReadability.FontSize(14, Ui.PixelScale(_recruitmentStockpileHost),
             Math.Clamp(SettingsCatalog.Number("interface_scale"), .5f, 2.5f),
             Math.Clamp(Ui.Metric("recruitment.minimum_font_pixels", 14), 8, 36));
         if (_recruitmentDepotLabels.Count > 0 && _recruitmentDepotLabels.Values.First().Caption.GetThemeFontSize("font_size") == font) return;
