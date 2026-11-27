@@ -369,10 +369,12 @@ public partial class DealOrForceGame
     }
 
     private bool _pickerActionsLayoutInProgress;
+    private bool _pickerActionsLayoutDirty;
 
     private void QueuePickerActionsLayout()
     {
-        if (_pickerActionsLayoutQueued || _pickerActionsLayoutInProgress) return;
+        if (_pickerActionsLayoutInProgress) { _pickerActionsLayoutDirty = true; return; }
+        if (_pickerActionsLayoutQueued) return;
         _pickerActionsLayoutQueued = true;
         Callable.From(() => { _pickerActionsLayoutQueued = false; LayoutPickerActions(); }).CallDeferred();
     }
@@ -383,46 +385,51 @@ public partial class DealOrForceGame
         _pickerActionsLayoutInProgress = true;
         try
         {
-        var view = Size.X > 100 && Size.Y > 100 ? Size : GetViewportRect().Size;
-        if (!float.IsFinite(view.X) || !float.IsFinite(view.Y) || view.X <= 0f || view.Y <= 0f) return;
-
-        if (_pickerCountryPanel is not null)
-        {
-            var touchBtn = DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
-            if (_pickerResultsFrame is not null)
+            for (var pass = 0; pass < 2; pass++)
             {
-                var targetResultsH = touchBtn ? 150f : (view.Y >= 900f ? 142f : 110f);
-                if (Math.Abs(_pickerResultsFrame.CustomMinimumSize.Y - targetResultsH) > 0.5f)
-                    _pickerResultsFrame.CustomMinimumSize = new Vector2(0, targetResultsH);
+                _pickerActionsLayoutDirty = false;
+                var view = Size.X > 100 && Size.Y > 100 ? Size : GetViewportRect().Size;
+                if (!float.IsFinite(view.X) || !float.IsFinite(view.Y) || view.X <= 0f || view.Y <= 0f) return;
+
+                if (_pickerCountryPanel is not null)
+                {
+                    var touchBtn = DealOrForce.Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+                    if (_pickerResultsFrame is not null)
+                    {
+                        var targetResultsH = touchBtn ? 150f : (view.Y >= 900f ? 142f : 110f);
+                        if (Math.Abs(_pickerResultsFrame.CustomMinimumSize.Y - targetResultsH) > 0.5f)
+                            _pickerResultsFrame.CustomMinimumSize = new Vector2(0, targetResultsH);
+                    }
+                    var panelWidth = Mathf.Clamp(view.X * 0.28f, 396f, 444f);
+                    var panelHeight = Mathf.Clamp(view.Y - 36f, 520f, 920f);
+                    var right = view.X - 18f;
+                    var leftCountry = right - panelWidth;
+                    var topCountry = Mathf.Max(18f, (view.Y - panelHeight) * 0.5f);
+                    PlaceHudBounds(_pickerCountryPanel, new(leftCountry, topCountry, panelWidth, panelHeight));
+                }
+
+                if (_pickerHeadingPanel is not null)
+                {
+                    var headingMaxRight = _pickerCountryPanel is not null ? _pickerCountryPanel.OffsetLeft - 18f : view.X - 440f;
+                    var headingWidth = Mathf.Clamp(437f, 320f, Mathf.Max(320f, headingMaxRight - 18f));
+                    PlaceHudBounds(_pickerHeadingPanel, new(18f, 18f, headingWidth, 88f));
+                }
+
+                var authored = InterfaceSkin.Layout("picker.actions");
+                var left = authored.AnchorLeft * view.X + authored.OffsetLeft;
+                var rightEdge = authored.AnchorRight * view.X + authored.OffsetRight;
+                if (_pickerCountryPanel is not null)
+                    rightEdge = Mathf.Min(rightEdge, _pickerCountryPanel.OffsetLeft - 18f);
+                var bottom = Mathf.Min(authored.AnchorBottom * view.Y + authored.OffsetBottom,
+                    view.Y - Mathf.Clamp(Ui.Metric("picker.actions_bottom_inset", 36), 18, 120));
+                var height = Mathf.Max(92, Mathf.Max(_pickerActionsPanel.GetCombinedMinimumSize().Y,
+                    _pickerActionsStack.GetCombinedMinimumSize().Y + 16));
+                var bounds = ResponsiveHudLayout.Fit(new(left, bottom - height, Mathf.Max(180, rightEdge - left), height), view.X, view.Y);
+                PlaceHudBounds(_pickerActionsPanel, bounds);
+                if (!_pickerActionsLayoutDirty) break;
             }
-            var panelWidth = Mathf.Clamp(view.X * 0.28f, 396f, 444f);
-            var panelHeight = Mathf.Clamp(view.Y - 36f, 520f, 920f);
-            var right = view.X - 18f;
-            var leftCountry = right - panelWidth;
-            var topCountry = Mathf.Max(18f, (view.Y - panelHeight) * 0.5f);
-            PlaceHudBounds(_pickerCountryPanel, new(leftCountry, topCountry, panelWidth, panelHeight));
         }
-
-        if (_pickerHeadingPanel is not null)
-        {
-            var headingMaxRight = _pickerCountryPanel is not null ? _pickerCountryPanel.OffsetLeft - 18f : view.X - 440f;
-            var headingWidth = Mathf.Clamp(437f, 320f, Mathf.Max(320f, headingMaxRight - 18f));
-            PlaceHudBounds(_pickerHeadingPanel, new(18f, 18f, headingWidth, 88f));
-        }
-
-        var authored = InterfaceSkin.Layout("picker.actions");
-        var left = authored.AnchorLeft * view.X + authored.OffsetLeft;
-        var rightEdge = authored.AnchorRight * view.X + authored.OffsetRight;
-        if (_pickerCountryPanel is not null)
-            rightEdge = Mathf.Min(rightEdge, _pickerCountryPanel.OffsetLeft - 18f);
-        var bottom = Mathf.Min(authored.AnchorBottom * view.Y + authored.OffsetBottom,
-            view.Y - Mathf.Clamp(Ui.Metric("picker.actions_bottom_inset", 36), 18, 120));
-        var height = Mathf.Max(92, Mathf.Max(_pickerActionsPanel.GetCombinedMinimumSize().Y,
-            _pickerActionsStack.GetCombinedMinimumSize().Y + 16));
-        var bounds = ResponsiveHudLayout.Fit(new(left, bottom - height, Mathf.Max(180, rightEdge - left), height), view.X, view.Y);
-        PlaceHudBounds(_pickerActionsPanel, bounds);
-        }
-        finally { _pickerActionsLayoutInProgress = false; }
+        finally { _pickerActionsLayoutInProgress = false; _pickerActionsLayoutDirty = false; }
     }
 
     /// <summary>What the seed field says, if it says a number at all.</summary>

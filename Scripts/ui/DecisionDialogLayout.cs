@@ -45,6 +45,7 @@ public partial class DecisionDialogLayout : Node
     {
         if (Panel?.GetParent() is not Control parent || !Panel.IsVisibleInTree()) return;
         var canvas = parent.Size;
+        if (!float.IsFinite(canvas.X) || !float.IsFinite(canvas.Y) || canvas.X <= 0f || canvas.Y <= 0f) return;
         var scale = Ui.PixelScale(parent);
         var pixelScale = new Vector2(scale, scale);
         var preference = Math.Clamp(SettingsCatalog.Number("interface_scale"), .5f, 2.5f);

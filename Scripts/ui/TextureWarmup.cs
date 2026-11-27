@@ -19,6 +19,10 @@ namespace DealOrForce;
 public partial class TextureWarmup : Node
 {
     private static readonly string[] Folders = { "res://game/gfx/interface/" };
+    private static readonly List<TextureWarmup> ActiveWarmups = new();
+    // Clearing a warmup node does not cancel Godot's queued LoadThreadedRequest tasks.
+    // Retired paths must still be collected via LoadThreadedGet or Godot leaks them in ObjectDB at exit.
+    private static readonly List<string> RetiredLoads = new();
     private const int DesktopInFlight = 6;
     private const int MobileInFlight = 2;
     private const int MobileKeptLimit = 48;
@@ -69,11 +73,65 @@ public partial class TextureWarmup : Node
     {
         if (owner?.GetNodeOrNull<TextureWarmup>("TextureWarmup") is { } existing)
         {
+            existing.RetireInFlight();
             existing._waiting.Clear();
-            existing._loading.Clear();
             existing._kept.Clear();
             existing.QueueFree();
         }
+    }
+
+    internal static int PendingWarmups
+    {
+        get
+        {
+            var count = RetiredLoads.Count;
+            for (var i = 0; i < ActiveWarmups.Count; i++)
+                count += ActiveWarmups[i]._loading.Count;
+            return count;
+        }
+    }
+
+    internal static void PrepareApplicationExit()
+    {
+        for (var i = ActiveWarmups.Count - 1; i >= 0; i--)
+        {
+            var warmup = ActiveWarmups[i];
+            warmup._waiting.Clear();
+            warmup.RetireInFlight();
+            warmup._kept.Clear();
+            if (IsInstanceValid(warmup)) warmup.SetProcess(false);
+        }
+    }
+
+    internal static void PollRetiredLoads()
+    {
+        if (RetiredLoads.Count == 0) return;
+        for (var i = RetiredLoads.Count - 1; i >= 0; i--)
+        {
+            var path = RetiredLoads[i];
+            var status = ResourceLoader.LoadThreadedGetStatus(path);
+            if (status == ResourceLoader.ThreadLoadStatus.InProgress) continue;
+            if (status != ResourceLoader.ThreadLoadStatus.InvalidResource) ResourceLoader.LoadThreadedGet(path);
+            RetiredLoads.RemoveAt(i);
+        }
+    }
+
+    private void RetireInFlight()
+    {
+        if (_loading.Count == 0) return;
+        RetiredLoads.AddRange(_loading);
+        _loading.Clear();
+    }
+
+    public override void _EnterTree()
+    {
+        if (!ActiveWarmups.Contains(this)) ActiveWarmups.Add(this);
+    }
+
+    public override void _ExitTree()
+    {
+        RetireInFlight();
+        ActiveWarmups.Remove(this);
     }
 
     public override void _Ready() => _started = Time.GetTicksMsec();

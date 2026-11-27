@@ -152,6 +152,7 @@ public partial class DealOrForceGame
     {
         if (_nuclearAlert is null) return;
         var view = _hudLayer.Size;
+        if (!float.IsFinite(view.X) || !float.IsFinite(view.Y) || view.X <= 0f || view.Y <= 0f) return;
         var scale = Ui.PixelScale(_hudLayer);
         var pixels = new Vector2(scale, scale);
         var preference = Math.Clamp(SettingsCatalog.Number("interface_scale"), .5f, 2.5f);

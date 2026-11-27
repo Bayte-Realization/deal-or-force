@@ -47,16 +47,8 @@ $ErrorActionPreference = 'Stop'
 if (-not $Project) { $Project = Split-Path -Parent $PSScriptRoot }
 
 function Find-Godot {
-    if ($Godot) { return $Godot }
-    if ($env:GODOT_EXECUTABLE) { return $env:GODOT_EXECUTABLE }
-    $config = Join-Path $Project '.mcp.json'
-    if (Test-Path -LiteralPath $config) {
-        try {
-            $path = (Get-Content -LiteralPath $config -Raw | ConvertFrom-Json).mcpServers.'godot-coding-solo'.env.GODOT_PATH
-            if ($path -and (Test-Path -LiteralPath $path)) { return $path }
-        } catch { }
-    }
-    return 'C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe'
+    . (Join-Path $PSScriptRoot 'EngineVersion.ps1')
+    return Resolve-MatchingGodot -ProjectRoot $Project -ExplicitGodot $Godot
 }
 
 $engine = Find-Godot

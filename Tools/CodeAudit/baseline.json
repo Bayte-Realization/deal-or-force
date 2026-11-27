@@ -7,7 +7,7 @@
   "simulationStaticMutable": 1405,
   "deadCandidates": 169,
   "totalFiles": 1012,
-  "totalLines": 354480,
+  "totalLines": 354565,
   "files": {
     "Scripts/AudioAssets.cs": {
       "lines": 46,
@@ -17,9 +17,9 @@
       "magicNumbers": 0
     },
     "Scripts/Boot/ApplicationExit.cs": {
-      "lines": 97,
-      "maxMethodLines": 29,
-      "maxCyclomatic": 7,
+      "lines": 105,
+      "maxMethodLines": 33,
+      "maxCyclomatic": 10,
       "staticMutable": 1,
       "magicNumbers": 0
     },
@@ -5001,7 +5001,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/CountrySelectionUI.cs": {
-      "lines": 898,
+      "lines": 905,
       "maxMethodLines": 279,
       "maxCyclomatic": 22,
       "staticMutable": 0,
@@ -5092,9 +5092,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/DecisionDialogLayout.cs": {
-      "lines": 98,
-      "maxMethodLines": 53,
-      "maxCyclomatic": 21,
+      "lines": 99,
+      "maxMethodLines": 54,
+      "maxCyclomatic": 25,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -5484,9 +5484,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/MapControlsUI.cs": {
-      "lines": 435,
+      "lines": 443,
       "maxMethodLines": 61,
-      "maxCyclomatic": 12,
+      "maxCyclomatic": 13,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -5673,9 +5673,9 @@
       "magicNumbers": 0
     },
     "Scripts/ui/NuclearAlertUI.cs": {
-      "lines": 211,
+      "lines": 212,
       "maxMethodLines": 61,
-      "maxCyclomatic": 7,
+      "maxCyclomatic": 11,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -6387,10 +6387,10 @@
       "magicNumbers": 0
     },
     "Scripts/ui/TextureWarmup.cs": {
-      "lines": 121,
+      "lines": 179,
       "maxMethodLines": 39,
       "maxCyclomatic": 21,
-      "staticMutable": 1,
+      "staticMutable": 3,
       "magicNumbers": 0
     },
     "Scripts/ui/TooltipKeeper.cs": {
@@ -6443,7 +6443,7 @@
       "magicNumbers": 0
     },
     "Scripts/ui/UiTheme.cs": {
-      "lines": 319,
+      "lines": 321,
       "maxMethodLines": 30,
       "maxCyclomatic": 9,
       "staticMutable": 5,

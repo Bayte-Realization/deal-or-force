@@ -41,8 +41,12 @@ public partial class ApplicationExit : Node
     private void WindowCloseRequested() => Request(_window);
 
     // Remains active on pause and after returning to the title screen. Completed
-    // optional warmups must be received even when their flag was never displayed.
-    public override void _Process(double delta) => DealOrForceGame.PollFlagWarmups();
+    // optional warmups must be received even when their flag or icon was never displayed.
+    public override void _Process(double delta)
+    {
+        DealOrForceGame.PollFlagWarmups();
+        TextureWarmup.PollRetiredLoads();
+    }
 
     private async Task Finish()
     {
@@ -52,16 +56,20 @@ public partial class ApplicationExit : Node
             // A paused tree still advances this always-processing shutdown timer.
             _tree.Paused = true;
             MusicDirector.PrepareApplicationExit();
+            TextureWarmup.PrepareApplicationExit();
             StopAudio(_tree.Root);
             var deadline = Time.GetTicksMsec() + 2_000;
-            while (DealOrForceGame.PendingFlagWarmups > 0 && Time.GetTicksMsec() < deadline)
+            while ((DealOrForceGame.PendingFlagWarmups > 0 || TextureWarmup.PendingWarmups > 0) && Time.GetTicksMsec() < deadline)
             {
                 DealOrForceGame.PollFlagWarmups();
-                if (DealOrForceGame.PendingFlagWarmups > 0)
+                TextureWarmup.PollRetiredLoads();
+                if (DealOrForceGame.PendingFlagWarmups > 0 || TextureWarmup.PendingWarmups > 0)
                     await ToSignal(_tree.CreateTimer(.02, true, false, true), SceneTreeTimer.SignalName.Timeout);
             }
             if (DealOrForceGame.PendingFlagWarmups > 0)
                 GD.PushWarning("[dof] optional flag warmups still pending at exit: " + DealOrForceGame.PendingFlagWarmups);
+            if (TextureWarmup.PendingWarmups > 0)
+                GD.PushWarning("[dof] optional texture warmups still pending at exit: " + TextureWarmup.PendingWarmups);
             await ToSignal(_tree.CreateTimer(.1, true, false, true), SceneTreeTimer.SignalName.Timeout);
             await ToSignal(_tree, SceneTree.SignalName.ProcessFrame);
         }

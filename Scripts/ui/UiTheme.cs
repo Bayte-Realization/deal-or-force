@@ -47,11 +47,13 @@ internal static class Ui
     /// </summary>
     internal static float PixelScale(Control control)
     {
-        var viewport = control?.GetViewport();
+        if (control is null || !GodotObject.IsInstanceValid(control) || !control.IsInsideTree()) return 1f;
+        var viewport = control.GetViewport();
         if (viewport is null) return 1f;
         var scale = (viewport.GetStretchTransform() * control.GetGlobalTransformWithCanvas()).Scale.Abs();
+        if (!float.IsFinite(scale.X) || !float.IsFinite(scale.Y)) return 1f;
         var min = MathF.Min(scale.X, scale.Y);
-        return float.IsFinite(min) && min > 1e-4f ? MathF.Max(.01f, min) : 1f;
+        return min > 1e-4f ? MathF.Max(.01f, min) : 1f;
     }
 
     /// <summary>

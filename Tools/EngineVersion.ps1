@@ -21,3 +21,37 @@ function Get-ExpectedEngineVersionPrefix([string]$CsprojPath) {
     else { $prefix += 'stable.' }
     return $prefix
 }
+
+function Resolve-MatchingGodot(
+    [string]$ProjectRoot,
+    [string]$ExplicitGodot = '',
+    [string]$DefaultFallback = 'C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe'
+) {
+    $csproj = Join-Path $ProjectRoot 'DealOrForce.csproj'
+    $wanted = if (Test-Path -LiteralPath $csproj) { Get-ExpectedEngineVersionPrefix $csproj } else { '' }
+    $candidates = New-Object System.Collections.ArrayList
+    if ($ExplicitGodot) { $null = $candidates.Add($ExplicitGodot) }
+    if ($env:GODOT_EXECUTABLE) { $null = $candidates.Add($env:GODOT_EXECUTABLE) }
+    $config = Join-Path $ProjectRoot '.mcp.json'
+    if (Test-Path -LiteralPath $config) {
+        try {
+            $mcpPath = (Get-Content -LiteralPath $config -Raw | ConvertFrom-Json).mcpServers.'godot-coding-solo'.env.GODOT_PATH
+            if ($mcpPath) { $null = $candidates.Add($mcpPath) }
+        } catch { }
+    }
+    if ($DefaultFallback) { $null = $candidates.Add($DefaultFallback) }
+
+    foreach ($cand in $candidates) {
+        if (-not $cand -or -not (Test-Path -LiteralPath $cand -PathType Leaf)) { continue }
+        if (-not $wanted) { return $cand }
+        $ver = (& $cand --version 2>$null | Select-Object -Last 1)
+        $verText = if ($ver) { $ver.ToString().Trim() } else { '' }
+        if ($verText.StartsWith($wanted, [StringComparison]::Ordinal)) {
+            return $cand
+        }
+        if ($ExplicitGodot -and $cand -eq $ExplicitGodot) {
+            throw "Godot $verText ($cand) does not match the project's $wanted SDK."
+        }
+    }
+    throw "No Godot executable matching $wanted found (checked explicit, GODOT_EXECUTABLE, .mcp.json, and $DefaultFallback)."
+}

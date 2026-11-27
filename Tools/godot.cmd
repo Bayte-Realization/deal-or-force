@@ -21,11 +21,11 @@ rem done, launching through this file fixes the PATH for this one process and no
 
 setlocal
 
-if not defined GODOT_EXE set "GODOT_EXE=C:\GodotEngineNet\Godot_v4.7.2-stable_mono_win64.exe"
+if not defined GODOT_EXE set "GODOT_EXE=C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64.exe"
 
 if not exist "%GODOT_EXE%" (
     echo Godot not found at "%GODOT_EXE%".
-    echo Set GODOT_EXE to the path of Godot_v4.7.2-stable_mono_win64.exe and run this again.
+    echo Set GODOT_EXE to the path of Godot_v4.8-beta5_mono_win64.exe and run this again.
     exit /b 1
 )
 

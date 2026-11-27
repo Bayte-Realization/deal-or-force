@@ -15,7 +15,7 @@
 //   {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
 //   {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
 
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,16 +23,40 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const project = resolve(here, '..', '..');
 
+function expectedEnginePrefix() {
+  const csproj = join(project, 'DealOrForce.csproj');
+  if (!existsSync(csproj)) return '';
+  const m = readFileSync(csproj, 'utf8').match(/Godot\.NET\.Sdk\/(\d+)\.(\d+)\.(\d+)(?:-([A-Za-z]+)\.?(\d+))?/);
+  if (!m) return '';
+  let prefix = `${m[1]}.${m[2]}.`;
+  if (m[3] !== '0') prefix += `${m[3]}.`;
+  prefix += m[4] ? `${m[4].toLowerCase()}${m[5] ?? ''}.` : 'stable.';
+  return prefix;
+}
+
 function godot() {
-  if (process.env.GODOT_EXECUTABLE) return process.env.GODOT_EXECUTABLE;
+  const wanted = expectedEnginePrefix();
+  const candidates = [];
+  if (process.env.GODOT_EXECUTABLE) candidates.push(process.env.GODOT_EXECUTABLE);
   const config = join(project, '.mcp.json');
   if (existsSync(config)) {
     try {
       const path = JSON.parse(readFileSync(config, 'utf8'))?.mcpServers?.['godot-coding-solo']?.env?.GODOT_PATH;
-      if (path && existsSync(path)) return path;
+      if (path) candidates.push(path);
     } catch { /* a malformed config is not a reason to fail the tool */ }
   }
-  return 'C:\\GodotEngineNet 4.8-dev\\Godot_v4.8-dev7_mono_win64_console.exe';
+  const fallback = 'C:\\GodotEngineNet 4.8-Beta5\\Godot_v4.8-beta5_mono_win64_console.exe';
+  candidates.push(fallback);
+  for (const cand of candidates) {
+    if (!cand || !existsSync(cand)) continue;
+    if (!wanted) return cand;
+    try {
+      const out = execFileSync(cand, ['--version'], { encoding: 'utf8', windowsHide: true, timeout: 10000 }).trim();
+      const lastLine = out.split(/\r?\n/).pop()?.trim() ?? '';
+      if (lastLine.startsWith(wanted)) return cand;
+    } catch { /* try next candidate */ }
+  }
+  return fallback;
 }
 
 function run(command, args) {

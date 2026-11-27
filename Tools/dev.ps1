@@ -69,27 +69,8 @@ function Invoke-Build {
 }
 
 function Find-MatchingGodot {
-    $candidate = Find-Godot
-    if (-not (Test-Path -LiteralPath $candidate)) {
-        throw "No Godot executable at $candidate"
-    }
-    # A stale .mcp.json can point at another 4.x build. The game's own export check
-    # already refuses a mismatched engine; play and import must do the same, or a wrong
-    # editor is started and its MCP bridge hangs before the game ever reports readiness.
-    $version = (& $candidate --version | Select-Object -Last 1).Trim()
     . (Join-Path $PSScriptRoot 'EngineVersion.ps1')
-    $wanted = Get-ExpectedEngineVersionPrefix (Join-Path $project 'DealOrForce.csproj')
-    if ($wanted) {
-        if (-not $version.StartsWith($wanted, [StringComparison]::Ordinal)) {
-            $fallback = 'C:\GodotEngineNet 4.8-Beta5\Godot_v4.8-beta5_mono_win64_console.exe'
-            if (-not (Test-Path -LiteralPath $fallback)) {
-                throw "Godot $version does not match the project's $wanted SDK, and no matching fallback exists."
-            }
-            Write-Host "  engine $version does not match $wanted; using $fallback" -ForegroundColor Yellow
-            $candidate = $fallback
-        }
-    }
-    return $candidate
+    return Resolve-MatchingGodot -ProjectRoot $project -ExplicitGodot $Godot
 }
 
 function Invoke-LoggedNative([string]$Executable, [string[]]$Arguments, [string]$LogPath) {
@@ -156,7 +137,7 @@ function Invoke-Game {
 
 function Invoke-Doctor {
     Write-Host '== what starts with the game ==' -ForegroundColor Cyan
-    $engine = Find-Godot
+    $engine = try { Find-MatchingGodot } catch { Find-Godot }
     Write-Host ("  engine          {0}" -f $(if (Test-Path -LiteralPath $engine) { $engine } else { "MISSING: $engine" }))
     $sdk = (dotnet --version) 2>$null
     Write-Host ("  .NET SDK        {0}" -f $sdk)
