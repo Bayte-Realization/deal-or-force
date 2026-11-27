@@ -102,8 +102,9 @@ pub fn paint_political_plate_rect(
     if !owners.is_empty() && !authored_owners.is_empty() {
         let limit = owners.len().min(authored_owners.len()).min(65_536);
         for p in 1..limit {
-            if authored_owners[p] != owners[p] {
-                prov_lut[p] = if owners[p] == 0 { 65_535 } else { owners[p] };
+            let owner = owners[p];
+            if authored_owners[p] != owner {
+                prov_lut[p] = if owner == 0 { 65_535 } else { owner };
                 has_override = true;
             }
         }
@@ -367,6 +368,41 @@ mod tests {
         mipmap_rgba8_rect(w, h, 0, 0, w, h, &mut full).unwrap();
 
         assert_eq!(inc, full);
+    }
+
+    #[test]
+    fn incremental_plate_rect_matches_full_when_authored_owners_empty() {
+        let (w, h) = (64usize, 32usize);
+        let cells = w * h;
+        let mut holders = vec![1u16; cells];
+        let mut provs = vec![1u16; cells];
+        let geo = vec![0u8; cells];
+        for y in 4..28 {
+            for x in 16..48 {
+                holders[y * w + x] = 2;
+                provs[y * w + x] = 2;
+            }
+        }
+        let owners = [0u16, 1, 3];
+        let mut pal = vec![0x6E7B8BFFu32; 65_536];
+        pal[1] = 0xC83232FF;
+        pal[2] = 0x32C864FF;
+        pal[3] = 0x3264DCFF;
+
+        let mut full = vec![0u8; cells * 4];
+        let mut rect = vec![0u8; cells * 4];
+        paint_political_plate(w, h, &holders, &provs, &geo, &owners, &[], &pal, 0.34, 0.70, 0.92, 1, &mut full).unwrap();
+        paint_political_plate_rect(w, h, &holders, &provs, &geo, &owners, &[], &pal, 0.34, 0.70, 0.92, 0, 0, w, h, &mut rect).unwrap();
+        assert_eq!(rect, full, "empty authored_owners must preserve authored holders identically across plate paths");
+
+        unsafe {
+            let mut bake = DofRasterBake::from_raw(w as u32, h as u32, holders.as_ptr(), provs.as_ptr()).unwrap();
+            let mut f_empty_auth = vec![0u8; cells];
+            let mut f_no_owners = vec![0u8; cells];
+            bake.bake_frontier(&owners, &[], 20.0, 1.0, 1, &mut f_empty_auth).unwrap();
+            bake.bake_frontier(&[], &[], 20.0, 1.0, 1, &mut f_no_owners).unwrap();
+            assert_eq!(f_empty_auth, f_no_owners, "empty authored_owners must match MapBorders.CurrentHolder (no override) in frontier bake");
+        }
     }
 
     #[test]

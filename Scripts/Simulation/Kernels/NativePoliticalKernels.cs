@@ -12,8 +12,9 @@ namespace DealOrForce.Simulation.Kernels;
 /// </summary>
 public static partial class NativePoliticalKernels
 {
-    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern unsafe int dof_political_cohorts_drift_v1(
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_political_cohorts_drift_v1(
         uint count,
         byte* flags,
         float* step,

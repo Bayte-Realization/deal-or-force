@@ -34,14 +34,15 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_back, shadows_disabled;
 
 uniform sampler2D glyph_atlas : filter_linear, repeat_disable;
 uniform float quality_tier = 0.0;
-uniform vec3 col_bg = vec3(0.08, 0.10, 0.14);
-uniform vec3 col_border = vec3(0.76, 0.67, 0.45);
-uniform vec3 col_pos = vec3(0.24, 0.78, 0.42);
-uniform vec3 col_warn = vec3(0.95, 0.68, 0.18);
-uniform vec3 col_neg = vec3(0.90, 0.25, 0.20);
-uniform vec3 col_info = vec3(0.32, 0.68, 0.94);
-uniform vec3 col_muted = vec3(0.55, 0.60, 0.66);
-uniform vec3 col_text = vec3(0.96, 0.97, 0.98);
+uniform float linear_renderer = 0.0;
+uniform vec4 col_bg : source_color = vec4(0.08, 0.10, 0.14, 1.0);
+uniform vec4 col_border : source_color = vec4(0.76, 0.67, 0.45, 1.0);
+uniform vec4 col_pos : source_color = vec4(0.24, 0.78, 0.42, 1.0);
+uniform vec4 col_warn : source_color = vec4(0.95, 0.68, 0.18, 1.0);
+uniform vec4 col_neg : source_color = vec4(0.90, 0.25, 0.20, 1.0);
+uniform vec4 col_info : source_color = vec4(0.32, 0.68, 0.94, 1.0);
+uniform vec4 col_muted : source_color = vec4(0.55, 0.60, 0.66, 1.0);
+uniform vec4 col_text : source_color = vec4(0.96, 0.97, 0.98, 1.0);
 
 varying vec4 v_color;
 varying vec4 v_custom;
@@ -49,6 +50,10 @@ varying vec4 v_custom;
 void vertex() {
     v_color = COLOR;
     v_custom = INSTANCE_CUSTOM;
+}
+
+vec3 decode_srgb(vec3 c) {
+    return linear_renderer > 0.5 ? pow(max(c, vec3(0.0)), vec3(2.2)) : c;
 }
 
 float sd_segment(vec2 p, vec2 a, vec2 b) {
@@ -67,9 +72,11 @@ float sample_glyph(int glyph_idx, vec2 local_uv) {
     if (local_uv.x < 0.0 || local_uv.x > 1.0 || local_uv.y < 0.0 || local_uv.y > 1.0) {
         return 0.0;
     }
-    float u = (float(glyph_idx) + clamp(local_uv.x, 0.02, 0.98)) / 12.0;
-    float v = clamp(local_uv.y, 0.02, 0.98);
-    return texture(glyph_atlas, vec2(u, v)).r;
+    float u = (float(glyph_idx) + clamp(local_uv.x, 0.03, 0.97)) / 12.0;
+    float v = clamp(local_uv.y, 0.03, 0.97);
+    float sdf = texture(glyph_atlas, vec2(u, v)).r;
+    float w = max(fwidth(sdf) * 0.85, 0.055);
+    return smoothstep(0.5 - w, 0.5 + w, sdf);
 }
 
 void fragment() {
@@ -89,23 +96,32 @@ void fragment() {
     bool mom_down = (flags & 8) != 0;
     bool known = (flags & 16) != 0 && v_custom.x >= 0.0;
 
-    // Unpack 15-bit defender RGB from v_custom.w (0..32767, exact in GLES3 + Vulkan).
+    // Unpack 15-bit defender RGB from v_custom.w (0..32767, exact in GLES3 + Vulkan) and decode sRGB on Forward+.
     float dp = floor(v_custom.w + 0.5);
     float db = floor(dp / 1024.0);
     float rem = dp - db * 1024.0;
     float dg = floor(rem / 32.0);
     float dr = rem - dg * 32.0;
-    vec3 def_col = vec3(dr, dg, db) / 31.0;
-    vec3 att_col = v_color.rgb;
+    vec3 def_col = decode_srgb(vec3(dr, dg, db) / 31.0);
+    vec3 att_col = decode_srgb(v_color.rgb);
 
-    vec3 ring_ink = col_muted;
+    vec3 bg_col = col_bg.rgb;
+    vec3 brd_col = col_border.rgb;
+    vec3 pos_col = col_pos.rgb;
+    vec3 warn_col = col_warn.rgb;
+    vec3 neg_col = col_neg.rgb;
+    vec3 info_col = col_info.rgb;
+    vec3 muted_col = col_muted.rgb;
+    vec3 text_col = col_text.rgb;
+
+    vec3 ring_ink = muted_col;
     if (known) {
         if (info_tone) {
-            ring_ink = col_info;
+            ring_ink = info_col;
         } else {
             ring_ink = share < 0.5
-                ? mix(col_neg, col_warn, share * 2.0)
-                : mix(col_warn, col_pos, (share - 0.5) * 2.0);
+                ? mix(neg_col, warn_col, share * 2.0)
+                : mix(warn_col, pos_col, (share - 0.5) * 2.0);
         }
     }
 
@@ -113,8 +129,8 @@ void fragment() {
     float alpha = 0.0;
 
     // 1. Soft drop halo + outer pulse ring (skipped on MobileLow quality_tier >= 1.5).
-    float halo_a = (1.0 - smoothstep(0.86, 0.95, r)) * 0.72;
-    col = vec3(0.01, 0.015, 0.02);
+    float halo_a = (1.0 - smoothstep(0.86, 0.96, r)) * 0.78;
+    col = decode_srgb(vec3(0.01, 0.015, 0.02));
     alpha = halo_a;
 
     if (quality_tier < 1.5) {
@@ -122,9 +138,9 @@ void fragment() {
         float pulse_strength = pocket_alert ? 1.35 : 0.90;
         float beat = (0.5 + 0.5 * sin(TIME * 3.8)) * pulse_strength;
         vec3 pulse_col = pocket_alert
-            ? vec3(1.0, 0.18, 0.14)
-            : (share >= 0.56 ? vec3(0.28, 0.88, 0.46)
-                : (share <= 0.44 ? vec3(1.0, 0.28, 0.16) : vec3(0.98, 0.68, 0.20)));
+            ? decode_srgb(vec3(1.0, 0.18, 0.14))
+            : (share >= 0.56 ? decode_srgb(vec3(0.28, 0.88, 0.46))
+                : (share <= 0.44 ? decode_srgb(vec3(1.0, 0.28, 0.16)) : decode_srgb(vec3(0.98, 0.68, 0.20))));
         float pa = pulse_ring * beat * 0.48;
         col = mix(col, pulse_col, clamp(pa / max(alpha + pa, 0.001), 0.0, 1.0));
         alpha = max(alpha, pa);
@@ -133,13 +149,13 @@ void fragment() {
     // 2. Sculpted dark medallion disc (outer radius 0.875, inner 0.828).
     float disc_outer = 1.0 - smoothstep(0.875 - aa, 0.875 + aa, r);
     if (disc_outer > 0.001) {
-        vec3 bg_dark = col_bg * 0.78;
+        vec3 bg_dark = bg_col * 0.72;
         col = mix(col, bg_dark, disc_outer);
         alpha = max(alpha, disc_outer);
     }
     float disc_inner = 1.0 - smoothstep(0.828 - aa, 0.828 + aa, r);
     if (disc_inner > 0.001) {
-        col = mix(col, col_bg, disc_inner);
+        col = mix(col, bg_col, disc_inner);
         alpha = max(alpha, disc_inner);
     }
 
@@ -150,17 +166,17 @@ void fragment() {
         float left_arc = smoothstep(1.70, 1.80, abs(ang));
         float right_arc = 1.0 - smoothstep(1.34, 1.44, abs(ang));
         if (left_arc > 0.001) {
-            col = mix(col, min(att_col + 0.16, 1.0), rim_band * left_arc);
+            col = mix(col, min(att_col * 1.15, 1.0), rim_band * left_arc);
         }
         if (right_arc > 0.001) {
-            col = mix(col, min(def_col + 0.16, 1.0), rim_band * right_arc);
+            col = mix(col, min(def_col * 1.15, 1.0), rim_band * right_arc);
         }
     }
 
-    float border_w = pocket_alert ? 0.042 : 0.030;
+    float border_w = pocket_alert ? 0.044 : 0.032;
     float border_ring = smoothstep(0.875 - border_w - aa, 0.875 - border_w + aa, r)
                       * (1.0 - smoothstep(0.885 - aa, 0.885 + aa, r));
-    vec3 border_col = pocket_alert ? min(col_neg + 0.18, 1.0) : col_border;
+    vec3 border_col = pocket_alert ? min(neg_col * 1.20, 1.0) : brd_col;
     if (border_ring > 0.001) {
         col = mix(col, border_col, border_ring);
         alpha = max(alpha, border_ring);
@@ -169,11 +185,11 @@ void fragment() {
     // 4. Progress ring track + green-amber-red progress arc + tip pip (r = 0.74).
     float track_outer = smoothstep(0.675 - aa, 0.675 + aa, r) * (1.0 - smoothstep(0.805 - aa, 0.805 + aa, r));
     if (track_outer > 0.001) {
-        col = mix(col, col_bg * 0.45, track_outer);
+        col = mix(col, bg_col * 0.42, track_outer);
     }
     float track_inner = smoothstep(0.695 - aa, 0.695 + aa, r) * (1.0 - smoothstep(0.785 - aa, 0.785 + aa, r));
     if (track_inner > 0.001) {
-        col = mix(col, mix(col_bg * 0.45, col_neg, 0.32), track_inner);
+        col = mix(col, mix(bg_col * 0.42, neg_col, 0.34), track_inner);
         if (known) {
             // Clockwise angle from 12 o'clock (0, -1): [0, TAU)
             float cw = atan(p.x, -p.y);
@@ -188,7 +204,7 @@ void fragment() {
         vec2 tip = vec2(sin(sweep), -cos(sweep)) * 0.74;
         float tip_mask = 1.0 - smoothstep(0.052 - aa, 0.052 + aa, length(p - tip));
         if (tip_mask > 0.001) {
-            col = mix(col, min(ring_ink + 0.32, 1.0), tip_mask);
+            col = mix(col, min(ring_ink * 1.25, 1.0), tip_mask);
         }
     }
 
@@ -199,72 +215,71 @@ void fragment() {
         sd_segment(ap, vec2(0.0, 0.67), vec2(0.0, 0.79)));
     float tick_mask = 1.0 - smoothstep(0.015 - aa, 0.015 + aa, tick_d);
     if (tick_mask > 0.001) {
-        col = mix(col, col_border * 0.72, tick_mask * 0.8);
+        col = mix(col, brd_col * 0.72, tick_mask * 0.8);
     }
 
-    // 6. Crossed-swords clash emblem in upper center (y in [-0.62, -0.14]).
-    float blade1 = sd_segment(p, vec2(-0.24, -0.58), vec2(0.24, -0.16));
-    float blade2 = sd_segment(p, vec2(0.24, -0.58), vec2(-0.24, -0.16));
-    float hilt1 = sd_segment(p, vec2(-0.26, -0.26), vec2(-0.10, -0.12));
-    float hilt2 = sd_segment(p, vec2(0.26, -0.26), vec2(0.10, -0.12));
+    // 6. Crossed-swords clash emblem in upper center (y in [-0.60, -0.20]).
+    float blade1 = sd_segment(p, vec2(-0.22, -0.58), vec2(0.22, -0.20));
+    float blade2 = sd_segment(p, vec2(0.22, -0.58), vec2(-0.22, -0.20));
+    float hilt1 = sd_segment(p, vec2(-0.24, -0.29), vec2(-0.09, -0.17));
+    float hilt2 = sd_segment(p, vec2(0.24, -0.29), vec2(0.09, -0.17));
     float emblem_d = min(min(blade1, blade2), min(hilt1, hilt2));
-    float emblem_mask = 1.0 - smoothstep(0.036 - aa, 0.036 + aa, emblem_d);
+    float emblem_mask = 1.0 - smoothstep(0.038 - aa, 0.038 + aa, emblem_d);
     if (emblem_mask > 0.001) {
-        col = mix(col, min(ring_ink + 0.22, 1.0), emblem_mask);
+        col = mix(col, min(ring_ink * 1.15, 1.0), emblem_mask);
     }
 
     // 7. Momentum chevron right above the percentage pill when pushing.
     if (known && (mom_up || mom_down)) {
         float dir = mom_up ? -1.0 : 1.0;
-        vec2 tip = vec2(0.0, -0.06 + dir * 0.05);
-        vec2 bl = vec2(-0.11, -0.06 - dir * 0.05);
-        vec2 br = vec2(0.11, -0.06 - dir * 0.05);
+        vec2 tip = vec2(0.0, -0.10 + dir * 0.045);
+        vec2 bl = vec2(-0.11, -0.10 - dir * 0.045);
+        vec2 br = vec2(0.11, -0.10 - dir * 0.045);
         float chev_d = min(sd_segment(p, bl, tip), sd_segment(p, tip, br));
         float chev_mask = 1.0 - smoothstep(0.028 - aa, 0.028 + aa, chev_d);
-        vec3 mom_col = mom_up ? min(col_pos + 0.15, 1.0) : min(col_neg + 0.15, 1.0);
+        vec3 mom_col = mom_up ? min(pos_col * 1.15, 1.0) : min(neg_col * 1.15, 1.0);
         if (chev_mask > 0.001) {
             col = mix(col, mom_col, chev_mask);
         }
     }
 
-    // 8. High-contrast tabular percentage pill (y in [0.06, 0.56]) + atlas digits.
+    // 8. High-contrast tabular battle readout pill (y in [0.00, 0.56]) + SDF atlas digits (matches _battleReadouts).
     int n_chars = 1;
     int c0 = 11; // '?'
-    int c1 = 10; // '%'
-    int c2 = 10;
-    int c3 = 10;
+    int c1 = 0;
+    int c2 = 0;
     if (known && pct_val >= 0.0) {
         int ip = clamp(int(pct_val), 0, 100);
         if (ip >= 100) {
-            n_chars = 4; c0 = 1; c1 = 0; c2 = 0; c3 = 10;
+            n_chars = 3; c0 = 1; c1 = 0; c2 = 0;
         } else if (ip >= 10) {
-            n_chars = 3; c0 = ip / 10; c1 = ip - c0 * 10; c2 = 10;
+            n_chars = 2; c0 = ip / 10; c1 = ip - c0 * 10;
         } else {
-            n_chars = 2; c0 = ip; c1 = 10;
+            n_chars = 1; c0 = ip;
         }
     }
 
-    float char_w = n_chars >= 4 ? 0.24 : 0.27;
+    float char_w = n_chars >= 3 ? 0.30 : 0.36;
     float total_w = float(n_chars) * char_w;
-    vec2 pill_center = vec2(0.0, 0.31);
-    vec2 pill_half = vec2(total_w * 0.5 + 0.11, 0.24);
+    vec2 pill_center = vec2(0.0, 0.28);
+    vec2 pill_half = vec2(max(total_w * 0.5 + 0.14, 0.34), 0.27);
     float pill_d = sd_box(p - pill_center, pill_half) - 0.04;
     float pill_fill = 1.0 - smoothstep(-aa, aa, pill_d);
     if (pill_fill > 0.001) {
-        col = mix(col, col_bg * 0.55, pill_fill);
-        float pill_edge = smoothstep(-0.032 - aa, -0.032 + aa, pill_d) * pill_fill;
-        col = mix(col, ring_ink * 0.85, pill_edge);
+        col = mix(col, bg_col * 0.45, pill_fill);
+        float pill_edge = smoothstep(-0.034 - aa, -0.034 + aa, pill_d) * pill_fill;
+        col = mix(col, ring_ink * 0.88, pill_edge);
 
         float text_x0 = -total_w * 0.5;
-        float text_y0 = pill_center.y - 0.18;
-        float text_h = 0.36;
+        float text_y0 = pill_center.y - 0.22;
+        float text_h = 0.44;
         float rel_x = (p.x - text_x0) / char_w;
         float rel_y = (p.y - text_y0) / text_h;
         if (rel_x >= 0.0 && rel_x < float(n_chars) && rel_y >= 0.0 && rel_y <= 1.0) {
             int slot = int(floor(rel_x));
-            int glyph = slot == 0 ? c0 : (slot == 1 ? c1 : (slot == 2 ? c2 : c3));
+            int glyph = slot == 0 ? c0 : (slot == 1 ? c1 : c2);
             float ink = sample_glyph(glyph, vec2(fract(rel_x), rel_y));
-            col = mix(col, col_text, ink);
+            col = mix(col, text_col, ink);
         }
     }
 
@@ -283,10 +298,12 @@ void fragment() {
         var mat = new ShaderMaterial
         {
             Shader = Shader,
-            RenderPriority = 20
+            RenderPriority = 22
         };
         mat.SetShaderParameter("glyph_atlas", GlyphAtlas);
         mat.SetShaderParameter("quality_tier", qualityTier);
+        var isLinear = !string.Equals(RenderingServer.GetCurrentRenderingMethod(), "gl_compatibility", StringComparison.Ordinal);
+        mat.SetShaderParameter("linear_renderer", isLinear ? 1f : 0f);
         ApplyThemePalette(mat);
         return mat;
     }
@@ -294,14 +311,14 @@ void fragment() {
     public static void ApplyThemePalette(ShaderMaterial mat)
     {
         if (mat is null) return;
-        mat.SetShaderParameter("col_bg", ToVec3(Ui.Colour("combat.badge_background")));
-        mat.SetShaderParameter("col_border", ToVec3(Ui.Colour("button.primary_border")));
-        mat.SetShaderParameter("col_pos", ToVec3(Ui.Colour("state.positive")));
-        mat.SetShaderParameter("col_warn", ToVec3(Ui.Colour("state.warning")));
-        mat.SetShaderParameter("col_neg", ToVec3(Ui.Colour("state.negative")));
-        mat.SetShaderParameter("col_info", ToVec3(Ui.Colour("state.info")));
-        mat.SetShaderParameter("col_muted", ToVec3(Ui.Colour("text.muted")));
-        mat.SetShaderParameter("col_text", ToVec3(Ui.Colour("text.bright")));
+        mat.SetShaderParameter("col_bg", Ui.Colour("combat.badge_background"));
+        mat.SetShaderParameter("col_border", Ui.Colour("button.primary_border"));
+        mat.SetShaderParameter("col_pos", Ui.Colour("state.positive"));
+        mat.SetShaderParameter("col_warn", Ui.Colour("state.warning"));
+        mat.SetShaderParameter("col_neg", Ui.Colour("state.negative"));
+        mat.SetShaderParameter("col_info", Ui.Colour("state.info"));
+        mat.SetShaderParameter("col_muted", Ui.Colour("text.muted"));
+        mat.SetShaderParameter("col_text", Ui.Colour("text.bright"));
     }
 
     public static float PackDefenderColor(Color defender)
@@ -353,17 +370,17 @@ void fragment() {
         buffer[o + 19] = packedDefenderColor;
     }
 
-    private static Vector3 ToVec3(Color c) => new(c.R, c.G, c.B);
-
     /// <summary>
-    /// Generates a crisp 384x48 R8 (18 KB VRAM) anti-aliased bitmap atlas of tabular numerals
+    /// Generates a crisp 384x48 R8 (18 KB VRAM) Signed Distance Field (SDF) atlas of tabular numerals
     /// '0'..'9', '%', and '?' using analytical distance-to-segment/circle strokes.
-    /// Zero font/SubViewport dependency, identical on Windows, Linux, and Android GLES3.
+    /// Zero font/SubViewport dependency; fwidth-based SDF anti-aliasing stays sharp at any zoom.
     /// </summary>
     private static ImageTexture BuildGlyphAtlas()
     {
         const int w = GlyphCount * GlyphWidth;
         const int h = GlyphHeight;
+        const float strokeRadius = 0.118f;
+        const float sdfSpread = 0.28f;
         var data = new byte[w * h];
 
         for (var g = 0; g < GlyphCount; g++)
@@ -376,20 +393,14 @@ void fragment() {
                 {
                     var nx = (px + 0.5f) / GlyphWidth; // [0..1], left to right
                     var d = EvalGlyphDistance(g, nx, ny);
-                    var cov = SmoothCoverage(d, 0.092f, 0.036f);
-                    data[py * w + xOff + px] = (byte)Math.Clamp((int)(cov * 255f + 0.5f), 0, 255);
+                    var sdf = Math.Clamp(0.5f + (strokeRadius - d) / (2f * sdfSpread), 0f, 1f);
+                    data[py * w + xOff + px] = (byte)Math.Clamp((int)(sdf * 255f + 0.5f), 0, 255);
                 }
             }
         }
 
         using var img = Image.CreateFromData(w, h, false, Image.Format.R8, data);
         return ImageTexture.CreateFromImage(img);
-    }
-
-    private static float SmoothCoverage(float dist, float radius, float feather)
-    {
-        var t = Math.Clamp((radius + feather - dist) / (2f * feather), 0f, 1f);
-        return t * t * (3f - 2f * t);
     }
 
     private static float Seg(float px, float py, float ax, float ay, float bx, float by)
@@ -434,10 +445,10 @@ void fragment() {
                     Seg(px, py, R - 0.02f, T + 0.28f, L, B)),
                 Seg(px, py, L, B, R, B)),
             3 => MathF.Min(
-                px >= M - 0.18f || py < T + 0.26f || py > C - 0.08f
-                    ? (py <= C ? Ring(px, py, M, (T + C) * 0.5f, 0.26f, 0.26f) : Ring(px, py, M, (C + B) * 0.5f, 0.28f, 0.27f))
-                    : 9f,
-                Seg(px, py, M - 0.06f, C, M + 0.12f, C)),
+                py <= C
+                    ? (px >= M - 0.14f || py < T + 0.22f ? Ring(px, py, M, (T + C) * 0.5f, 0.26f, 0.26f) : 9f)
+                    : (px >= M - 0.14f || py > B - 0.22f ? Ring(px, py, M, (C + B) * 0.5f, 0.28f, 0.27f) : 9f),
+                Seg(px, py, M - 0.08f, C, M + 0.12f, C)),
             4 => MathF.Min(
                 Seg(px, py, R - 0.08f, T, R - 0.08f, B),
                 MathF.Min(Seg(px, py, R - 0.08f, T, L, C + 0.14f), Seg(px, py, L, C + 0.14f, R + 0.04f, C + 0.14f))),

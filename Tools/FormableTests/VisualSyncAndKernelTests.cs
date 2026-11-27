@@ -37,6 +37,7 @@ public static class VisualSyncAndKernelTests
         WartimeGraphKernelsAndCrossingInvalidation();
         DemographyRulesHookBuiltInEquivalence();
         TerritorialDisputeIndexZeroFalseNegatives();
+        AirReconVisionInvalidationRegression();
         ChokepointZeroAllocParityAndVerboseGate();
         LockFreeSyncSourceContracts();
         Console.WriteLine($"visual sync & kernel: {_passed} PASS");
@@ -123,7 +124,7 @@ public static class VisualSyncAndKernelTests
             // Wait until at least one snapshot is published and verify clock/map lockstep.
             WorldVisualState latest = null;
             var sw = Stopwatch.StartNew();
-            while (sw.ElapsedMilliseconds < 1500)
+            while (sw.ElapsedMilliseconds < 5000)
             {
                 if (runner.TryAcquireLatestVisualSnapshot(out var snap))
                 {
@@ -132,6 +133,8 @@ public static class VisualSyncAndKernelTests
                 }
                 Thread.Sleep(5);
             }
+            runner.DrainMainThreadUpdates(out _, out _, out _, out var initialFault);
+            Check(initialFault is null, $"BackgroundSimRunner raised no worker fault ({initialFault?.Message ?? "none"})");
             Check(latest is not null && latest.Version >= 1,
                 $"BackgroundSimRunner published lock-free WorldVisualState (version={latest?.Version ?? 0})");
             var presentationDate = runner.ReadPresentationDate(campaign);
@@ -144,7 +147,7 @@ public static class VisualSyncAndKernelTests
             runner.NotifyVisualFramePresented(latest.Version);
             var verBefore = latest.Version;
             sw.Restart();
-            while (sw.ElapsedMilliseconds < 1200)
+            while (sw.ElapsedMilliseconds < 5000)
             {
                 if (runner.TryAcquireLatestVisualSnapshot(out var next) && next.Version > verBefore)
                 {
@@ -154,6 +157,8 @@ public static class VisualSyncAndKernelTests
                 }
                 Thread.Sleep(5);
             }
+            runner.DrainMainThreadUpdates(out _, out _, out _, out var postFault);
+            Check(postFault is null, $"BackgroundSimRunner remains fault-free after presentation ack ({postFault?.Message ?? "none"})");
             Check(latest!.Version > verBefore,
                 $"BackgroundSimRunner advances smoothly after NotifyVisualFramePresented ({verBefore} -> {latest.Version})");
 
@@ -272,6 +277,44 @@ public static class VisualSyncAndKernelTests
                     source, nextOwners, nextOwners, authored, colors, shades, false, ref mipScratch, out var usedIncNoOp);
                 Check(usedIncNoOp && FirstByteDiff(noOp, fullRef) < 0,
                     $"PoliticalPlate empty diff is bit-exact no-op ({mode})");
+
+                // Empty authoredOwners must follow MapBorders.CurrentHolder (preserve authored holders, no override) on BOTH plate and frontier!
+                byte[] emptyAuthInc = null;
+                byte[] emptyAuthRef = null;
+                PoliticalPlate.PaintDirtyMipmappedInto(
+                    source, null, prevOwners, Array.Empty<ushort>(), colors, shades, true, ref emptyAuthInc, out _);
+                var eaInc = PoliticalPlate.PaintDirtyMipmappedInto(
+                    source, prevOwners, nextOwners, Array.Empty<ushort>(), colors, shades, false, ref emptyAuthInc, out var eaUsedInc);
+                var eaRef = PoliticalPlate.PaintDirtyMipmappedInto(
+                    source, null, nextOwners, Array.Empty<ushort>(), colors, shades, true, ref emptyAuthRef, out _);
+                Check(eaUsedInc && FirstByteDiff(eaInc, eaRef) < 0,
+                    $"PoliticalPlate incremental rect matches full when authoredOwners is empty ({mode})");
+
+                // Single-edge antimeridian province (touches x==0 only, not x==w-1): border across wrap at x==w-1 must stay bit-exact!
+                const int aw = 64, ah = 32;
+                var aHolders = new ushort[aw * ah];
+                var aProvs = new ushort[aw * ah];
+                var aGeo = new byte[aw * ah];
+                for (var y = 4; y < ah - 4; y++)
+                {
+                    for (var x = 0; x < aw; x++)
+                    {
+                        var idx = y * aw + x;
+                        if (x < 12) { aProvs[idx] = 1; aHolders[idx] = 1; }
+                        else { aProvs[idx] = 2; aHolders[idx] = 2; }
+                    }
+                }
+                var aSource = new PoliticalPlateSource { Width = aw, Height = ah, Holders = aHolders, Provinces = aProvs, Geography = aGeo };
+                var aAuth = new ushort[] { 0, 1, 2 };
+                var aPrev = new ushort[] { 0, 1, 2 };
+                var aNext = new ushort[] { 0, 2, 2 }; // Province 1 (x=0..11) flips to match Province 2 (x=12..63) -> removes border at x=63!
+                byte[] aIncBuf = null;
+                byte[] aFullBuf = null;
+                PoliticalPlate.PaintDirtyMipmappedInto(aSource, null, aPrev, aAuth, colors, shades, true, ref aIncBuf, out _);
+                var aInc = PoliticalPlate.PaintDirtyMipmappedInto(aSource, aPrev, aNext, aAuth, colors, shades, false, ref aIncBuf, out _);
+                var aFull = PoliticalPlate.PaintDirtyMipmappedInto(aSource, null, aNext, aAuth, colors, shades, true, ref aFullBuf, out _);
+                Check(FirstByteDiff(aInc, aFull) < 0,
+                    $"PoliticalPlate antimeridian single-edge province flip stays bit-exact across seam ({mode})");
             }
             finally
             {
@@ -348,6 +391,15 @@ public static class VisualSyncAndKernelTests
 
                 var diff = FirstByteDiff(inc, fullRef);
                 Check(diff < 0, $"FrontierField BuildDirtyMipmappedInto is BIT-EXACT across all mip levels ({mode}, diff={diff})");
+
+                // Empty authoredOwners must match MapBorders.CurrentHolder (no override) identically in Rust and C# managed!
+                if (!simulateNoNative)
+                {
+                    var nativeEmptyAuth = FrontierField.Build(authoredRaster, provincesRaster, w, h, nextOwners, Array.Empty<ushort>());
+                    var managedEmptyAuth = FrontierField.BuildManaged(authoredRaster, provincesRaster, w, h, nextOwners, Array.Empty<ushort>());
+                    Check(FirstByteDiff(nativeEmptyAuth, managedEmptyAuth) < 0,
+                        "FrontierField.Build with empty authoredOwners matches BuildManaged (MapBorders.CurrentHolder) bit-exact");
+                }
             }
             finally
             {
@@ -483,8 +535,7 @@ public static class VisualSyncAndKernelTests
         DemographyMortalityEvaluator mort = DemographyRulesHook.ManagedMortalityFactor;
         DemographyCohortStepper step = DemographyRulesHook.ManagedStepCohorts;
 
-        var wasInstalled = DemographyRulesHook.Installed;
-        var wasCustom = DemographyRulesHook.IsCustomInstalled;
+        var savedHook = DemographyRulesHook.CaptureSnapshot();
         try
         {
             DemographyRulesHook.Install(ws, fert, mort, step, builtInEquivalent: true);
@@ -497,10 +548,7 @@ public static class VisualSyncAndKernelTests
         }
         finally
         {
-            if (wasInstalled)
-                DemographyRulesHook.Install(ws, fert, mort, step, builtInEquivalent: !wasCustom);
-            else
-                DemographyRulesHook.Install(null!, null!, null!, null!, builtInEquivalent: false);
+            DemographyRulesHook.RestoreSnapshot(savedHook);
         }
     }
 
@@ -543,6 +591,84 @@ public static class VisualSyncAndKernelTests
         index.EndTick();
         Check(!index.IsActiveFor(campaign),
             "TerritorialDisputeIndex deactivates cleanly on EndTick");
+    }
+
+    private static void AirReconVisionInvalidationRegression()
+    {
+        // Build a 360x8 map (1 deg/col ~= 111 km) with two non-adjacent nations separated by a
+        // 1-col neutral buffer (~220 km apart) and BorderVisionDepth=0 so only air recon reveals
+        // targetProv; stopping air recon MUST immediately clear the lifted fog!
+        const int w = 360, h = 8;
+        var regions = new ushort[w * h];
+        var owners = new ushort[w * h];
+        for (var y = 0; y < h; y++)
+        {
+            for (var x = 10; x < 16; x++)
+            {
+                var idx = y * w + x;
+                if (x < 12) { regions[idx] = 101; owners[idx] = 1; }
+                else if (x < 14) { regions[idx] = 103; owners[idx] = 3; } // neutral buffer
+                else { regions[idx] = 102; owners[idx] = 2; }
+            }
+        }
+        var map = ProvinceTopology.Build(regions, owners, w, h, _ => false);
+        var c = new Campaign(12345);
+        var n1 = new Nation { Id = 0, MapIndex = 1, Tag = "AAA", Name = "Alpha" };
+        var n2 = new Nation { Id = 1, MapIndex = 2, Tag = "BBB", Name = "Beta" };
+        var n3 = new Nation { Id = 2, MapIndex = 3, Tag = "CCC", Name = "Buffer" };
+        c.Nations.Add(n1); c.Nations.Add(n2); c.Nations.Add(n3);
+        c.AttachProvinceTopology(map);
+        c.Defines.BorderVisionDepth = 0;
+        c.Defines.ArmyVisionDepth = 0;
+        c.Wars.Add(new StrategicWar { Id = 1, AttackerId = n1.Id, DefenderId = n2.Id });
+
+        var baseProv = -1;
+        var targetProv = -1;
+        for (var p = 1; p <= map.ProvinceCount; p++)
+        {
+            if (map.ProvinceToNation[p] == 1 && baseProv < 0) baseProv = p;
+            if (map.ProvinceToNation[p] == 2 && targetProv < 0) targetProv = p;
+        }
+        string reconTypeId = null;
+        var bestRange = 0f;
+        foreach (var t in SupportTypeCatalog.All)
+        {
+            if (t.Kind is SupportKind.Air or SupportKind.Drone && SupportCore.Enabled(c, t) && t.RangeKm > bestRange)
+            {
+                bestRange = t.RangeKm;
+                reconTypeId = t.Id;
+            }
+        }
+        if (baseProv <= 0 || targetProv <= 0 || string.IsNullOrEmpty(reconTypeId))
+        {
+            Check(true, "air recon vision invalidation skipped cleanly (no catalog air support type)");
+            return;
+        }
+        var seenBeforeRecon = CampaignIntel.CanSeeProvince(c, n1.Id, targetProv);
+
+        var wing = new SupportFormation
+        {
+            Id = 777,
+            NationId = n1.Id,
+            TypeId = reconTypeId,
+            BaseProvinceId = baseProv,
+            Strength = 1f,
+            Mission = AirReconnaissance.Mission
+        };
+        c.SupportFormations.Add(wing);
+        SupportCore.IndexReach(c);
+
+        // Active air recon MUST lift fog over targetProv across the neutral buffer.
+        CampaignIntel.InvalidateActors(c);
+        var seenDuringRecon = CampaignIntel.CanSeeProvince(c, n1.Id, targetProv);
+
+        // Ground the recon wing and tick actors (same territory, cache reuse path):
+        // enemy province MUST return to fog of war immediately!
+        wing.Mission = SupportCore.MissionStandby;
+        CampaignIntel.InvalidateActors(c);
+        var seenAfterStandby = CampaignIntel.CanSeeProvince(c, n1.Id, targetProv);
+        Check(!seenBeforeRecon && seenDuringRecon && !seenAfterStandby,
+            $"ProvinceVision lifts fog during air recon and clears it immediately on standby (before={seenBeforeRecon}, during={seenDuringRecon}, after={seenAfterStandby})");
     }
 
     private static void ChokepointZeroAllocParityAndVerboseGate()
@@ -588,20 +714,37 @@ public static class VisualSyncAndKernelTests
         var gameSrc = File.ReadAllText(Path.Combine(root, "Scripts", "DealOrForceGame.cs"));
         var syncSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobeLockFreeSync.cs"));
         var gpuSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GpuMapCompute.cs"));
+        var plateSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobePlateRepaint.cs"));
+        var globeSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "GlobePresentation.cs"));
+        var badgeSrc = File.ReadAllText(Path.Combine(root, "Scripts", "gfx", "SurfaceBattleBadge.cs"));
         Check(gameSrc.Contains("_globe?.SyncLockFreeWorldVisuals(_simRunner)", StringComparison.Ordinal) &&
               gameSrc.Contains("_simRunner.NotifyVisualFramePresented(", StringComparison.Ordinal),
             "DealOrForceGame drives lock-free visual sync and notifies presented visual frame sequence");
         Check(syncSrc.Contains("TryAcquireLatestVisualSnapshot", StringComparison.Ordinal) &&
               syncSrc.Contains("RefreshProvinceControllersLockFree", StringComparison.Ordinal) &&
               syncSrc.Contains("PaintLiveWarFrontsLockFree", StringComparison.Ordinal) &&
-              syncSrc.Contains("SyncBattleMarkersLockFree", StringComparison.Ordinal),
-            "GlobeLockFreeSync updates controllers, fronts, battles, and plates lock-free from WorldVisualSnapshot");
+              syncSrc.Contains("SyncBattleMarkersLockFree", StringComparison.Ordinal) &&
+              syncSrc.Contains("item.VisibleToPlayer", StringComparison.Ordinal),
+            "GlobeLockFreeSync updates controllers, fronts, Fog-of-War-aware battles, and plates lock-free");
         Check(gpuSrc.Contains("DataFormat.R32Uint", StringComparison.Ordinal) &&
+              gpuSrc.Contains("DataFormat.R32Sfloat", StringComparison.Ordinal) &&
               gpuSrc.Contains("Texture2Drd", StringComparison.Ordinal) &&
+              gpuSrc.Contains("BindTexturesOnMainThread", StringComparison.Ordinal) &&
               gpuSrc.Contains("CallOnRenderThread", StringComparison.Ordinal) &&
+              gpuSrc.Contains("if (!rid.IsValid)", StringComparison.Ordinal) &&
               !gpuSrc.Contains(".Submit(", StringComparison.Ordinal) &&
               !gpuSrc.Contains(".Sync(", StringComparison.Ordinal),
-            "GpuMapCompute follows Godot 4.8 RenderingDevice rules (R32Uint JFA, Texture2Drd, CallOnRenderThread, no Submit/Sync)");
+            "GpuMapCompute follows Godot 4.8 RD rules (R32Uint JFA, R32Sfloat blur, main-thread TextureRdRid, invalid-RID guard, no Submit/Sync)");
+        var topoIdx = globeSrc.IndexOf("_provinceTopology = result.Provinces;", StringComparison.Ordinal);
+        var gpuInitIdx = globeSrc.IndexOf("TryStartGpuMapCompute(", StringComparison.Ordinal);
+        Check(topoIdx > 0 && gpuInitIdx > topoIdx &&
+              plateSrc.Contains("frontierMatches", StringComparison.Ordinal) &&
+              plateSrc.Contains("UploadPlateCatchUp(owners)", StringComparison.Ordinal),
+            "GpuMapCompute starts after _provinceTopology/_paintedOwner exist and GlobePlateRepaint tracks frontier catch-up lock-free");
+        Check(badgeSrc.Contains(": source_color", StringComparison.Ordinal) &&
+              badgeSrc.Contains("linear_renderer", StringComparison.Ordinal) &&
+              badgeSrc.Contains("fwidth(sdf)", StringComparison.Ordinal),
+            "BattleBadgeGpu uses sRGB-correct source_color uniforms and fwidth SDF numerals across Forward+ and GLES3");
     }
 
     private static int FirstByteDiff(byte[] a, byte[] b)

@@ -63,6 +63,8 @@ public sealed partial class GlobePresentation
             Name = "BattleBadgesGpu",
             Multimesh = _battleBadgeMultiMesh,
             MaterialOverride = _battleBadgeMaterial,
+            CustomAabb = new Aabb(new Vector3(-50f, -50f, -50f), new Vector3(100f, 100f, 100f)),
+            IgnoreOcclusionCulling = true,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             GIMode = GeometryInstance3D.GIModeEnum.Disabled
         };
@@ -1080,10 +1082,10 @@ public sealed partial class GlobePresentation
             var text = known ? $"{share * 100:0}" : "?";
             _battleReadouts[battle.Id] = (text, share, tone);
 
-            var attColor = _campaign.NationById(battle.AttackerId) is { } attNation
-                ? new Color(attNation.Color) : Ui.Colour("state.negative");
-            var defColor = _campaign.NationById(battle.DefenderId) is { } defNation
-                ? new Color(defNation.Color) : Ui.Colour("state.info");
+            var attColor = _campaign.NationById(battle.AttackerId) is { } attNation && !string.IsNullOrEmpty(attNation.Color)
+                ? Color.FromString(attNation.Color, Ui.Colour("state.negative")) : Ui.Colour("state.negative");
+            var defColor = _campaign.NationById(battle.DefenderId) is { } defNation && !string.IsNullOrEmpty(defNation.Color)
+                ? Color.FromString(defNation.Color, Ui.Colour("state.info")) : Ui.Colour("state.info");
 
             marker.Share = known ? Math.Clamp(share, 0f, 1f) : -1f;
             marker.DisplayPercent = known ? MathF.Round(Math.Clamp(share, 0f, 1f) * 100f) : -1f;
@@ -1216,7 +1218,9 @@ public sealed partial class GlobePresentation
         }
         else
         {
-            marker.LocalPosition = LocalSurfacePointFromNormal(marker.Normal, SurfaceMarkerRadius);
+            // Slightly above SurfaceMarkerRadius (matching GlobeMovements 1.002f) so battle medallions
+            // sit cleanly in front of ground army cards while remaining depth-tested behind the globe.
+            marker.LocalPosition = LocalSurfacePointFromNormal(marker.Normal, SurfaceMarkerRadius * 1.0022f);
             marker.LocalRotation = SurfaceCounterQuaternion(marker.Normal);
             marker.Width = SurfaceCounterWidthAt(rootTransform * marker.LocalPosition, "battle");
         }

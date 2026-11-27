@@ -80,6 +80,11 @@ public sealed partial class GlobePresentation
         _plateWorkStartedStale = false;
     }
 
+    private void FrontierApplied(ushort[] owners)
+    {
+        _frontierShownOwners = owners;
+    }
+
     private void TryStartGpuMapCompute(Simulation.ProvinceTopology topology, ushort[] initialOwners)
     {
         DisposeGpuMapCompute();
@@ -106,12 +111,22 @@ public sealed partial class GlobePresentation
         }
     }
 
-    private void DisposeGpuMapCompute()
+    private void DisposeGpuMapCompute(bool markStaleForCpuFallback = false)
     {
         if (_gpuMapBound && _globeMaterial is not null)
         {
             if (_plateTexture is not null) _globeMaterial.SetShaderParameter("political_map", _plateTexture);
             if (_frontierTexture is not null) _globeMaterial.SetShaderParameter("frontier_field", _frontierTexture);
+        }
+        if (markStaleForCpuFallback && _gpuMapBound)
+        {
+            // CPU textures have not been updated while GPU compute owned the material parameters;
+            // reset tracking so the next repaint rebuilds CPU plate/frontier cleanly.
+            _plateShownOwners = null;
+            _frontierShownOwners = null;
+            _plateMipScratch = null;
+            _frontierMipScratch = null;
+            _platePending = true;
         }
         _gpuMapBound = false;
         _gpuMapCompute?.Dispose();
@@ -123,11 +138,16 @@ public sealed partial class GlobePresentation
         if (_gpuMapCompute is null) return;
         if (_gpuMapCompute.IsFailed)
         {
-            DisposeGpuMapCompute();
+            DisposeGpuMapCompute(markStaleForCpuFallback: true);
             return;
         }
         if (!_gpuMapBound && _gpuMapCompute.IsReady && _globeMaterial is not null)
         {
+            if (!_gpuMapCompute.BindTexturesOnMainThread())
+            {
+                DisposeGpuMapCompute(markStaleForCpuFallback: true);
+                return;
+            }
             _globeMaterial.SetShaderParameter("political_map", _gpuMapCompute.PlateTexture);
             if (_gpuMapCompute.HasFrontier && FrontierFieldWanted())
             {
@@ -136,6 +156,10 @@ public sealed partial class GlobePresentation
                 _globeMaterial.SetShaderParameter("frontier_ready", 1f);
             }
             _gpuMapBound = true;
+            var frontierSummary = _gpuMapCompute.HasFrontier
+                ? $"{_gpuMapCompute.FrontierWidth}x{_gpuMapCompute.FrontierHeight} (6-pass 1+JFA)"
+                : "off";
+            GD.Print($"[dof] gpu_map_compute active: plate={_gpuMapCompute.PlateWidth}x{_gpuMapCompute.PlateHeight} frontier={frontierSummary} driver={RenderingServer.GetCurrentRenderingDriverName()}");
         }
     }
 
@@ -146,59 +170,83 @@ public sealed partial class GlobePresentation
         TryStartPlateRepaint(topology, ownersOverride, fastForwardOverride);
     }
 
+    private static void ResolvePlateCooldowns(bool gpuReady, bool fastForward, out double plateMs, out double frontierMs)
+    {
+        var isTouch = Platform.PlatformProfile.Current?.IsTouchPrimary == true;
+        var plateSec = isTouch
+            ? MobilePlateRepaintSeconds
+            : gpuReady ? GpuPlateRepaintSeconds : (fastForward ? FastSimPlateRepaintSeconds : PlateRepaintSeconds);
+        var frontierSec = gpuReady
+            ? GpuFrontierRepaintSeconds
+            : (fastForward ? FastSimFrontierRepaintSeconds : FrontierRepaintSeconds);
+        plateMs = plateSec * 1000.0;
+        frontierMs = frontierSec * 1000.0;
+    }
+
+    private bool TryDispatchGpuPlateRepaint(
+        ushort[] owners, ushort[] authoredOwners, Simulation.MapPlateShades shades,
+        ulong now, bool needPlate, bool needFrontier, bool wantFrontierNow)
+    {
+        if (!(_gpuMapBound && _gpuMapCompute is { IsReady: true })) return false;
+        if (wantFrontierNow && !_gpuMapCompute.HasFrontier) return false;
+        if (wantFrontierNow) _frontierRequestedMsec = now;
+        var updateColors = _plateColoursStale;
+        if (needPlate) _plateColoursStale = false;
+        if (_gpuMapCompute.DispatchRepaint(owners, authoredOwners, _colorByMapIndex, shades,
+                updatePlate: needPlate, updateColors: updateColors, updateFrontier: wantFrontierNow))
+        {
+            if (needPlate) _plateShownOwners = owners;
+            if (wantFrontierNow) _frontierShownOwners = owners;
+            UploadPlateCatchUp(owners);
+            return true;
+        }
+        _plateColoursStale |= updateColors;
+        DisposeGpuMapCompute(markStaleForCpuFallback: true);
+        _platePending = needFrontier && !wantFrontierNow;
+        return false;
+    }
+
     private void TryStartPlateRepaint(Simulation.ProvinceTopology topology, ushort[] ownersOverride = null, bool? fastForwardOverride = null)
     {
         PollGpuMapComputeBinding();
         if (!_platePending || _plateWork is not null || _pendingPlateUpload is not null) return;
         var currentOwners = ownersOverride is { Length: > 0 } ? ownersOverride : topology.ProvinceToNation;
-        // The picture on screen already is today's owners in today's colours: nothing to do.
-        if (!_plateColoursStale && _plateShownOwners is not null &&
-            currentOwners.AsSpan().SequenceEqual(_plateShownOwners))
-        {
-            _platePending = false;
-            return;
-        }
+        var plateMatches = !_plateColoursStale && _plateShownOwners is not null &&
+                           currentOwners.AsSpan().SequenceEqual(_plateShownOwners);
+        var frontierWanted = FrontierFieldWanted() && Platform.PlatformProfile.Current?.IsTouchPrimary != true &&
+                             _frontierAuthored is not null;
+        var frontierMatches = !frontierWanted ||
+                              (_frontierShownOwners is not null && currentOwners.AsSpan().SequenceEqual(_frontierShownOwners));
+        if (plateMatches && frontierMatches) { _platePending = false; return; }
+        if (_gpuMapCompute is { IsPending: true }) return;
+
         var now = Time.GetTicksMsec();
         var fastForward = fastForwardOverride ?? (_campaign is { IsPaused: false, Speed: >= 4 });
-        // If Forward+ GPU compute init is still finishing on the render thread, wait one frame
-        // rather than launching a redundant full-planet CPU bake.
-        if (_gpuMapCompute is { IsPending: true }) return;
         var gpuReady = _gpuMapBound && _gpuMapCompute is { IsReady: true };
+        ResolvePlateCooldowns(gpuReady, fastForward, out var plateCooldownMs, out var frontierCooldownMs);
 
-        var desktopPlateSeconds = gpuReady
-            ? GpuPlateRepaintSeconds
-            : (fastForward ? FastSimPlateRepaintSeconds : PlateRepaintSeconds);
-        var desktopFrontierSeconds = gpuReady
-            ? GpuFrontierRepaintSeconds
-            : (fastForward ? FastSimFrontierRepaintSeconds : FrontierRepaintSeconds);
-        var cooldownMs = (Platform.PlatformProfile.Current?.IsTouchPrimary == true ? MobilePlateRepaintSeconds : desktopPlateSeconds) * 1000.0;
-        if (_plateRequestedMsec > 0 && now - _plateRequestedMsec < cooldownMs) return;
-        _plateRequestedMsec = now;
-        _platePending = false;
+        var needPlate = !plateMatches;
+        var needFrontier = !frontierMatches;
+        var frontierReadyByTime = _frontierRequestedMsec == 0 || now - _frontierRequestedMsec >= frontierCooldownMs;
+        if (needPlate)
+        {
+            if (_plateRequestedMsec > 0 && now - _plateRequestedMsec < plateCooldownMs) return;
+            _plateRequestedMsec = now;
+        }
+        else if (!frontierReadyByTime)
+        {
+            return;
+        }
 
+        var wantFrontierNow = needFrontier && frontierReadyByTime;
+        _platePending = needFrontier && !wantFrontierNow;
         var owners = ownersOverride is { Length: > 0 } ? ownersOverride : (ushort[])topology.ProvinceToNation.Clone();
         var authoredOwners = _paintedOwner;
         var shades = Simulation.MapBorderStyles.PlateShades();
-        var wantFrontierNow = FrontierFieldWanted() && Platform.PlatformProfile.Current?.IsTouchPrimary != true &&
-                              (_frontierRequestedMsec == 0 || now - _frontierRequestedMsec >= desktopFrontierSeconds * 1000.0);
 
         // Fast Path: Forward+ GLSL Compute Shaders (Vulkan / D3D12) — zero RAM->VRAM upload, < 1 ms in VRAM!
-        if (gpuReady)
-        {
-            if (wantFrontierNow) _frontierRequestedMsec = now;
-            var updateColors = _plateColoursStale;
-            _plateColoursStale = false;
-            if (_gpuMapCompute.DispatchRepaint(owners, authoredOwners, _colorByMapIndex, shades, updateColors, wantFrontierNow))
-            {
-                _plateShownOwners = owners;
-                if (wantFrontierNow) _frontierShownOwners = owners;
-                UploadPlateCatchUp();
-                return;
-            }
-            // If GPU compute tripped, restore fallback bindings and continue on CPU incremental Rust path.
-            _plateColoursStale |= updateColors;
-            DisposeGpuMapCompute();
-        }
+        if (TryDispatchGpuPlateRepaint(owners, authoredOwners, shades, now, needPlate, needFrontier, wantFrontierNow))
+            return;
 
         _plateWorkStartedStale = _plateColoursStale;
         _plateColoursStale = false;
@@ -212,8 +260,7 @@ public sealed partial class GlobePresentation
         var forceFullPlate = _plateWorkStartedStale;
 
         // Tier A CPU Path (Android ARM64 NEON, Compatibility/GLES3, headless):
-        // Incremental dirty-rect PoliticalPlate + FrontierField + incremental mipmap pyramid
-        // (zero full-planet Image.GenerateMipmaps() stall!).
+        // Incremental dirty-rect PoliticalPlate + FrontierField + incremental mipmap pyramid.
         _plateWork = Task.Run(() =>
         {
             var plateMipBytes = Simulation.PoliticalPlate.PaintDirtyMipmappedInto(

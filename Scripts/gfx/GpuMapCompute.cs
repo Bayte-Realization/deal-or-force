@@ -20,12 +20,15 @@ internal sealed class GpuMapCompute
 {
     private RenderingDevice _rd;
     private int _initState; // 0 = idle, 1 = pending, 2 = ready, -1 = failed
-    private bool _disposed;
+    private int _disposedFlag; // 0 = active, 1 = disposed (atomic across main & render threads)
     private string _failureReason = "";
+    private int _plateDispatches;
+    private int _frontierDispatches;
 
     private int _plateW, _plateH, _plateMips;
     private int _frontierW, _frontierH, _frontierMips;
     private bool _hasFrontier;
+    private bool _texturesBoundOnMainThread;
 
     // Shared dynamic buffers
     private Rid _provLutBuf;
@@ -63,11 +66,32 @@ internal sealed class GpuMapCompute
 
     public Texture2Drd PlateTexture { get; private set; }
     public Texture2Drd FrontierTexture { get; private set; }
-    public bool IsReady => System.Threading.Volatile.Read(ref _initState) == 2 && !_disposed;
-    public bool IsPending => System.Threading.Volatile.Read(ref _initState) == 1 && !_disposed;
+    public bool IsReady => System.Threading.Volatile.Read(ref _initState) == 2 && System.Threading.Volatile.Read(ref _disposedFlag) == 0;
+    public bool IsPending => System.Threading.Volatile.Read(ref _initState) == 1 && System.Threading.Volatile.Read(ref _disposedFlag) == 0;
     public bool IsFailed => System.Threading.Volatile.Read(ref _initState) < 0;
     public bool HasFrontier => IsReady && _hasFrontier;
+    public int PlateWidth => _plateW;
+    public int PlateHeight => _plateH;
+    public int FrontierWidth => _frontierW;
+    public int FrontierHeight => _frontierH;
     public string FailureReason => _failureReason;
+
+    /// <summary>
+    /// Attaches the render-thread-created RD texture RIDs to <see cref="Texture2Drd"/> strictly on
+    /// the main thread once <see cref="IsReady"/> is true, avoiding any cross-thread Resource mutation.
+    /// </summary>
+    public bool BindTexturesOnMainThread()
+    {
+        if (!IsReady || PlateTexture is null || !_plateTex.IsValid) return false;
+        if (!_texturesBoundOnMainThread)
+        {
+            PlateTexture.TextureRdRid = _plateTex;
+            if (_hasFrontier && FrontierTexture is not null && _frontierTex.IsValid)
+                FrontierTexture.TextureRdRid = _frontierTex;
+            _texturesBoundOnMainThread = true;
+        }
+        return true;
+    }
 
     public static bool IsEnvironmentAllowed()
     {
@@ -99,7 +123,9 @@ internal sealed class GpuMapCompute
         IReadOnlyDictionary<int, uint> colors,
         MapPlateShades shades)
     {
-        if (_disposed || System.Threading.Volatile.Read(ref _initState) != 0 || !IsEnvironmentAllowed()) return false;
+        if (System.Threading.Volatile.Read(ref _disposedFlag) != 0 ||
+            System.Threading.Volatile.Read(ref _initState) != 0 ||
+            !IsEnvironmentAllowed()) return false;
         if (plateSource is null || plateSource.Width <= 0 || plateSource.Height <= 0) return false;
 
         _rd = RenderingServer.GetRenderingDevice();
@@ -134,7 +160,7 @@ internal sealed class GpuMapCompute
 
         RenderingServer.CallOnRenderThread(Callable.From(() =>
         {
-            if (_disposed)
+            if (System.Threading.Volatile.Read(ref _disposedFlag) != 0)
             {
                 System.Threading.Volatile.Write(ref _initState, -1);
                 return;
@@ -142,6 +168,12 @@ internal sealed class GpuMapCompute
             var ok = InitializeOnRenderThread(
                 plateCells, plateGeo, frontierCells,
                 plateLutCopy, paletteCopy, hasOverride, shades);
+            if (System.Threading.Volatile.Read(ref _disposedFlag) != 0)
+            {
+                FreeOwnedRidsOnRenderThread(_rd);
+                System.Threading.Volatile.Write(ref _initState, -1);
+                return;
+            }
             System.Threading.Volatile.Write(ref _initState, ok ? 2 : -1);
         }));
 
@@ -153,10 +185,13 @@ internal sealed class GpuMapCompute
         ushort[] authoredOwners,
         IReadOnlyDictionary<int, uint> colors,
         MapPlateShades shades,
+        bool updatePlate,
         bool updateColors,
         bool updateFrontier)
     {
         if (!IsReady) return false;
+        var doFrontier = updateFrontier && _hasFrontier;
+        if (!updatePlate && !doFrontier) return true;
 
         var hasOverride = FillProvLut(owners, authoredOwners, _provLutBytes);
         var lutCopy = (byte[])_provLutBytes.Clone();
@@ -166,18 +201,21 @@ internal sealed class GpuMapCompute
             FillPalette(colors, _paletteBytes);
             palCopy = (byte[])_paletteBytes.Clone();
         }
-        var doFrontier = updateFrontier && _hasFrontier;
+        var doPlate = updatePlate;
 
         RenderingServer.CallOnRenderThread(Callable.From(() =>
         {
-            if (_disposed || System.Threading.Volatile.Read(ref _initState) != 2 || _rd is null) return;
+            if (System.Threading.Volatile.Read(ref _disposedFlag) != 0 ||
+                System.Threading.Volatile.Read(ref _initState) != 2 ||
+                _rd is null) return;
             try
             {
                 _rd.BufferUpdate(_provLutBuf, 0, (uint)lutCopy.Length, lutCopy);
                 if (palCopy is not null)
                     _rd.BufferUpdate(_paletteBuf, 0, (uint)palCopy.Length, palCopy);
 
-                DispatchPlateOnRenderThread(hasOverride, shades);
+                if (doPlate)
+                    DispatchPlateOnRenderThread(hasOverride, shades);
                 if (doFrontier)
                     DispatchFrontierOnRenderThread(hasOverride);
             }
@@ -193,28 +231,38 @@ internal sealed class GpuMapCompute
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (System.Threading.Interlocked.Exchange(ref _disposedFlag, 1) != 0) return;
         System.Threading.Volatile.Write(ref _initState, -1);
+        _texturesBoundOnMainThread = false;
+        var pCount = System.Threading.Volatile.Read(ref _plateDispatches);
+        var fCount = System.Threading.Volatile.Read(ref _frontierDispatches);
+        if (pCount > 0 || fCount > 0)
+            GD.Print($"[dof] gpu_map_compute shutdown: plate_dispatches={pCount} frontier_dispatches={fCount}");
 
-        // Clear Texture2Drd references BEFORE freeing underlying RD texture RIDs (Godot 4.8 requirement).
+        // Clear Texture2Drd references strictly on the main thread BEFORE freeing RD texture RIDs.
         if (PlateTexture is not null) PlateTexture.TextureRdRid = new Rid();
         if (FrontierTexture is not null) FrontierTexture.TextureRdRid = new Rid();
         PlateTexture = null;
         FrontierTexture = null;
 
         var rd = _rd;
-        _rd = null;
         if (rd is null) return;
 
         RenderingServer.CallOnRenderThread(Callable.From(() =>
         {
-            for (var i = _ownedRids.Count - 1; i >= 0; i--)
-            {
-                if (_ownedRids[i].IsValid) rd.FreeRid(_ownedRids[i]);
-            }
-            _ownedRids.Clear();
+            FreeOwnedRidsOnRenderThread(rd);
+            _rd = null;
         }));
+    }
+
+    private void FreeOwnedRidsOnRenderThread(RenderingDevice rd)
+    {
+        if (rd is null) return;
+        for (var i = _ownedRids.Count - 1; i >= 0; i--)
+        {
+            if (_ownedRids[i].IsValid) rd.FreeRid(_ownedRids[i]);
+        }
+        _ownedRids.Clear();
     }
 
     private bool InitializeOnRenderThread(
@@ -312,7 +360,7 @@ internal sealed class GpuMapCompute
 
                 var blurFmt = new RDTextureFormat
                 {
-                    Format = RenderingDevice.DataFormat.R16Sfloat,
+                    Format = RenderingDevice.DataFormat.R32Sfloat,
                     Width = (uint)_frontierW,
                     Height = (uint)_frontierH,
                     Depth = 1,
@@ -377,17 +425,16 @@ internal sealed class GpuMapCompute
             }
 
             // Initial dispatch so textures are valid on frame 0!
+            // Texture2Drd.TextureRdRid is bound strictly on the main thread inside BindTexturesOnMainThread().
             DispatchPlateOnRenderThread(hasOverride, shades);
             if (_hasFrontier)
                 DispatchFrontierOnRenderThread(hasOverride);
-
-            PlateTexture.TextureRdRid = _plateTex;
-            if (_hasFrontier) FrontierTexture.TextureRdRid = _frontierTex;
             return true;
         }
         catch (Exception ex)
         {
             _failureReason = ex.Message;
+            FreeOwnedRidsOnRenderThread(_rd);
             GD.PushWarning($"[dof] GPU map compute init unavailable ({ex.Message}); falling back to incremental Rust SIMD.");
             return false;
         }
@@ -431,6 +478,7 @@ internal sealed class GpuMapCompute
             ph = nh;
         }
         _rd.ComputeListEnd();
+        System.Threading.Interlocked.Increment(ref _plateDispatches);
     }
 
     private void DispatchFrontierOnRenderThread(bool hasOverride)
@@ -504,6 +552,7 @@ internal sealed class GpuMapCompute
             ph = nh;
         }
         _rd.ComputeListEnd();
+        System.Threading.Interlocked.Increment(ref _frontierDispatches);
     }
 
     private Rid CompileCompute(string name, string glsl)
@@ -536,7 +585,9 @@ internal sealed class GpuMapCompute
 
     private Rid Track(Rid rid)
     {
-        if (rid.IsValid) _ownedRids.Add(rid);
+        if (!rid.IsValid)
+            throw new InvalidOperationException("RenderingDevice returned invalid RID during GPU map compute setup.");
+        _ownedRids.Add(rid);
         return rid;
     }
 
@@ -587,15 +638,14 @@ internal sealed class GpuMapCompute
     private static bool FillProvLut(ushort[] owners, ushort[] authoredOwners, byte[] dstBytes)
     {
         Array.Clear(dstBytes);
-        if (owners is null || owners.Length == 0) return false;
+        if (owners is null || owners.Length == 0 || authoredOwners is null || authoredOwners.Length == 0) return false;
         var lut = MemoryMarshal.Cast<byte, ushort>(dstBytes.AsSpan());
-        var limit = Math.Min(owners.Length, 65536);
+        var limit = Math.Min(Math.Min(owners.Length, authoredOwners.Length), 65536);
         var hasOverride = false;
         for (var p = 1; p < limit; p++)
         {
             var owner = owners[p];
-            var same = authoredOwners is not null && p < authoredOwners.Length && authoredOwners[p] == owner;
-            if (!same)
+            if (authoredOwners[p] != owner)
             {
                 lut[p] = owner == 0 ? (ushort)65535 : owner;
                 hasOverride = true;
@@ -824,7 +874,7 @@ void main() {
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(set = 0, binding = 0, r32ui) readonly uniform uimage2D in_seed;
-layout(set = 0, binding = 1, r16f) writeonly uniform image2D out_blur_h;
+layout(set = 0, binding = 1, r32f) writeonly uniform image2D out_blur_h;
 
 layout(push_constant) uniform Params {
     uint width;
@@ -872,7 +922,7 @@ void main() {
 #version 450
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(set = 0, binding = 0, r16f) readonly uniform image2D in_blur_h;
+layout(set = 0, binding = 0, r32f) readonly uniform image2D in_blur_h;
 layout(set = 0, binding = 1, r8) writeonly uniform image2D out_frontier;
 
 layout(push_constant) uniform Params {

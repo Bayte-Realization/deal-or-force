@@ -117,8 +117,9 @@ public static partial class NativeRasterBake
         byte* outPixelsRgba,
         uint outPixelsLen);
 
-    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern unsafe int dof_raster_paint_plate_rect_v1(
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_raster_paint_plate_rect_v1(
         uint width,
         uint height,
         ushort* sourceHolders,
@@ -140,8 +141,9 @@ public static partial class NativeRasterBake
         byte* outPixelsRgba,
         uint outPixelsLen);
 
-    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern unsafe int dof_raster_bake_frontier_rect_v1(
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_raster_bake_frontier_rect_v1(
         IntPtr bake,
         ushort* owners,
         uint ownersLen,
@@ -156,8 +158,9 @@ public static partial class NativeRasterBake
         byte* outBytes,
         uint outLen);
 
-    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern unsafe int dof_raster_mipmap_rgba8_rect_v1(
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_raster_mipmap_rgba8_rect_v1(
         uint width,
         uint height,
         uint rectX0,
@@ -167,8 +170,9 @@ public static partial class NativeRasterBake
         byte* mipBuffer,
         uint mipLen);
 
-    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern unsafe int dof_raster_mipmap_r8_rect_v1(
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_raster_mipmap_r8_rect_v1(
         uint width,
         uint height,
         uint rectX0,
@@ -299,13 +303,15 @@ public static partial class NativeRasterBake
             fixed (ushort* authoredOwnersPtr = authoredOwners)
             fixed (byte* outPtr = output)
             {
-                return dof_raster_bake_frontier_rect_v1(
+                var ok = dof_raster_bake_frontier_rect_v1(
                     entry.Handle.DangerousGetHandle(),
                     ownersPtr, owners is null ? 0u : (uint)owners.Length,
                     authoredOwnersPtr, authoredOwners is null ? 0u : (uint)authoredOwners.Length,
                     cap, smoothing,
                     (uint)x0, (uint)y0, (uint)x1, (uint)y1,
                     outPtr, (uint)output.Length) == 0;
+                GC.KeepAlive(entry.Handle);
+                return ok;
             }
         }
     }

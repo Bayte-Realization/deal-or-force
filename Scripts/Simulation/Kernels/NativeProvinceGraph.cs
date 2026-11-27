@@ -176,8 +176,9 @@ public sealed partial class NativeProvinceGraph
         int* outComponentCount,
         int* outMemberCount);
 
-    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern unsafe int dof_graph_border_pairs_v1(
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_graph_border_pairs_v1(
         IntPtr graph,
         IntPtr scratch,
         ushort* controllers,
@@ -186,8 +187,9 @@ public sealed partial class NativeProvinceGraph
         uint outCapacity,
         uint* outCount);
 
-    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern unsafe int dof_graph_occupation_census_v1(
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_graph_occupation_census_v1(
         IntPtr scratch,
         ushort* provinceToNation,
         ushort* controllers,
@@ -202,8 +204,9 @@ public sealed partial class NativeProvinceGraph
         uint occCapacity,
         uint* outOccLen);
 
-    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern unsafe int dof_graph_flood_vision_v1(
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_graph_flood_vision_v1(
         IntPtr graph,
         IntPtr scratch,
         byte* reach,
@@ -212,8 +215,9 @@ public sealed partial class NativeProvinceGraph
         byte* seedDepths,
         uint seedCount);
 
-    [DllImport(NativeKernelsLoader.LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern unsafe int dof_graph_seed_territory_vision_v1(
+    [LibraryImport(NativeKernelsLoader.LibraryName)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe partial int dof_graph_seed_territory_vision_v1(
         IntPtr graph,
         IntPtr scratch,
         int* ownedProvinces,
@@ -616,6 +620,8 @@ public sealed partial class NativeProvinceGraph
                     ws.Scratch.DangerousGetHandle(),
                     pCtrl, (uint)controllers.Length,
                     pOut, (uint)ws.BorderPairsBuffer.Length, &count);
+                GC.KeepAlive(_graph);
+                GC.KeepAlive(ws.Scratch);
                 if (status == 0)
                 {
                     pairs = ws.BorderPairsBuffer.AsSpan(0, (int)count);
@@ -675,6 +681,7 @@ public sealed partial class NativeProvinceGraph
                     pPtn, pCtrl, arrayLen, (uint)provinceCount,
                     pHk, pHc, (uint)ws.HomeKeysBuffer.Length, &hLen,
                     pOp, pOc, (uint)ws.OccPairsBuffer.Length, &oLen);
+                GC.KeepAlive(ws.Scratch);
                 if (status == 0)
                 {
                     homeKeys = ws.HomeKeysBuffer.AsSpan(0, (int)hLen);
@@ -713,11 +720,14 @@ public sealed partial class NativeProvinceGraph
         fixed (int* pSeeds = seeds)
         fixed (byte* pDepths = depths)
         {
-            return dof_graph_flood_vision_v1(
+            var ok = dof_graph_flood_vision_v1(
                 _graph.DangerousGetHandle(),
                 ws.Scratch.DangerousGetHandle(),
                 pReach, (uint)reach.Length,
                 pSeeds, pDepths, (uint)seeds.Length) == 0;
+            GC.KeepAlive(_graph);
+            GC.KeepAlive(ws.Scratch);
+            return ok;
         }
     }
 
@@ -736,11 +746,14 @@ public sealed partial class NativeProvinceGraph
         fixed (int* pOwned = ownedProvinces)
         fixed (byte* pReach = reach)
         {
-            return dof_graph_seed_territory_vision_v1(
+            var ok = dof_graph_seed_territory_vision_v1(
                 _graph.DangerousGetHandle(),
                 ws.Scratch.DangerousGetHandle(),
                 pOwned, (uint)ownedProvinces.Length,
                 borderDepth, pReach, (uint)reach.Length) == 0;
+            GC.KeepAlive(_graph);
+            GC.KeepAlive(ws.Scratch);
+            return ok;
         }
     }
 }

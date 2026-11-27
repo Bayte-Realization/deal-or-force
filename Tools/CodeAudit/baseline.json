@@ -1,5 +1,5 @@
 {
-  "compileErrors": 31,
+  "compileErrors": 40,
   "godotInSimulationUses": 0,
   "maxFileLines": 3281,
   "maxMethodLines": 1347,
@@ -7,7 +7,7 @@
   "simulationStaticMutable": 1405,
   "deadCandidates": 169,
   "totalFiles": 1012,
-  "totalLines": 354276,
+  "totalLines": 354452,
   "files": {
     "Scripts/AudioAssets.cs": {
       "lines": 46,
@@ -1375,7 +1375,7 @@
       "magicNumbers": 10
     },
     "Scripts/Simulation/DemographyRulesHook.cs": {
-      "lines": 160,
+      "lines": 163,
       "maxMethodLines": 28,
       "maxCyclomatic": 3,
       "staticMutable": 1,
@@ -1977,21 +1977,21 @@
       "magicNumbers": 15
     },
     "Scripts/Simulation/Kernels/NativePoliticalKernels.cs": {
-      "lines": 101,
+      "lines": 102,
       "maxMethodLines": 63,
       "maxCyclomatic": 22,
       "staticMutable": 0,
       "magicNumbers": 1
     },
     "Scripts/Simulation/Kernels/NativeProvinceGraph.cs": {
-      "lines": 747,
+      "lines": 760,
       "maxMethodLines": 134,
       "maxCyclomatic": 34,
       "staticMutable": 0,
       "magicNumbers": 13
     },
     "Scripts/Simulation/Kernels/NativeRasterBake.cs": {
-      "lines": 648,
+      "lines": 654,
       "maxMethodLines": 70,
       "maxCyclomatic": 24,
       "staticMutable": 0,
@@ -2985,8 +2985,8 @@
       "magicNumbers": 11
     },
     "Scripts/Simulation/ProvinceRasterBounds.cs": {
-      "lines": 377,
-      "maxMethodLines": 63,
+      "lines": 387,
+      "maxMethodLines": 73,
       "maxCyclomatic": 19,
       "staticMutable": 0,
       "magicNumbers": 17
@@ -2999,7 +2999,7 @@
       "magicNumbers": 86
     },
     "Scripts/Simulation/ProvinceVision.FastPath.cs": {
-      "lines": 277,
+      "lines": 282,
       "maxMethodLines": 85,
       "maxCyclomatic": 29,
       "staticMutable": 0,
@@ -4077,8 +4077,8 @@
       "magicNumbers": 89
     },
     "Scripts/Simulation/WorldVisualSnapshot.cs": {
-      "lines": 351,
-      "maxMethodLines": 82,
+      "lines": 353,
+      "maxMethodLines": 83,
       "maxCyclomatic": 20,
       "staticMutable": 0,
       "magicNumbers": 4
@@ -4266,8 +4266,8 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobeLockFreeSync.cs": {
-      "lines": 355,
-      "maxMethodLines": 85,
+      "lines": 375,
+      "maxMethodLines": 74,
       "maxCyclomatic": 39,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -4350,9 +4350,9 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobePlateRepaint.cs": {
-      "lines": 410,
+      "lines": 457,
       "maxMethodLines": 85,
-      "maxCyclomatic": 29,
+      "maxCyclomatic": 28,
       "staticMutable": 0,
       "magicNumbers": 0
     },
@@ -4413,7 +4413,7 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GlobePresentation.cs": {
-      "lines": 2125,
+      "lines": 2129,
       "maxMethodLines": 514,
       "maxCyclomatic": 103,
       "staticMutable": 0,
@@ -4532,8 +4532,8 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/GpuMapCompute.cs": {
-      "lines": 939,
-      "maxMethodLines": 175,
+      "lines": 989,
+      "maxMethodLines": 174,
       "maxCyclomatic": 18,
       "staticMutable": 0,
       "magicNumbers": 0
@@ -4560,9 +4560,9 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/MilitaryPresentation.cs": {
-      "lines": 1254,
+      "lines": 1258,
       "maxMethodLines": 185,
-      "maxCyclomatic": 66,
+      "maxCyclomatic": 68,
       "staticMutable": 3,
       "magicNumbers": 0
     },
@@ -4581,9 +4581,9 @@
       "magicNumbers": 0
     },
     "Scripts/gfx/SurfaceBattleBadge.cs": {
-      "lines": 472,
+      "lines": 483,
       "maxMethodLines": 55,
-      "maxCyclomatic": 22,
+      "maxCyclomatic": 23,
       "staticMutable": 2,
       "magicNumbers": 0
     },

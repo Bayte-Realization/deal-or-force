@@ -88,6 +88,7 @@ public struct VisualBattleItem
     public bool HasRounds;
     public bool HasPocketCollapse;
     public bool HasEncircledDefenders;
+    public bool VisibleToPlayer;
     public string AttackerColorHex;
     public string DefenderColorHex;
 }
@@ -333,6 +334,7 @@ public sealed class WorldVisualState
                 HasRounds = battle.Rounds.Count > 0,
                 HasPocketCollapse = telemetry.HasPocketCollapse,
                 HasEncircledDefenders = telemetry.HasEncircledDefenders,
+                VisibleToPlayer = CampaignIntel.PlayerCanSeeBattle(campaign, battle),
                 AttackerColorHex = attNation?.Color ?? "",
                 DefenderColorHex = defNation?.Color ?? ""
             };

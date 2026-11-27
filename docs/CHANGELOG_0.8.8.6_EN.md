@@ -20,7 +20,7 @@ PortAlpha 0.8.8.6 advances the **PortAlpha** publication branch (Android `versio
 ## Pillar 3 — Zero-`SubViewport` GPU-Instanced Battle Badges & Unmanaged `Image` Leak Closure
 
 - **Analytical SDF `BattleBadgeGpu` (`Scripts/gfx/SurfaceBattleBadge.cs`, `Scripts/gfx/MilitaryPresentation.cs`).** Replaced per-battle `128×128` `SubViewport` FBOs with a single `MultiMeshInstance3D` draw call using an analytical SDF medallion shader, 15-bit packed defender RGB, `Ui.Colour` tokens, and an 18 KB `384×48` R8 digit atlas (`-1.5–2.25 GB` peak VRAM, `-960` scene-tree nodes, zero `SubViewport` allocations).
-- **Unmanaged `Image` disposal fixes.** Closed undisposed temporary `Image` handles across `ShellMinimapView`, `GlobePackedTextures`, `GlobeMovements`, `GlobeCities`, and `GlobePresentation.FleetsAndCapitals`.
+- **Unmanaged `Image` disposal fixes.** Closed undisposed temporary `Image` handles across `GlobePackedTextures`, `GlobeMovements`, `GlobeCities`, and `GlobePresentation.FleetsAndCapitals`.
 
 ## Pillar 4 — Smooth Anti-Burst Time Pacing & Verbose Log Gating
 

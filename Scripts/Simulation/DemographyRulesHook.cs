@@ -46,6 +46,9 @@ internal static class DemographyRulesHook
         _bundle = new HookBundle(workingShare, fertility, mortality, stepCohorts, builtInEquivalent);
     }
 
+    internal static object? CaptureSnapshot() => _bundle;
+    internal static void RestoreSnapshot(object? snapshot) => _bundle = snapshot as HookBundle;
+
     internal static float WorkingShare(float youngShare, float oldShare)
     {
         var bundle = _bundle;

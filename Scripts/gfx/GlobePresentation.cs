@@ -907,9 +907,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     ? result.FrontierAuthored : null;
                 result.FrontierAuthored = null;
                 ApplyFrontier(result.Frontier);
+                if (result.Frontier is not null) FrontierApplied(result.PlateOwners);
                 result.Frontier?.Dispose();
                 result.Frontier = null;
-                TryStartGpuMapCompute(_provinceTopology, result.PlateOwners);
                 WakeGlobeRendering();
                 break;
             }
@@ -993,6 +993,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 // moves, and the whole point of keeping it is to be able to tell that it did.
                 _paintedOwner = (ushort[])result.Provinces.ProvinceToNation.Clone();
                 _labelOwner = (ushort[])result.Provinces.ProvinceToNation.Clone();
+
+                // Start Forward+ GPU map compute (PoliticalPlate + 6-pass 1+JFA FrontierField) now that
+                // both _provinceTopology and _paintedOwner are populated.
+                TryStartGpuMapCompute(_provinceTopology, _plateShownOwners ?? _paintedOwner);
 
                 // And the topology keeps its own copy of the authored world, for the next
                 // campaign started this session: the simulation writes its borders into

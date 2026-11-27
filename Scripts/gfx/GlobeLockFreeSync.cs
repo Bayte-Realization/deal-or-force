@@ -18,6 +18,7 @@ public sealed partial class GlobePresentation
     private long _lastLockFreeVisualVersion = -1;
     private long _lastLockFreeBattleHours = -1;
     private int _lastLockFreeBattleCount = -1;
+    private bool _lastLockFreeBattleFog;
     private int _lastLockFreeNationPaletteHash;
 
     /// <summary>
@@ -86,10 +87,11 @@ public sealed partial class GlobePresentation
             PaintLiveWarFrontsLockFree(topology, visual);
         }
 
-        // 6. Update GPU-instanced battle badges lock-free (respecting Fog of War for non-player battles).
-        if (MilitaryMarkersEnabled && !FogOfWarActive &&
+        // 6. Update GPU-instanced battle badges lock-free (honoring Fog of War via VisualBattleItem.VisibleToPlayer).
+        if (MilitaryMarkersEnabled &&
             (_lastLockFreeBattleHours != visual.ElapsedHours ||
              _lastLockFreeBattleCount != visual.BattleCount ||
+             _lastLockFreeBattleFog != FogOfWarActive ||
              mapChanged || frontChanged))
         {
             SyncBattleMarkersLockFree(topology, visual);
@@ -232,9 +234,14 @@ public sealed partial class GlobePresentation
             _battleAnchors = new ProvinceBoundaryAnchor(topology);
         }
 
+        var fogActive = FogOfWarActive;
         _activeBattleIds.Clear();
         for (var i = 0; i < visual.BattleCount; i++)
-            _activeBattleIds.Add(visual.Battles[i].BattleId);
+        {
+            ref readonly var item = ref visual.Battles[i];
+            if (!fogActive || item.VisibleToPlayer)
+                _activeBattleIds.Add(item.BattleId);
+        }
 
         _finishedBattleIds.Clear();
         foreach (var id in _battleMarkers.Keys)
@@ -251,6 +258,7 @@ public sealed partial class GlobePresentation
         for (var i = 0; i < visual.BattleCount; i++)
         {
             ref readonly var item = ref visual.Battles[i];
+            if (!_activeBattleIds.Contains(item.BattleId)) continue;
             if (!GlobeLineSanity.TryValidateProvinceId(item.ProvinceId, topology.ProvinceCount, topology.ProvinceCenterCell))
                 continue;
             if (!_battleMarkers.TryGetValue(item.BattleId, out var marker))
@@ -258,54 +266,66 @@ public sealed partial class GlobePresentation
                 marker = new BattleMarkerEntry { BattleId = item.BattleId };
                 _battleMarkers[item.BattleId] = marker;
             }
-
-            var location = topology.CenterOf(item.ProvinceId);
-            if (!GlobeLineSanity.IsValidGeo(location.Latitude, location.Longitude)) continue;
-            var origin = 0;
-            if (item.BestOriginProvinceId > 0 &&
-                GlobeLineSanity.TryValidateProvinceId(item.BestOriginProvinceId, topology.ProvinceCount, topology.ProvinceCenterCell) &&
-                _battleAnchors.TryFind(item.ProvinceId, item.BestOriginProvinceId, out var border) &&
-                GlobeLineSanity.IsValidGeo(border.Latitude, border.Longitude))
-            {
-                location = border;
-                origin = item.BestOriginProvinceId;
-            }
-
-            marker.ProvinceId = item.ProvinceId;
-            marker.AttackingProvinceId = origin;
-            marker.Latitude = location.Latitude;
-            marker.Longitude = location.Longitude;
-            marker.Normal = GlobeLineSanity.TrySafeNormalize(ToNum(SurfacePoint(location.Latitude, location.Longitude, 1f)), out var unitNorm)
-                ? ToGd(unitNorm)
-                : Vector3.Up;
-
-            var own = playerId >= 0 && (item.AttackerId == playerId || item.DefenderId == playerId);
-            var attacks = !own || item.AttackerId == playerId;
-            var share = attacks ? item.AttackerProgress : 1f - item.AttackerProgress;
-            var momentum = attacks ? item.Momentum : -item.Momentum;
-            var pocketAlert = item.HasPocketCollapse || item.HasEncircledDefenders;
-            var known = item.AssessmentKnown || item.HasRounds;
-            var tone = !item.AssessmentKnown ? "text.muted" : !own ? "state.info" :
-                share > .55f ? "state.positive" : share < .45f ? "state.negative" : "state.warning";
-            var text = known ? $"{share * 100:0}" : "?";
-            _battleReadouts[item.BattleId] = (text, share, tone);
-
-            var attColor = !string.IsNullOrEmpty(item.AttackerColorHex)
-                ? new Color(item.AttackerColorHex) : Ui.Colour("state.negative");
-            var defColor = !string.IsNullOrEmpty(item.DefenderColorHex)
-                ? new Color(item.DefenderColorHex) : Ui.Colour("state.info");
-
-            marker.Share = known ? Math.Clamp(share, 0f, 1f) : -1f;
-            marker.DisplayPercent = known ? MathF.Round(Math.Clamp(share, 0f, 1f) * 100f) : -1f;
-            marker.Flags = BattleBadgeGpu.PackFlags(known, pocketAlert, thirdPartyInfo: known && !own, momentum);
-            marker.AttackerColor = attColor;
-            marker.PackedDefenderColor = BattleBadgeGpu.PackDefenderColor(defColor);
+            UpdateLockFreeBattleMarker(marker, in item, topology, playerId, fogActive);
         }
 
         _lastLockFreeBattleHours = visual.ElapsedHours;
         _lastLockFreeBattleCount = visual.BattleCount;
+        _lastLockFreeBattleFog = fogActive;
         FinishBattleMarkers();
         WakeGlobeRendering();
+    }
+
+    private void UpdateLockFreeBattleMarker(
+        BattleMarkerEntry marker,
+        in Simulation.VisualBattleItem item,
+        Simulation.ProvinceTopology topology,
+        int playerId,
+        bool fogActive)
+    {
+        var location = topology.CenterOf(item.ProvinceId);
+        if (!GlobeLineSanity.IsValidGeo(location.Latitude, location.Longitude)) return;
+        var origin = 0;
+        if (item.BestOriginProvinceId > 0 &&
+            GlobeLineSanity.TryValidateProvinceId(item.BestOriginProvinceId, topology.ProvinceCount, topology.ProvinceCenterCell) &&
+            _battleAnchors.TryFind(item.ProvinceId, item.BestOriginProvinceId, out var border) &&
+            GlobeLineSanity.IsValidGeo(border.Latitude, border.Longitude))
+        {
+            location = border;
+            origin = item.BestOriginProvinceId;
+        }
+
+        marker.ProvinceId = item.ProvinceId;
+        marker.AttackingProvinceId = origin;
+        marker.Latitude = location.Latitude;
+        marker.Longitude = location.Longitude;
+        marker.Normal = GlobeLineSanity.TrySafeNormalize(ToNum(SurfacePoint(location.Latitude, location.Longitude, 1f)), out var unitNorm)
+            ? ToGd(unitNorm)
+            : Vector3.Up;
+
+        var own = playerId >= 0 && (item.AttackerId == playerId || item.DefenderId == playerId);
+        var detailed = !fogActive || own;
+        var attacks = !own || item.AttackerId == playerId;
+        var share = detailed
+            ? (attacks ? item.AttackerProgress : 1f - item.AttackerProgress)
+            : (attacks ? item.AssessmentAttackerShare : item.AssessmentDefenderShare);
+        var momentum = detailed ? (attacks ? item.Momentum : -item.Momentum) : 0f;
+        var pocketAlert = detailed && (item.HasPocketCollapse || item.HasEncircledDefenders);
+        var known = detailed && (item.AssessmentKnown || item.HasRounds);
+        var tone = !detailed || !item.AssessmentKnown ? "text.muted" : !own ? "state.info" :
+            share > .55f ? "state.positive" : share < .45f ? "state.negative" : "state.warning";
+        _battleReadouts[item.BattleId] = (known ? $"{share * 100:0}" : "?", share, tone);
+
+        var attColor = !string.IsNullOrEmpty(item.AttackerColorHex)
+            ? Color.FromString(item.AttackerColorHex, Ui.Colour("state.negative")) : Ui.Colour("state.negative");
+        var defColor = !string.IsNullOrEmpty(item.DefenderColorHex)
+            ? Color.FromString(item.DefenderColorHex, Ui.Colour("state.info")) : Ui.Colour("state.info");
+
+        marker.Share = known ? Math.Clamp(share, 0f, 1f) : -1f;
+        marker.DisplayPercent = known ? MathF.Round(Math.Clamp(share, 0f, 1f) * 100f) : -1f;
+        marker.Flags = BattleBadgeGpu.PackFlags(known, pocketAlert, thirdPartyInfo: known && !own, momentum);
+        marker.AttackerColor = attColor;
+        marker.PackedDefenderColor = BattleBadgeGpu.PackDefenderColor(defColor);
     }
 
     private void RefreshCountryLabelPlacementLockFree(CampaignRenderSnapshot snap)

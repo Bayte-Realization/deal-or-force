@@ -89,17 +89,15 @@ impl DofRasterBake {
         let w = self.width;
         let h = self.height;
         let n_threads = resolve_threads(threads, h);
-        let has_prov = !self.cell_to_province.is_empty() && !owners.is_empty();
+        let has_prov = !self.cell_to_province.is_empty() && !owners.is_empty() && !authored_owners.is_empty();
         let mut has_override = false;
 
         if has_prov {
             self.prov_lut.fill(0);
-            let limit = owners.len().min(65_536);
+            let limit = owners.len().min(authored_owners.len()).min(65_536);
             for p in 1..limit {
                 let owner = owners[p];
-                let same_authored =
-                    !authored_owners.is_empty() && p < authored_owners.len() && authored_owners[p] == owner;
-                if !same_authored {
+                if authored_owners[p] != owner {
                     self.prov_lut[p] = if owner == 0 { 65_535 } else { owner };
                     has_override = true;
                 }
@@ -208,16 +206,14 @@ impl DofRasterBake {
             return self.bake_frontier(owners, authored_owners, cap, smoothing, 0, out_bytes);
         }
 
-        let has_prov = !self.cell_to_province.is_empty() && !owners.is_empty();
+        let has_prov = !self.cell_to_province.is_empty() && !owners.is_empty() && !authored_owners.is_empty();
         let mut has_override = false;
         if has_prov {
             self.prov_lut.fill(0);
-            let limit = owners.len().min(65_536);
+            let limit = owners.len().min(authored_owners.len()).min(65_536);
             for p in 1..limit {
                 let owner = owners[p];
-                let same_authored =
-                    !authored_owners.is_empty() && p < authored_owners.len() && authored_owners[p] == owner;
-                if !same_authored {
+                if authored_owners[p] != owner {
                     self.prov_lut[p] = if owner == 0 { 65_535 } else { owner };
                     has_override = true;
                 }

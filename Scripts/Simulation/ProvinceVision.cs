@@ -220,7 +220,7 @@ public static partial class CampaignIntel
 
             var hasBattles = EnsureActorIndex(c, cache, stamp, map, Math.Clamp(c.Defines.LandingVisionRangeDegrees, .1f, 3f));
             if (TryReuseViewerVision(c, cache, view, nation, viewerId, territoryMatched, hasBattles,
-                    borderDepth, armyDepth, out var actorSig, out var intelCount, out var intelEnabled))
+                    borderDepth, armyDepth, out var actorSig, out var intelCount, out var intelEnabled, out var hasAirRecon))
                 return view;
 
             view.Revision++;
@@ -281,7 +281,7 @@ public static partial class CampaignIntel
             // What agents report and what reconnaissance flights photograph: seen, not seen past.
             IntelNetworks.RevealInto(c, viewerId, view.Reach);
             AirReconnaissance.RevealInto(c, viewerId, view.Reach);
-            StampViewerVision(view, cache, actorSig, intelCount, intelEnabled);
+            StampViewerVision(view, cache, actorSig, intelCount, intelEnabled, hasAirRecon);
             return view;
         }
     }

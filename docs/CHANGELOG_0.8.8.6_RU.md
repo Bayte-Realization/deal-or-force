@@ -20,7 +20,7 @@
 ## Компонент 3 — GPU-инстансинг значков боёв без `SubViewport` и закрытие утечек `Image`
 
 - **Аналитический SDF `BattleBadgeGpu` (`Scripts/gfx/SurfaceBattleBadge.cs`, `Scripts/gfx/MilitaryPresentation.cs`).** Отдельные `128×128` `SubViewport` FBO заменены на один `MultiMeshInstance3D` draw call с аналитическим SDF-шейдером медальона, 15-битной упаковкой цвета защитника, токенами `Ui.Colour` и 18 КБ атласом цифр `384×48` R8 (`-1.5–2.25 ГБ` пиковой VRAM, `-960` узлов сцены, 0 `SubViewport`).
-- **Закрытие утечек неуправляемых `Image`.** Добавлен `using`/`.Dispose()` для временных `Image` в `ShellMinimapView`, `GlobePackedTextures`, `GlobeMovements`, `GlobeCities` и `GlobePresentation.FleetsAndCapitals`.
+- **Закрытие утечек неуправляемых `Image`.** Добавлен `using`/`.Dispose()` для временных `Image` в `GlobePackedTextures`, `GlobeMovements`, `GlobeCities` и `GlobePresentation.FleetsAndCapitals`.
 
 ## Компонент 4 — Анти-рывковый темп времени и отключение спама `simulation.log`
 

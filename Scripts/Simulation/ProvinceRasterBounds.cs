@@ -160,9 +160,19 @@ public sealed class ProvinceRasterBounds
                 return true;
             }
 
-            var x0 = Math.Max(0, _minX[p] - pad);
+            // Horizontal equirectangular wrapping means any province whose padded halo reaches
+            // x < 0 or x > Width affects columns on the opposite side of the antimeridian seam.
+            // Fall back cleanly to a full repaint to preserve 100% bit-exact border & distance parity.
+            if (_minX[p] < pad || _maxX[p] + 1 + pad > Width)
+            {
+                needsFullRepaint = true;
+                output.Clear();
+                return true;
+            }
+
+            var x0 = _minX[p] - pad;
             var y0 = Math.Max(0, _minY[p] - pad);
-            var x1 = Math.Min(Width, _maxX[p] + 1 + pad);
+            var x1 = _maxX[p] + 1 + pad;
             var y1 = Math.Min(Height, _maxY[p] + 1 + pad);
 
             if (disallowDateLineEdge && (x0 < pad || x1 + pad > Width))

@@ -143,11 +143,13 @@ public static partial class CampaignIntel
         int armyDepth,
         out ulong actorSig,
         out int intelCount,
-        out bool intelEnabled)
+        out bool intelEnabled,
+        out bool hasAirRecon)
     {
         actorSig = ComputeViewerVisionSignature(c, cache, nation, viewerId, hasBattles,
             borderDepth, armyDepth, out intelCount, out intelEnabled);
-        if (!territoryMatched || !view.FullReachValid)
+        hasAirRecon = HasActiveAirReconMission(c, viewerId);
+        if (hasAirRecon || !territoryMatched || !view.FullReachValid)
             return false;
         if (view.LastActorSig != actorSig || view.LastManualEpoch != cache.ManualEpoch)
             return false;
@@ -155,7 +157,7 @@ public static partial class CampaignIntel
             return false;
         if (intelEnabled && view.LastIntelHeldRevision != cache.HeldRevision)
             return false;
-        return !HasActiveAirReconMission(c, viewerId);
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -164,9 +166,12 @@ public static partial class CampaignIntel
         Cache cache,
         ulong actorSig,
         int intelCount,
-        bool intelEnabled)
+        bool intelEnabled,
+        bool hasAirRecon)
     {
-        view.FullReachValid = true;
+        // Never mark FullReachValid when AirReconnaissance lifted fog over enemy ground;
+        // otherwise stopping/losing the recon flight on the next tick would reuse stale vision!
+        view.FullReachValid = !hasAirRecon;
         view.LastActorSig = actorSig;
         view.LastManualEpoch = cache.ManualEpoch;
         view.LastIntelCount = intelCount;
