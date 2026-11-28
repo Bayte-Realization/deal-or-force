@@ -163,6 +163,7 @@ public static class FrontManager
         public int RouteGeneration;
         public readonly Queue<int> RouteFrontier = new();
         public readonly List<int> RouteScratch = new();
+        public readonly HashSet<ushort> RouteAllowed = new();
     }
 
     private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
@@ -407,13 +408,10 @@ public static class FrontManager
     {
         var nation = campaign.NationById(nationId);
         if (nation is null) return;
-        // Its own sector: a coalition's front runs past every member, and a division
-        // cannot march through an ally's country to stand on its border.
         Posts.Clear();
-        // The set itself, not the read-only view: the same members in the same order,
-        // without boxing an enumerator for every country on every side every day.
+        // Friendly-controlled front posts (own ground, war allies, subjects/overlords, military access).
         foreach (var province in war.FriendlyFrontSet(nationId))
-            if (campaign.ProvinceController[province] == (ushort)nation.MapIndex) Posts.Add(province);
+            if (WarCoalition.CanHoldFrontPost(campaign, nation, province)) Posts.Add(province);
         Posts.Sort();
         Arrange(campaign, nation, war, null);
     }
@@ -500,12 +498,10 @@ public static class FrontManager
             }
         }
         Posts.Clear();
-        var controllers = campaign.ProvinceController;
-        var ownController = (ushort)nation.MapIndex;
         if (line.Kind == FrontLineKind.Offensive)
         {
             foreach (var province in line.SourceProvinces)
-                if (province > 0 && province < controllers.Length && controllers[province] == ownController) Posts.Add(province);
+                if (WarCoalition.CanHoldFrontPost(campaign, nation, province)) Posts.Add(province);
         }
         else
         {
@@ -513,7 +509,7 @@ public static class FrontManager
             for (var i = 0; i < sequence.Count; i++)
             {
                 var province = sequence[i];
-                if (province > 0 && province < controllers.Length && controllers[province] == ownController) Posts.Add(province);
+                if (WarCoalition.CanHoldFrontPost(campaign, nation, province)) Posts.Add(province);
             }
         }
         Posts.Sort();
@@ -1190,6 +1186,9 @@ public static class FrontManager
     {
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
+        var allowed = Active.RouteAllowed;
+        allowed.Clear();
+        MilitaryAccess.FillControllers(campaign, nation.Id, allowed);
         DonorFrontier.Clear();
         if (!DonorComponents.TryGetValue(hole, out var component) && !topology.IsWater(hole))
         {
@@ -1202,7 +1201,7 @@ public static class FrontManager
             var current = DonorFrontier.Dequeue();
             foreach (var next in topology.Neighbors[current])
             {
-                if (controllers[next] != nation.MapIndex || topology.IsWater(next) ||
+                if (!allowed.Contains(controllers[next]) || topology.IsWater(next) ||
                     !DonorComponents.TryAdd(next, component)) continue;
                 DonorFrontier.Enqueue(next);
             }
@@ -1382,15 +1381,15 @@ public static class FrontManager
     }
 
     private static bool TryFindRoute(ProvinceTopology topology, int startProvince, int targetProvince,
-        ushort nationMapIndex, ushort[] controllers, List<int> destination)
+        HashSet<ushort> allowed, ushort[] controllers, List<int> destination)
     {
         destination.Clear();
         var neighbors = topology.Neighbors;
         if (startProvince <= 0 || targetProvince <= 0 ||
             startProvince >= neighbors.Length || targetProvince >= neighbors.Length ||
             controllers is null || controllers.Length < neighbors.Length ||
-            controllers[startProvince] != nationMapIndex ||
-            controllers[targetProvince] != nationMapIndex)
+            !allowed.Contains(controllers[startProvince]) ||
+            !allowed.Contains(controllers[targetProvince]))
             return false;
         if (startProvince == targetProvince) return true;
         if (topology.IsWater(startProvince) || topology.IsWater(targetProvince)) return false;
@@ -1423,7 +1422,7 @@ public static class FrontManager
             for (var i = 0; i < adj.Length; i++)
             {
                 var next = adj[i];
-                if (stamp[next] == generation || controllers[next] != nationMapIndex || topology.IsWater(next)) continue;
+                if (stamp[next] == generation || !allowed.Contains(controllers[next]) || topology.IsWater(next)) continue;
                 stamp[next] = generation;
                 previous[next] = current;
                 queue.Enqueue(next);
@@ -1437,25 +1436,20 @@ public static class FrontManager
         return true;
     }
 
-    /// <summary>
-    /// Send one division to one post, keeping everything else about it: its duty, its war, its
-    /// line, its plan. A march already under way in the same direction keeps its progress.
-    /// </summary>
+    /// <summary>Send one division to one post, keeping its duty, war, line and plan.</summary>
     private static bool Repost(Campaign campaign, Nation nation, Army army, int post, ref int multiStackPosts)
     {
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         var route = Active.RouteScratch;
         route.Clear();
-        // Battle withdrawals require a preflight and covering force; they use
-        // FrontDisengagement, not this ordinary marching path.
         if (army.InBattle) return false;
         if (army.ProvinceId != post)
         {
-            if (!TryFindRoute(topology, army.ProvinceId, post, (ushort)nation.MapIndex, controllers, route))
-                return false;
-            // Ground no road of ours reaches - an exclave, an island - is not a post this
-            // division can take.
+            var allowed = Active.RouteAllowed;
+            allowed.Clear();
+            MilitaryAccess.FillControllers(campaign, nation.Id, allowed);
+            if (!TryFindRoute(topology, army.ProvinceId, post, allowed, controllers, route)) return false;
             if (route.Count == 0) return false;
             if (army.TemplateId == MilitiaCore.TemplateId && army.AssignedWarId < 0)
                 for (var i = 0; i < route.Count; i++)

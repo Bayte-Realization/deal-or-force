@@ -91,6 +91,16 @@ internal sealed class ShellContext
     public Func<string> GetObserverTransientNote { get; set; }
     public Action<int> OpenObservedMovement { get; set; }
     public Action OpenGrandProjects { get; set; }
+    public Action OpenConstruction { get; set; }
+    public Action<BuildingKind> BeginConstructionPlacement { get; set; }
+    public Action<int> CancelConstruction { get; set; }
+    public Action<int, BuildingKind, int> QueueConstructionInState { get; set; }
+    public Action<int, BuildingKind> DemolishBuildingInState { get; set; }
+    public Func<ScenarioState, BuildingKind, float?, (string Text, string Summary)> PreviewBuildingEffects { get; set; }
+    public Action<ScenarioState> FocusState { get; set; }
+    public Action<ICampaignCommand, bool> CommitImmediateCommand { get; set; }
+    public Action<ScenarioState> OpenCapitalChooserForState { get; set; }
+    public Action<ScenarioState> OpenRegionalLawsForState { get; set; }
     public Func<bool> IsTouchMode { get; set; }
     public Func<TouchTapMode> GetTouchTapMode { get; set; }
     public Action<TouchTapMode> SetTouchTapMode { get; set; }
@@ -99,6 +109,8 @@ internal sealed class ShellContext
 
     public bool ExplicitRegionIconsToggle { get; set; }
     public bool AltKeycapsVisible { get; set; }
+    public ConstructionCategory RegionBuildCategory { get; set; } = ConstructionCategory.All;
+    public string PendingRegionActionKey { get; set; } = "";
     /// <summary>UI-only collapse memory per nation ID for the stability breakdown in the country dossier.</summary>
     public HashSet<int> CollapsedStabilityBreakdownNations { get; } = new();
 
@@ -222,20 +234,12 @@ internal sealed class ShellContext
             var m = hiDpi ? sliceMargin * 2 : sliceMargin;
             var sb = new StyleBoxTexture
             {
-                Texture = tex,
-                TextureMarginLeft = m,
-                TextureMarginTop = m,
-                TextureMarginRight = m,
-                TextureMarginBottom = m,
-                ContentMarginLeft = contentLeft,
-                ContentMarginTop = contentTop,
-                ContentMarginRight = contentRight,
-                ContentMarginBottom = contentBottom
+                Texture = tex, TextureMarginLeft = m, TextureMarginTop = m, TextureMarginRight = m, TextureMarginBottom = m,
+                ContentMarginLeft = contentLeft, ContentMarginTop = contentTop, ContentMarginRight = contentRight, ContentMarginBottom = contentBottom
             };
             _styleCache[key] = sb;
             return sb;
         }
-
         if (InterfaceSkin.Metric(InterfaceSkin.MaterialSwitch, 0f) >= 0.5f && Ui.Surface("plate") is { } matBox)
         {
             _styleCache[key] = matBox;
@@ -243,15 +247,9 @@ internal sealed class ShellContext
         }
         var flat = new StyleBoxFlat
         {
-            BgColor = Ui.Colour(fallbackBgToken),
-            BorderColor = Ui.Colour(fallbackBorderToken),
-            ContentMarginLeft = contentLeft,
-            ContentMarginTop = contentTop,
-            ContentMarginRight = contentRight,
-            ContentMarginBottom = contentBottom,
-            ShadowColor = new Color(0f, 0f, 0f, 0.4f),
-            ShadowSize = 4,
-            ShadowOffset = new Vector2(0f, 2f)
+            BgColor = Ui.Colour(fallbackBgToken), BorderColor = Ui.Colour(fallbackBorderToken),
+            ContentMarginLeft = contentLeft, ContentMarginTop = contentTop, ContentMarginRight = contentRight, ContentMarginBottom = contentBottom,
+            ShadowColor = new Color(0f, 0f, 0f, 0.4f), ShadowSize = 4, ShadowOffset = new Vector2(0f, 2f)
         };
         flat.SetBorderWidthAll(1);
         flat.SetCornerRadiusAll(fallbackRadius);

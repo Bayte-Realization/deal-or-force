@@ -516,12 +516,11 @@ public partial class DealOrForceGame
             var acceptance = PeaceNegotiation.Acceptance(_campaign, war, player.Id, terms);
             var button = ActionButton(PeaceTermsName(terms), () => ProposePeace(war, captured), 138, 30);
             button.Disabled = blocked.Length > 0;
-            button.TooltipText = Ui.Tip(blocked.Length > 0
-                ? blocked
-                : PeaceNegotiation.Description(terms) + "\n" +
-                  Simulation.Loc.Format("Acceptance {0}%.", acceptance.ToString("0")));
+            button.TooltipText = Ui.Tip(blocked.Length > 0 ? blocked
+                : PeaceNegotiation.Description(terms) + "\n" + Simulation.Loc.Format("Acceptance {0}%.", acceptance.ToString("0")));
             quick.AddChild(button);
         }
+        AddWarQuickAnnexButton(quick, war, player);
     }
 
     private static string PeaceTermsName(PeaceTerms terms) => terms switch

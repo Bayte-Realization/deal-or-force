@@ -119,7 +119,12 @@ public static class PeaceOffers
         PeaceDemand demand, PeaceTerms terms)
     {
         if (campaign is null || war is null) return Loc.Get("There is no war to end");
-        if (campaign.Defines is { ForcePeaceOnTotalOccupationOrFullScore: true })
+        var defines = campaign.Defines;
+        var today = campaign.ElapsedDays;
+        var lastAsked = System.Math.Max(war.LastOfferToPlayerDay, war.RefusedOfferDay);
+        if (lastAsked >= 0 && today - lastAsked < System.Math.Max(0, defines.AiPeaceOfferToPlayerIntervalDays))
+            return "interval";
+        if (defines is { ForcePeaceOnTotalOccupationOrFullScore: true })
         {
             var att = campaign.NationById(war.AttackerId);
             var def = campaign.NationById(war.DefenderId);
@@ -128,11 +133,6 @@ public static class PeaceOffers
                 (def is not null && PeaceNegotiation.IsTotallyOccupiedInWar(campaign, war, def)))
                 return "";
         }
-        var defines = campaign.Defines;
-        var today = campaign.ElapsedDays;
-        var lastAsked = System.Math.Max(war.LastOfferToPlayerDay, war.RefusedOfferDay);
-        if (lastAsked >= 0 && today - lastAsked < System.Math.Max(0, defines.AiPeaceOfferToPlayerIntervalDays))
-            return "interval";
         if (war.RefusedOfferDay >= 0 &&
             !MateriallyDifferent(war.RefusedOfferWasWritten, war.RefusedOffer, war.RefusedOfferTerms,
                 written, demand, terms, defines.AiPeaceOfferMaterialProvinceShare) &&

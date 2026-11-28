@@ -52,7 +52,7 @@ public partial class DealOrForceGame
         _dealCompleted = false;
         if (IsInstanceValid(_dealReturnFocus) && _dealReturnFocus.IsVisibleInTree()) _dealReturnFocus.GrabFocus();
         _dealReturnFocus = null;
-        if (IsNewShellActive && _hudLayer is { Visible: true }) RefreshNewShell(force: true);
+        if (IsNewShellActive && _hudLayer is { Visible: true }) { SyncNewShellModalState(); RefreshNewShell(force: true); }
     }
 
     private Ultimatum.Side DealGiveSide() => new()
@@ -117,43 +117,18 @@ public partial class DealOrForceGame
 
         // Scrollable middle document keeps the header and DealSettlementFooter permanently pinned on-screen
         // at both 1920x1080 and 1280x720 even when the Trade agreement strip and strategic clauses are open.
-        var bodyScroll = new ScrollContainer
-        {
-            Name = "DealBodyScroll",
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
-            ClipContents = true,
-            FollowFocus = false
-        };
+        var bodyScroll = new ScrollContainer { Name = "DealBodyScroll", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, VerticalScrollMode = ScrollContainer.ScrollMode.Auto, ClipContents = true, FollowFocus = false };
         rows.AddChild(bodyScroll);
-        var bodyPad = new MarginContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill,
-            ClipContents = true
-        };
+        var bodyPad = new MarginContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
         bodyPad.AddThemeConstantOverride("margin_right", 10);
         bodyScroll.AddChild(bodyPad);
-        var bodyStack = new VBoxContainer
-        {
-            Name = "DealBodyStack",
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill,
-            ClipContents = true
-        };
+        var bodyStack = new VBoxContainer { Name = "DealBodyStack", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, ClipContents = true };
         bodyStack.AddThemeConstantOverride("separation", 10);
         bodyPad.AddChild(bodyStack);
 
-        var body = new HBoxContainer
-        {
-            Name = "DealColumns",
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 320),
-            ClipContents = true
-        };
+        var body = new HBoxContainer { Name = "DealColumns", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 290), ClipContents = true };
         body.AddThemeConstantOverride("separation", 16);
         bodyStack.AddChild(body);
         var player = _campaign.Player;
@@ -257,6 +232,7 @@ public partial class DealOrForceGame
         _dealSend.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         actions.AddChild(_dealSend);
         ReadableDecision(panel, "modal.deal");
+        if (IsNewShellActive) { OnNewShellWorkspaceRaised(_dealComposer); FitNewShellWorkspaceLayer(_dealComposer); }
         RefreshDealComposer();
         Ui.FocusInputIfDesktop(_dealGiveCash.GetLineEdit());
     }
@@ -270,47 +246,33 @@ public partial class DealOrForceGame
 
     private void BuildDealSharedGuarantees(VBoxContainer parent, Nation player, Nation target)
     {
-        var frame = new PanelContainer
-        {
-            Name = "DealStrategicPanel",
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            ClipContents = true
-        };
+        var frame = new PanelContainer { Name = "DealStrategicPanel", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkBegin, ClipContents = true };
         frame.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 8));
         parent.AddChild(frame);
-        var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
-        box.AddThemeConstantOverride("separation", 4);
+        var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkBegin, ClipContents = true };
+        box.AddThemeConstantOverride("separation", 6);
         frame.AddChild(box);
         box.AddChild(Title(Loc.Get("deal.section.shared_guarantees"), 13, Ui.Colour("text.accent")));
-
-        var row = new HFlowContainer { Name = "DealSharedGuaranteesRow", SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
-        row.AddThemeConstantOverride("h_separation", 14);
-        row.AddThemeConstantOverride("v_separation", 4);
+        // 2-column HBoxContainer (never HFlowContainer) so wrapping CheckBoxes get half the modal width instead of 0px.
+        var row = new HBoxContainer { Name = "DealSharedGuaranteesRow", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkBegin, ClipContents = true };
+        row.AddThemeConstantOverride("separation", 16);
         box.AddChild(row);
-
-        var chokeRef = Ultimatum.ClauseRefusal(_campaign, player, target, "chokepoint_transit");
-        _dealChokepointTransit = new CheckBox
+        CheckBox MakeSharedGuarantee(string name, string clauseId, string labelKey, string tipKey)
         {
-            Name = "DealChokepointTransit",
-            Text = Loc.Get("deal.clause.chokepoint_transit"),
-            Disabled = chokeRef.Length > 0,
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            TooltipText = Ui.Tip(chokeRef.Length > 0 ? chokeRef : Loc.Get("deal.tip.chokepoint_transit"))
-        };
-        _dealChokepointTransit.Toggled += _ => RefreshDealComposer();
-        row.AddChild(_dealChokepointTransit);
-
-        var medRef = Ultimatum.ClauseRefusal(_campaign, player, target, "ceasefire_mediation");
-        _dealCeasefireMediation = new CheckBox
-        {
-            Name = "DealCeasefireMediation",
-            Text = Loc.Get("deal.clause.ceasefire_mediation"),
-            Disabled = medRef.Length > 0,
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            TooltipText = Ui.Tip(medRef.Length > 0 ? medRef : Loc.Get("deal.tip.ceasefire_mediation"))
-        };
-        _dealCeasefireMediation.Toggled += _ => RefreshDealComposer();
-        row.AddChild(_dealCeasefireMediation);
+            var refusal = Ultimatum.ClauseRefusal(_campaign, player, target, clauseId);
+            var cb = new CheckBox
+            {
+                Name = name, Text = Loc.Get(labelKey), Disabled = refusal.Length > 0, ClipText = false,
+                AutowrapMode = TextServer.AutowrapMode.WordSmart, SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter, CustomMinimumSize = new Vector2(180, 32),
+                TooltipText = Ui.Tip(refusal.Length > 0 ? refusal : Loc.Get(tipKey))
+            };
+            cb.Toggled += _ => RefreshDealComposer();
+            row.AddChild(cb);
+            return cb;
+        }
+        _dealChokepointTransit = MakeSharedGuarantee("DealChokepointTransit", "chokepoint_transit", "deal.clause.chokepoint_transit", "deal.tip.chokepoint_transit");
+        _dealCeasefireMediation = MakeSharedGuarantee("DealCeasefireMediation", "ceasefire_mediation", "deal.clause.ceasefire_mediation", "deal.tip.ceasefire_mediation");
     }
 
     /// <summary>One half of the table: a cheque, the promises that side can honestly make,

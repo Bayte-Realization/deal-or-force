@@ -22,13 +22,39 @@ public static class WarCoalition
 
     public static bool FriendlyController(Campaign c, StrategicWar war, int nationId, ushort controller)
     {
+        if (controller == 0) return false;
         if (c.NationById(nationId) is { } own && controller == own.MapIndex) return true;
+        if (IsHostileControllerAnyWar(c, nationId, controller)) return false;
         if (MilitaryAccess.CanEnter(c, nationId, controller)) return true;
         if (war is null || war.Ended || !war.Involves(nationId)) return false;
         foreach (var id in war.Side(war.IsAttacking(nationId)))
             if (c.NationById(id) is { } nation && controller == nation.MapIndex) return true;
         return false;
     }
+
+    /// <summary>True if nation may stage a front post on province (own, war ally, subject/overlord, or military access; never hostile).</summary>
+    public static bool CanHoldFrontPost(Campaign c, Nation nation, int province)
+    {
+        var controls = c?.ProvinceController ?? c?.ProvinceMap?.ProvinceToNation;
+        if (nation is null || controls is null || province <= 0 || province > c.ProvinceMap.ProvinceCount ||
+            province >= controls.Length || c.ProvinceMap.IsWater(province)) return false;
+        var controller = controls[province];
+        return controller != 0 && (controller == (ushort)nation.MapIndex || MilitaryAccess.CanEnter(c, nation.Id, controller));
+    }
+
+    public static StrategicWar FindWarAgainstController(Campaign c, int nationId, ushort controller)
+    {
+        if (c is null || controller == 0 || !c.NationsByMapIndex().TryGetValue(controller, out var holder) || holder.Id == nationId)
+            return null;
+        var live = Warfare.LiveWars(c);
+        for (var i = 0; i < live.Count; i++)
+            if (!live[i].Ended && live[i].Opposes(nationId, holder.Id)) return live[i];
+        return null;
+    }
+
+    public static bool IsHostileControllerAnyWar(Campaign c, int nationId, ushort controller) =>
+        c is not null && controller != 0 && c.NationsByMapIndex().TryGetValue(controller, out var holder) &&
+        holder.Id != nationId && MilitaryAccess.Hostile(c, nationId, holder.Id);
 
     internal static StrategicWar AssignedWar(Campaign c, Army army)
     {
@@ -168,10 +194,27 @@ public static class WarCoalition
 
     internal static bool EnemyStandsIn(Campaign c, StrategicWar war, int nationId, int province)
     {
-        if (war is null) return false;
         foreach (var unit in c.Armies)
-            if (unit.ProvinceId == province && unit.Divisions >= .1f && war.Opposes(nationId, unit.NationId)) return true;
+        {
+            if (unit.ProvinceId != province || unit.Divisions < .1f || unit.NationId == nationId) continue;
+            if ((war is not null && war.Opposes(nationId, unit.NationId)) ||
+                MilitaryAccess.Hostile(c, nationId, unit.NationId))
+                return true;
+        }
         return false;
+    }
+
+    /// <summary>Hard invariant: a retreating division may ONLY enter non-hostile, friendly-controlled land with no enemy troops.</summary>
+    internal static bool CanRetreatTo(Campaign c, StrategicWar war, int nationId, int province)
+    {
+        var map = c?.ProvinceMap;
+        var controls = c?.ProvinceController;
+        if (map is null || controls is null || province <= 0 || province > map.ProvinceCount ||
+            province >= controls.Length || map.IsWater(province)) return false;
+        var controller = controls[province];
+        if (controller == 0 || IsHostileControllerAnyWar(c, nationId, controller) ||
+            HostileController(c, war, nationId, controller)) return false;
+        return FriendlyController(c, war, nationId, controller) && !EnemyStandsIn(c, war, nationId, province);
     }
 
     /// <summary>Keep the old own-ground preference; an ally's refuge is better than surrender.</summary>
@@ -185,13 +228,13 @@ public static class WarCoalition
         var ownRetreat = 0;
         foreach (var p in map.Neighbors[from])
         {
-            if (map.IsWater(p)) continue;
+            if (!CanRetreatTo(c, war, army.NationId, p)) continue;
             if (controls[p] == own.MapIndex)
             {
                 if (!lowestId) return p;
                 if (ownRetreat == 0 || p < ownRetreat) ownRetreat = p;
             }
-            else if ((allied == 0 || (lowestId && p < allied)) && FriendlyController(c, war, army.NationId, controls[p])) allied = p;
+            else if (allied == 0 || (lowestId && p < allied)) allied = p;
         }
         return ownRetreat > 0 ? ownRetreat : allied;
     }
@@ -204,12 +247,9 @@ public static class WarCoalition
         SpreadRetreatProvince(c, war, army, from, beaten, slipAway: false, out _);
 
     /// <summary>
-    /// The same, for a formation whose morale is gone: <paramref name="slipAway"/> lets a
-    /// rising's formation with no ground of its side to fall back on slip into a neighbouring
-    /// province among its own people (Partisans.SlipAwayProvince), and <paramref name="slipped"/>
-    /// says that is where it is going. Only the places that decide a broken formation's fate
-    /// ask this: whether a pocket that still has morale holds on (PocketResistance) is about
-    /// its own side's ground, and a guerrilla's way out does not make a stand a retreat.
+    /// Select a valid friendly retreat province for a retreating or broken formation.
+    /// Hard invariant: NEVER returns an enemy-controlled or non-friendly province. When no
+    /// friendly non-hostile neighbor is available, returns 0 so encircled divisions surrender cleanly.
     /// </summary>
     internal static int SpreadRetreatProvince(Campaign c, StrategicWar war, Army army, int from, bool beaten,
         bool slipAway, out bool slipped)
@@ -225,10 +265,8 @@ public static class WarCoalition
 
         foreach (var p in map.Neighbors[from])
         {
-            if (map.IsWater(p)) continue;
+            if (!CanRetreatTo(c, war, army.NationId, p)) continue;
             var isOwn = controls[p] == own.MapIndex;
-            var isAllied = !isOwn && FriendlyController(c, war, army.NationId, controls[p]);
-            if (!isOwn && !isAllied || EnemyStandsIn(c, war, army.NationId, p)) continue;
             // A formation choosing to step out of a fight goes somewhere quiet. One that has just
             // been beaten out of its province falls back onto its own side's line even where that
             // line is under attack - a province with a battle in it is still held - and it used
@@ -268,53 +306,10 @@ public static class WarCoalition
             }
         }
         if (bestProvince > 0 || !beaten) return bestProvince;
-        if (c.Defines.RetreatSearchDepth > 1)
-        {
-            var deep = DeepRetreatProvince(c, war, army, from, c.Defines.RetreatSearchDepth);
-            if (deep > 0) return deep;
-        }
         if (!slipAway) return 0;
         var away = Partisans.SlipAwayProvince(c, war, army, from);
-        slipped = away > 0;
+        if (away <= 0 || !CanRetreatTo(c, war, army.NationId, away)) return 0;
+        slipped = true;
         return away;
-    }
-
-    /// <summary>
-    /// A beaten formation with no friendly ground next to it breaks out towards its own line: the
-    /// nearest province its side holds and no enemy stands in, through a legal, undefended
-    /// corridor. Return only its FIRST step, never teleport across the whole corridor.
-    /// </summary>
-    private static int DeepRetreatProvince(Campaign c, StrategicWar war, Army army, int from, int depth)
-    {
-        var map = c.ProvinceMap;
-        var controls = c.ProvinceController;
-        var own = c.NationById(army.NationId);
-        var seen = new HashSet<int> { from };
-        var ring = new List<int> { from };
-        var firstStep = new Dictionary<int, int>();
-        var allowed = MilitaryAccess.Controllers(c, army.NationId);
-        if (war is not null && !war.Ended && war.Involves(army.NationId))
-        {
-            FillControllers(c, war, true, allowed);
-            FillControllers(c, war, false, allowed);
-        }
-        for (var step = 1; step <= depth && ring.Count > 0; step++)
-        {
-            var next = new List<int>();
-            foreach (var at in ring)
-                foreach (var p in map.Neighbors[at])
-                {
-                    if (map.IsWater(p) || !allowed.Contains(controls[p]) || !seen.Add(p) ||
-                        EnemyStandsIn(c, war, army.NationId, p)) continue;
-                    firstStep[p] = at == from ? p : firstStep[at];
-                    next.Add(p);
-                }
-            next.Sort();
-            foreach (var p in next)
-                if (controls[p] == own.MapIndex || FriendlyController(c, war, army.NationId, controls[p]))
-                    return firstStep[p];
-            ring = next;
-        }
-        return 0;
     }
 }

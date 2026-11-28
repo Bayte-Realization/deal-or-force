@@ -54,26 +54,7 @@ public static partial class Warfare
         perWar[outcome] = perWar.GetValueOrDefault(outcome) + 1;
     }
 
-    // One campaign's army index. Warfare made three megabytes of garbage a campaign day,
-    // nearly all of it these indexes and the little arrays LINQ handed back. The lists are
-    // kept and emptied instead of rebuilt. They used to be one set for the process: the
-    // next campaign's rebuild cleared the first campaign's war buckets, province slots and
-    // id table, and a fresh flag left by that rebuild let the first campaign read the
-    // wrong armies. Two peers could run for years before a quiet day and a landing met,
-    // and then one division's rounding never came back together. Each campaign now owns
-    // its containers. Inside one campaign they are still cleared and filled again.
-    // The live tick stays single-threaded. ActiveIndex only names the index of the path
-    // now running; it does not allow Parallel.For around the tick.
-    // A capture during the day's battles patches the province slots those formations
-    // left and entered. It does not rebuild this whole index until those battles have
-    // read who is standing where. The battles themselves stay in order: they still
-    // share this campaign's attacker and defender lists and its support exposure.
-    //
-    // Province slots are an array, not a dictionary: the index is rebuilt every step, and
-    // a dictionary rebuilt every step was a hash lookup per division plus an emptying of
-    // every list any division had ever stood in. Only the slots filled last time are
-    // emptied. ById is filled when a battle first asks, from the armies this index saw,
-    // so the day's battles share one table.
+    // One campaign's army index, reused per campaign across ticks. Single-threaded.
     private sealed class ArmyIndex
     {
         public readonly Dictionary<int, List<Army>> ByWar = new();
@@ -426,23 +407,7 @@ public static partial class Warfare
         return map;
     }
 
-    // How much ground each country originally owned, and how much of it somebody else is
-    // standing on. Every war used to work this out for itself by walking all thirty-eight
-    // thousand provinces - with fifty wars going stale on the same day that was two million
-    // province reads for a table that is the same table every time. Kept per campaign so
-    // a second world's census cannot overwrite the first world's home and occupied counts.
-    // The side maps of a war (who holds ground for the attacker, the defender, and either)
-    // live on that same index. The countries in a battle live on that campaign's battle
-    // board, one pair per battle id: the next battle clears its own pair, and a second
-    // campaign cannot clear the first. The line, the reserve, the reinforcement queue
-    // and the damage rows are the same kind of scratch, one per battle id. Two battles
-    // are still resolved one after another. A hit writes that war's losses, the
-    // region's damage and this campaign's support exposure. A capture marks the province
-    // slots stale. While this day's battles are still being read, a province slot is
-    // rewritten only when its membership no longer matches the army list, in that
-    // list's order. The whole index is rebuilt after that read. The attacker and
-    // defender lists are still one pair for the campaign, so one battle does not run
-    // beside another.
+    // Per-campaign occupation census and battle scratch.
     private static readonly Army[] SingleAdvancing = new Army[1];
 
     [ThreadStatic] private static int[] _homeCountsScratch;
@@ -856,13 +821,7 @@ public static partial class Warfare
             yield return 0;
         }
 
-        // A round is a DAY of fighting - it carries a date, a note and a line in the battle
-        // report - so it resolves on a day rather than on a step. At the shipped hourly step
-        // this ran twenty-four times a day: twenty-four days of casualties every day, and a
-        // war decided by one side running out of people instead of by the fighting.
-        //
-        // Gated inside the scope rather than around it, so the profiler still counts one
-        // entry per step and the cadence check still reads what it is written to read.
+        // Resolve battle rounds once per day.
         if (campaign.StepOpensNewDay)
         {
             using var battles = ResolveBattlesStages(campaign).GetEnumerator();
@@ -878,9 +837,112 @@ public static partial class Warfare
         {
             using (SimProfiler.Measure("  war:battles")) { }
         }
+        using (SimProfiler.Measure("  war:occupancy")) ResolveHostileProvinceOccupancy(campaign);
         using (SimProfiler.Measure("  war:occupation")) SecureOccupation(campaign);
         campaign.Battles.RemoveAll(battle => battle.Ended && campaign.ElapsedDays - battle.StartedDay > 30);
         ForgetEndedBattleNations(campaign);
+    }
+
+    private static void ResolveHostileProvinceOccupancy(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        if (topology is null || controllers is null || campaign.Armies.Count == 0) return;
+        UseBattleBuckets(campaign);
+        EnsureIndexed(campaign);
+        for (var i = campaign.Armies.Count - 1; i >= 0; i--)
+        {
+            if (i >= campaign.Armies.Count) continue;
+            var army = campaign.Armies[i];
+            if (army.InBattle || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 ||
+                army.ProvinceId >= controllers.Length || army.Divisions <= 0f) continue;
+            var armyNation = campaign.NationById(army.NationId);
+            if (armyNation is null) continue;
+            var controller = controllers[army.ProvinceId];
+            if (controller == 0 || controller == armyNation.MapIndex) continue;
+            var war = WarCoalition.FindWarAgainstController(campaign, army.NationId, controller);
+            if (war is null) continue;
+            if (army.Organisation <= float.Epsilon &&
+                WarCoalition.SpreadRetreatProvince(campaign, war, army, army.ProvinceId, beaten: true) <= 0)
+            {
+                WarLosses.Surrender(campaign, army);
+                Attrition.Destroy(campaign, army, "destroyed: zero morale stranded on enemy ground");
+                MarkIndexStale(campaign);
+                EnsureIndexed(campaign);
+                continue;
+            }
+            Present.Clear();
+            foreach (var other in InProvince(army.ProvinceId))
+                if (other.Id != army.Id && other.Divisions > 0f && other.NationId != army.NationId &&
+                    (war.Opposes(army.NationId, other.NationId) || MilitaryAccess.Hostile(campaign, army.NationId, other.NationId)))
+                    Present.Add(other);
+            if (Present.Count > 0)
+            {
+                EngagePresent(campaign, war, army.ProvinceId, army);
+                continue;
+            }
+            if (army.SupportOnly) continue;
+            var province = army.ProvinceId;
+            SingleAdvancing[0] = army;
+            CaptureVerified(campaign, war, province, army.NationId, SingleAdvancing, Array.Empty<Army>(), "secured enemy-controlled province");
+            SingleAdvancing[0] = null;
+            EnsureIndexed(campaign);
+        }
+    }
+
+    private static void EngagePresent(Campaign campaign, StrategicWar war, int provinceId, Army army)
+    {
+        var activeBattles = EnsureActiveBattles(campaign);
+        if (!activeBattles.TryGetValue((war.Id, provinceId), out var battle))
+        {
+            battle = new LandBattle { Id = campaign.NextBattleId++, WarId = war.Id, ProvinceId = provinceId,
+                AttackerId = army.NationId, DefenderId = Present[0].NationId, StartedDay = campaign.ElapsedDays };
+            campaign.Battles.Add(battle);
+            activeBattles[(war.Id, provinceId)] = battle;
+            UseArmyIndex(campaign).ActiveBattlesCount = campaign.Battles.Count;
+            foreach (var defending in Present) Join(battle, defending, false);
+        }
+        Join(battle, army, true);
+        MarkIndexStale(campaign);
+        EnsureIndexed(campaign);
+    }
+
+    private static bool CaptureVerified(Campaign campaign, StrategicWar war, int provinceId, int winnerId,
+        IReadOnlyCollection<Army> advancing, IReadOnlyCollection<Army> retreating, string how)
+    {
+        var captured = Capture(campaign, war, provinceId, winnerId, advancing, retreating, how);
+        if (!captured) return false;
+        var winner = campaign.NationById(winnerId);
+        var controllers = campaign.ProvinceController;
+        if (winner is null || controllers is null || provinceId <= 0 || provinceId >= controllers.Length) return true;
+        var current = controllers[provinceId];
+        if (current != (ushort)winner.MapIndex && !WarCoalition.FriendlyController(campaign, war, winnerId, current))
+        {
+            campaign.SetProvinceController(provinceId, (ushort)winner.MapIndex);
+            war.FrontDirty = true;
+            if (campaign.ProvinceOccupation is { } occ && provinceId < occ.Length) occ[provinceId] = 0f;
+        }
+        return true;
+    }
+
+    private static bool TryFindAlternateWarTarget(Campaign campaign, ProvinceTopology topology, ushort[] controllers,
+        Army army, StrategicWar currentWar, out StrategicWar altWar, out int altTarget)
+    {
+        altWar = null;
+        altTarget = -1;
+        if (army.ProvinceId <= 0 || army.ProvinceId >= topology.Neighbors.Length) return false;
+        var atCrossing = topology.IsCrossingEnd(army.ProvinceId);
+        foreach (var nb in topology.Neighbors[army.ProvinceId])
+        {
+            if (nb <= 0 || nb >= controllers.Length || topology.IsWater(nb)) continue;
+            if (atCrossing && LandCrossings.StepClosed(campaign, army.NationId, army.ProvinceId, nb)) continue;
+            var candidate = WarCoalition.FindWarAgainstController(campaign, army.NationId, controllers[nb]);
+            if (candidate is null || candidate.Id == currentWar.Id) continue;
+            altWar = candidate;
+            altTarget = nb;
+            return true;
+        }
+        return false;
     }
 
     private static readonly List<Army> NoArmies = new();
@@ -986,6 +1048,11 @@ public static partial class Warfare
                 routed = !heldBack && PrepareOperationalRoute(campaign, war, army, controllers, friendlyMaps);
             if (routed) return;
             var target = ChooseAssaultTarget(campaign, topology, war, army, controllers, enemyMaps);
+            if (target < 0 && TryFindAlternateWarTarget(campaign, topology, controllers, army, war, out var altWar, out var altTarget))
+            {
+                war = altWar;
+                target = altTarget;
+            }
             if (target < 0) return;
             Present.Clear();
             foreach (var other in InProvince(target))
@@ -1024,7 +1091,7 @@ public static partial class Warfare
                 if (army.MoveProgress >= 1f)
                 {
                     SingleAdvancing[0] = army;
-                    Capture(campaign, war, target, army.NationId, SingleAdvancing, Array.Empty<Army>(), "walked into a gap");
+                    CaptureVerified(campaign, war, target, army.NationId, SingleAdvancing, Array.Empty<Army>(), "walked into a gap");
                     SingleAdvancing[0] = null;
                 }
                 return;
@@ -1132,12 +1199,7 @@ public static partial class Warfare
         var battleCount = campaign.Battles.Count;
         if (battleCount == 0) yield break;
         UseBattleBuckets(campaign);
-        // A capture marks province slots stale. While this day's battles are still
-        // being read, that mark patches the slots whose membership changed. It does
-        // not rebuild the war buckets or every other province. The whole index is
-        // rebuilt after the last battle has been read, before occupation asks who
-        // is standing anywhere. Two battles still do not run together: they share
-        // this campaign's attacker and defender lists and its support exposure.
+        // Per-battle scratch; live tick stays single-threaded.
         var battleIndex = UseArmyIndex(campaign);
         battleIndex.DeferProvinceRebuild = true;
         try
@@ -1150,22 +1212,9 @@ public static partial class Warfare
             var war = warsById is not null && warsById.TryGetValue(battle.WarId, out var foundWar) ? foundWar : null;
             if (war is null || war.Ended) { Close(campaign, battle, -1, "War ended"); continue; }
 
-            // The line, reserve, reinforcement queue and damage rows belong to this
-            // battle. The next battle will point ActiveRows at its own scratch. This
-            // one stays. Battles are still taken one at a time. A capture patches the
-            // province slots the formations left and entered; it does not rebuild the
-            // whole index while a later battle of this day is still reading them.
-            // The hit still writes the war, the region and the support exposure, and
-            // the attacker and defender lists are still this campaign's one pair.
+            // Each battle uses its own scratch; live tick stays single-threaded.
             UseBattleRows(campaign, battle);
             ReinforceBattle(campaign, battle);
-
-            // Whoever is standing in the province and not already committed joins the
-            // defence. This used to walk every division in the world once per battle -
-            // three hundred and sixty battles against fourteen hundred divisions, half a
-            // million comparisons a day - to answer a question the province index already
-            // answers. A capture earlier today patched the provinces that changed, in
-            // the same order a full rebuild would have listed them.
             EnsureIndexed(campaign);
             foreach (var army in InProvince(battle.ProvinceId))
                 if (!army.InBattle && WarCoalition.SameSide(war, army.NationId, battle.DefenderId) && army.Divisions >= 0.1f)
@@ -1197,26 +1246,13 @@ public static partial class Warfare
             }
             if (defending.Count == 0)
             {
-                var occupied = Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
+                var occupied = CaptureVerified(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
                     "defenders left the province");
                 Close(campaign, battle, battle.AttackerId, occupied ? "Province taken unopposed" : "Support ended; province not occupied");
                 continue;
             }
 
-            // ----------------------------------------------------------------------
-            // Frontage. A province only has so much room, so numbers past the width
-            // wait their turn - which is what lets a smaller, better force hold a line
-            // against a larger one. Attacking from several provinces widens the front,
-            // the way it does in Hearts of Iron.
-            //
-            // This is a filter now, and it used to be a multiplier. The multiplier scaled
-            // a whole side's fire by the share of it that fitted, which meant nineteen
-            // divisions in a province all fought, all took losses and all counted as
-            // being in the battle, while the fifth one made the first four shoot worse
-            // than four would have. What is past the width is simply not in the fight: it
-            // stands in reserve, takes the place of whoever is spent, and the next day's
-            // split decides that again.
-            // ----------------------------------------------------------------------
+            // Frontage filter: divisions past combat width stand in reserve.
             var defines = campaign.Defines;
             var terrain = campaign.ProvinceMap?.TerrainAt(battle.ProvinceId) ?? TerrainCatalog.Get("plains");
             var baseWidth = defines.CombatWidth * terrain.CombatWidth;
@@ -1258,21 +1294,7 @@ public static partial class Warfare
             // from where the attackers stand, so nothing about it has to be saved.
             var straitAttackMultiplier = LandCrossings.AssaultMultiplier(campaign, battle.ProvinceId, AttackerLine);
 
-            // ----------------------------------------------------------------------
-            // Both sides shoot. The attacker's fire is measured against the defender's
-            // defence; the defender's return fire is measured against the attacker's
-            // breakthrough. That second half is the whole point: a division built to
-            // attack survives a counter-attack it would not survive on defence, and a
-            // dug-in division survives an assault it could never have launched.
-            // ----------------------------------------------------------------------
-            // The long-range forces over the ground: artillery, attack aircraft, drones,
-            // the sweep overhead. Reaches the battle from bases within range, saturating,
-            // and the enemy's sky and missile brigades take their cut of whatever the
-            // other side managed to contribute - a wing over a defended front pays first.
-            // Support is asked of the countries in the battle, not of the formations in the
-            // line: a wing or a gun brigade is based far behind the province and reaches the
-            // battle whoever happens to be standing in the front rank today. The sets belong
-            // to this battle. The next battle of this campaign does not clear them.
+            // Long-range support over the battle province.
             FillBattleNationSets(campaign, battle, attacking, defending);
             var nationBoard = Board(campaign);
             var attackerNations = nationBoard.AttackerNations[battle.Id];
@@ -1562,11 +1584,7 @@ public static partial class Warfare
                 battle.ProvinceId, terrain);
             defenderProtection *= 1f + defines.GuerrillaDefence * guerrillaCover;
 
-            // The fortunes of war (Defines.CombatFortune): each side's day runs a little above or
-            // below what its numbers say - the weather, a commander's call, a bridge that held -
-            // in its fire and in its staying power alike. Drawn from the campaign seed, the battle
-            // and the day, so a seed replays its war exactly and another seed fights it otherwise;
-            // centred on one, so fortune decides battles without tilting the world.
+            // Daily and per-battle fortune multipliers from campaign seed.
             var attackerFortune = Fortune(campaign, battle, 1);
             var defenderFortune = Fortune(campaign, battle, 2);
             attackerOffence *= attackerFortune; attackerProtection *= attackerFortune;
@@ -1700,10 +1718,7 @@ public static partial class Warfare
             // Ambushes: an attack into guerrilla cover is bled on its way in, by the side roads,
             // the mines and the villages it has to pass (GuerrillaWar).
             attackerOrgLoss *= 1f + defines.GuerrillaAmbush * guerrillaCover;
-            // However badly a battle goes, it is still two sides shooting at each other: the
-            // worse-off side's daily loss per formation is at most this many times the other's.
-            // The bounds above allowed seventeen to one, and ten years of it put seven million
-            // North Korean casualties against ninety thousand South Korean ones.
+            // Exchange cap on daily organisation loss and casualty rate.
             var exchange = MathF.Max(1f, defines.MaxOrganisationLossRatio);
             attackerOrgLoss = MathF.Min(attackerOrgLoss, defenderOrgLoss * exchange);
             defenderOrgLoss = MathF.Min(defenderOrgLoss, attackerOrgLoss * exchange);
@@ -1727,11 +1742,7 @@ public static partial class Warfare
                 var cut = attackerRate * bleed / defenderRate;
                 defenderScale *= cut; defenderDead *= cut;
             }
-            // And in men, not only in shares. What a side can kill is bounded by what is
-            // shooting at it, however many stand in front of it: in one bench war China lost
-            // twenty-seven men for each Burmese one. The frontage filter does most of that
-            // work now, since a stack can only bring its line to bear, but the bound stays:
-            // a line of four against one is still four times the men.
+            // Bound casualties in men by what is shooting at them.
             var trade = MathF.Max(1f, defines.MaxCasualtyExchange);
             if (defenderDead > 0f && attackerDead > defenderDead * trade)
                 attackerScale *= defenderDead * trade / attackerDead;
@@ -1739,11 +1750,7 @@ public static partial class Warfare
                 defenderScale *= attackerDead * trade / defenderDead;
             var defenderLoss = ApplyDamage(campaign, DefenderLine, defenderOrgLoss, defenderScale, out var defenderKilled);
             var attackerLoss = ApplyDamage(campaign, AttackerLine, attackerOrgLoss, attackerScale, out var attackerKilled);
-            // The reserve is behind the line, not out of the war: the shelling and the
-            // mortars that miss the front find the queue standing in the same province. It
-            // costs a share (Defines.ReserveExposure), because nothing in that queue is
-            // answering back - which is why nineteen divisions waiting are worth far less
-            // than nineteen divisions in the line.
+            // Reserve takes a share of shelling exposure.
             if (DefenderReserve.Count > 0)
             {
                 defenderLoss += ApplyDamage(campaign, DefenderReserve,
@@ -1837,7 +1844,7 @@ public static partial class Warfare
             if (pocketResists) battle.Rounds[^1].Note = PocketResistance.BattleNote;
             if (defendersSpent && !pocketResists)
             {
-                var occupied = Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
+                var occupied = CaptureVerified(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
                     "won the battle");
                 Close(campaign, battle, battle.AttackerId, occupied ? "Defenders broke" : "Defenders broke; support did not occupy");
             }
@@ -1994,18 +2001,7 @@ public static partial class Warfare
         var attackerAdded = 0;
         var defenderAdded = 0;
 
-        // Reinforcements come from the province being fought over, and from nowhere else.
-        //
-        // A formation standing in a province next door used to join the battle there without
-        // marching - two a day, every day, for as long as the fight lasted. Nine days into an
-        // assault the defender of Kharkiv was nineteen formations strong in a province that
-        // had held one, and the attacker paid a day's casualties for the privilege of
-        // shooting into a queue that refilled itself behind his back.
-        //
-        // Help still arrives: it marches into the province and joins on the day it gets
-        // there, which is the road the attacker has to take as well. What is gone is the free
-        // passage into somebody else's battle. It also keeps this pass cheap - one province
-        // index instead of the province and each of its neighbours.
+        // Reinforcements come only from the province being fought over.
         GatherReinforcements(campaign, battle);
 
         foreach (var army in Reinforcements)

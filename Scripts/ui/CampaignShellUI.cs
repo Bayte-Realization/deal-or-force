@@ -291,8 +291,8 @@ public partial class DealOrForceGame
 
     private void OpenEconomyTab(string tab)
     {
-        OpenScreen("Economy");
-        SelectDossierTab(tab);
+        if (TryOpenNewShellEconomyTab(tab)) return;
+        OpenScreen("Economy"); SelectDossierTab(tab);
     }
 
     private void ApplyDossierTab()

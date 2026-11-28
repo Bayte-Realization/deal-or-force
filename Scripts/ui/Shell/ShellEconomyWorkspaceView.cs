@@ -145,7 +145,7 @@ internal sealed class ShellEconomyWorkspaceView
             ("Budget", () => { }),
             ("shell.tab_debt", () => { Close(); _ctx.OpenSovereignFinance?.Invoke(); }),
             ("Market", () => { Close(); _ctx.OpenScreen?.Invoke("Trade"); }),
-            ("shell.tab_build", () => { Close(); _ctx.OpenScreen?.Invoke("State Affairs"); }),
+            ("shell.tab_build", () => { Close(); _ctx.OpenConstruction?.Invoke(); }),
             ("shell.tab_cbank", () => { Close(); _ctx.OpenScreen?.Invoke("State Affairs"); })
         };
 

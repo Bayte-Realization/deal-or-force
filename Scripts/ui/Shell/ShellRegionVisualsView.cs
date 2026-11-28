@@ -35,16 +35,18 @@ internal static class ShellRegionVisualsView
             bodyRows.AddChild(hint);
         }
 
-        if (activeTab == 0) PopulateOverviewTab(ctx, bodyRows, world, owner, state, provinceId, provCount);
+        if (activeTab == 0) PopulateOverviewTab(ctx, bodyRows, feedbackLabel, world, owner, state, provinceId, provCount, isOwn, onQueued);
         else if (activeTab == 1) PopulatePopulationTab(ctx, bodyRows, world, owner, state);
         else if (activeTab == 2) PopulateBuildTab(ctx, bodyRows, feedbackLabel, world, owner, state, isOwn, onQueued);
         else PopulateRecruitTab(ctx, bodyRows, world, owner, state, provinceId, provCount, isOwn);
     }
 
     private static void PopulateOverviewTab(
-        ShellContext ctx, VBoxContainer bodyRows, Campaign world, Nation owner, ScenarioState state, int provinceId, int provCount)
+        ShellContext ctx, VBoxContainer bodyRows, Label feedbackLabel, Campaign world, Nation owner, ScenarioState state,
+        int provinceId, int provCount, bool isOwn, Action onQueued)
     {
         ShellRegionKpiCardsView.AddRegionKpiCards(ctx, bodyRows, world, owner, state, provCount);
+        ShellRegionActionsCardView.AppendRegionActionsCard(ctx, bodyRows, feedbackLabel, world, owner, state, isOwn, onQueued);
 
         AddSectionHeader(ctx, bodyRows, Loc.Get("shell.reg_terrain_ground"));
         ShellRegionKpiCardsView.AddTerrainCard(ctx, bodyRows, world, owner, state, provinceId, provCount);

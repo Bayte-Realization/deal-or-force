@@ -346,7 +346,7 @@ public static class BattlePlanning
             float threat = 0f;
             foreach (var neighbour in topology.Neighbors[province])
             {
-                if (controllers[neighbour] == nation.MapIndex) continue;
+                if (WarCoalition.CanHoldFrontPost(campaign, nation, neighbour)) continue;
                 // Somebody else's ground next door is pressure whether or not an army is
                 // standing on it; an army standing on it is a great deal more.
                 threat += 1f;
@@ -540,9 +540,7 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
             // nobody.
             if (Kind == FrontLineKind.Defence && Provinces.Count > 0 && topology is not null)
             {
-                var controllers = campaign.ProvinceController ?? topology.ProvinceToNation;
-                var hints = Provinces.Where(province => province > 0 && province <= topology.ProvinceCount &&
-                                                        controllers[province] == nation.MapIndex).ToList();
+                var hints = Provinces.Where(province => WarCoalition.CanHoldFrontPost(campaign, nation, province)).ToList();
                 if (hints.Count > 0 && hints.Count(province => line.Provinces.Contains(province)) * 2 < hints.Count)
                 {
                     line.BorderNationId = -1;

@@ -72,5 +72,6 @@
   "mobile.override.Right-click the map to send this fleet. The mission is what it does when it gets there.": "Use Order mode or hold the map to send this fleet. The mission is what it does when it gets there.",
   "mobile.override.Right-click an enemy shore to land them there.": "Use Order mode or hold an enemy shore to land them there.",
   "mobile.override.Find a country by name or tag. Ctrl+F focuses this field; Enter opens the first match.": "Find a country by name or tag.",
-  "mobile.override.Search formations by name or ID. Ctrl+F focuses search; Enter selects the first match.": "Search formations by name or ID."
+  "mobile.override.Search formations by name or ID. Ctrl+F focuses search; Enter selects the first match.": "Search formations by name or ID.",
+  "On the map: tap a formation to select · long-press or use Order mode to move": "On the map: tap a formation to select · long-press or use Order mode to move"
 }

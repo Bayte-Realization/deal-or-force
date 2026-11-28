@@ -349,32 +349,17 @@ public static class PeaceConference
         // not asked this.
         // Every member of the beaten side is asked, not only its leader, which signs for them all;
         // one the treaty takes nothing from has nothing to sign away.
+        var proposer = campaign.NationById(demand.ProposerId);
         var beatenId = war.EnemyLeaderOf(demand.ProposerId);
         var beaten = campaign.NationById(beatenId);
         var beatenScore = beaten is null ? 0f : (war.IsAttacking(beatenId) ? war.WarScore : -war.WarScore);
         var beatenTotallyOcc = beaten is not null && PeaceNegotiation.IsTotallyOccupiedInWar(campaign, war, beaten);
         var forcePeace = campaign.Defines.ForcePeaceOnTotalOccupationOrFullScore && (beatenTotallyOcc || beatenScore <= -99.5f);
 
-        foreach (var memberId in war.EnemiesOf(demand.ProposerId))
-        {
-            if (campaign.NationById(memberId) is { IsHuman: false } member && Factions.FightsOnWithoutGround(campaign, member) &&
-                rounded.Provinces.Any(province => topology.ProvinceToNation[province] == member.MapIndex) &&
-                !Enumerable.Range(1, topology.ProvinceCount).Any(province =>
-                    topology.ProvinceToNation[province] == member.MapIndex && !rounded.Provinces.Contains(province)))
-            {
-                if (forcePeace && demand.Unconditional && PeaceNegotiation.IsTotallyOccupiedInWar(campaign, war, member))
-                {
-                    // Waived under total occupation forced peace with unconditional settlement
-                }
-                else
-                {
-                    return Loc.Get("They will not sign away the last of their ground while they still have an army in the field");
-                }
-            }
-        }
+        var fieldBlock = PeaceAnnexation.LastGroundFieldBlock(campaign, war, rounded, forcePeace, proposer);
+        if (fieldBlock.Length > 0) return fieldBlock;
 
         // Bilateral give-and-take validation (Wave 6J)
-        var proposer = campaign.NationById(demand.ProposerId);
         if (demand.HasOffers)
         {
             if (proposer is null) return Loc.Get("You are not a belligerent in this war");
@@ -545,12 +530,11 @@ public static class PeaceConference
                 if (!demand.Provinces.Contains(pair.Key) && !demand.OfferProvinces.Contains(pair.Key))
                     campaign.SetProvinceController(pair.Key, pair.Value);
 
+        HashSet<ushort> cededOwners = null;
         if (demand.Provinces.Count > 0)
         {
-            var cededOwners = new HashSet<ushort>();
-            var provToNation = campaign.ProvinceMap.ProvinceToNation;
-            foreach (var provId in demand.Provinces)
-                cededOwners.Add(provToNation[provId]);
+            cededOwners = new HashSet<ushort>();
+            foreach (var provId in demand.Provinces) cededOwners.Add(campaign.ProvinceMap.ProvinceToNation[provId]);
             if (demand.ReleaseRegions)
             {
                 var regionList = new List<int>();
@@ -737,6 +721,7 @@ public static class PeaceConference
         BorderFronts.ReturnToWholeFronts(campaign, released);
 
         CapitalCore.Tick(campaign);
+        PeaceAnnexation.DisbandFullyAnnexedForces(campaign, demand, cededOwners);
         campaign.MarkMapChanged();
         return true;
     }

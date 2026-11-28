@@ -93,7 +93,7 @@ public partial class DealOrForceGame
             IsFreeCameraMode = () => _freeCameraMode,
             IsAnyModalOpen = IsAnyShellModalOpen,
             IsProductionOpen = () => _productionLayer is { Visible: true },
-            GetOpenScreen = () => IsNewShellEconomyOpen ? "Economy" : _openScreen,
+            GetOpenScreen = () => IsNewShellEconomyOpen ? "Economy" : IsNewShellConstructionOpen ? "Construction" : _openScreen,
             GetMapMode = () => _activeMapMode,
             IsFlatMap = () => _globe is not null && _globe.IsFlatMap,
             IsShowcasePan = () => _globe?.ShowcasePan ?? false,
@@ -169,7 +169,7 @@ public partial class DealOrForceGame
         ctx.IsWatchingWorld = () => WatchingWorld;
         ctx.GetObserverTransientNote = () => _observerTransientNote;
         ctx.OpenObservedMovement = id => { if (id >= 0) OpenObservedMovement(id); else ToggleMovementPanel(); };
-        ctx.OpenGrandProjects = OpenNewShellGrandProjects;
+        ctx.OpenGrandProjects = OpenNewShellGrandProjects; BindConstructionShellContextActions(ctx);
     }
 
     private void UndoLastBatchForShell()
@@ -185,7 +185,7 @@ public partial class DealOrForceGame
         IsNewShellActive && !ShellDockRules.ShouldShowRegionIcons(
             isNewShell: true,
             explicitUserToggle: _shell?.Context.ExplicitRegionIconsToggle ?? false,
-            openScreen: IsNewShellEconomyOpen ? "Economy" : _openScreen,
+            openScreen: IsNewShellEconomyOpen ? "Economy" : IsNewShellConstructionOpen ? "Construction" : _openScreen,
             productionScreenVisible: _productionLayer is { Visible: true },
             resourcesOrEconomyMapMode: _activeMapMode is StrategicMapMode.Resources or StrategicMapMode.Economy);
 
@@ -193,6 +193,7 @@ public partial class DealOrForceGame
     {
         if (!_newShellBuilt) BuildNewShell();
         CloseVisibleCampaignScreen();
+        if (IsNewShellConstructionOpen) CloseNewShellConstructionWorkspace();
         if (IsNewShellGrandProjectsOpen) CloseNewShellGrandProjects();
         HideLegacyLeftAndBottomCards();
         _shell?.WorkPanel.Close();
@@ -217,6 +218,7 @@ public partial class DealOrForceGame
         if (!_newShellBuilt) BuildNewShell();
         CloseVisibleCampaignScreen();
         if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
+        if (IsNewShellConstructionOpen) CloseNewShellConstructionWorkspace();
         HideLegacyLeftAndBottomCards();
         _shell?.WorkPanel.Close();
         _openScreen = "GrandProjects";
@@ -238,8 +240,7 @@ public partial class DealOrForceGame
     internal void OpenNewShellCountryDossier(Nation nation)
     {
         if (!_newShellBuilt) BuildNewShell();
-        if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
-        if (IsNewShellGrandProjectsOpen) CloseNewShellGrandProjects();
+        CloseAllNewShellWorkspaces();
         HideLegacyLeftAndBottomCards();
         SetArmyPanelVisible(false);
         _openScreen = nation == _campaign?.Player ? "Nation" : "";
@@ -251,8 +252,7 @@ public partial class DealOrForceGame
     internal void OpenNewShellMapSelection(GlobePick pick)
     {
         if (!_newShellBuilt) BuildNewShell();
-        if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
-        if (IsNewShellGrandProjectsOpen) CloseNewShellGrandProjects();
+        CloseAllNewShellWorkspaces();
         HideLegacyLeftAndBottomCards();
         SetArmyPanelVisible(false);
         if (pick.State is not null) { _openScreen = ""; _shell?.WorkPanel.OpenRegion(pick.Nation, pick.State, pick.ProvinceId); }
@@ -273,7 +273,7 @@ public partial class DealOrForceGame
     internal void OnNewShellWorkspaceRaised(Control layer)
     {
         if (!_newShellBuilt) BuildNewShell();
-        if (IsNewShellEconomyOpen) CloseNewShellEconomyWorkspace();
+        CloseAllNewShellWorkspaces();
         CloseNewShellWorkPanel(unpinnedOnly: true);
         _newShellModalWasOpen = true;
         _shell?.SetModalObscured(true);
@@ -320,6 +320,7 @@ public partial class DealOrForceGame
     {
         if (!IsNewShellActive) return false;
         if (screen == "Economy") { OpenNewShellEconomyWorkspace(); UpdateScreenButtons(); return true; }
+        if (screen == "Construction") { OpenNewShellConstructionWorkspace(); UpdateScreenButtons(); return true; }
         if (screen == "Nation")
         {
             OpenNewShellCountryDossier(ObserverUiRules.ResolveInspectedNation(_campaign, _selectedNation));
@@ -377,6 +378,8 @@ public partial class DealOrForceGame
         if (!modalOpen && _formationBar is { Visible: true } && IsInstanceValid(_formationBar) &&
             _hudLayer is not null && _newShellRoot is not null && IsInstanceValid(_newShellRoot) && _formationBar.GetIndex() < _newShellRoot.GetIndex())
             _hudLayer.MoveChild(_formationBar, Math.Min(_hudLayer.GetChildCount() - 1, _newShellRoot.GetIndex() + 1));
+        if (_constructionPlacement is { Visible: true } && IsInstanceValid(_constructionPlacement)) RaiseOverlayAboveNewShell(_constructionPlacement);
+        if (_capitalCityChooser is { Visible: true } && IsInstanceValid(_capitalCityChooser)) RaiseOverlayAboveNewShell(_capitalCityChooser);
         if (_supportLayer is { Visible: true } && IsInstanceValid(_supportLayer)) { FitNewShellSupportPanel(); _supportLayer.MoveToFront(); }
     }
 
@@ -428,7 +431,7 @@ public partial class DealOrForceGame
         }
         if (_globe is not null && !isNew) _globe.NewShellVisibleArmyIds = null;
         if (isNew) { CloseMapLayerDrawer(); _shell?.ResetCadence(); LayoutNewShell(); RefreshNewShell(force: true); }
-        else { CloseShellTransientPopovers(); _shell?.WorkPanel.Close(); CloseNewShellEconomyWorkspace(); CloseNewShellGrandProjects(); LayoutCampaignShell(); Refresh(); }
+        else { CloseShellTransientPopovers(); _shell?.WorkPanel.Close(); CloseNewShellEconomyWorkspace(); CloseNewShellConstructionWorkspace(); CloseNewShellGrandProjects(); LayoutCampaignShell(); Refresh(); }
     }
 
     private void SetClassicChromeVisible(bool visible)
@@ -559,7 +562,7 @@ public partial class DealOrForceGame
     }
 
     private bool EvaluateAnyShellModalOpen() =>
-        IsNewShellEconomyOpen || IsNewShellGrandProjectsOpen || _handbookLayer is { Visible: true } || _peaceLayer is { Visible: true } ||
+        IsAnyNewShellWorkspaceOpen() || _handbookLayer is { Visible: true } || _peaceLayer is { Visible: true } ||
         _peaceOfferLayer is { Visible: true } || _defconLayer is { Visible: true } || _pauseMenuLayer is { Visible: true } ||
         _settingsLayer is { Visible: true } || _saveLoadLayer is { Visible: true } || _pickerLayer is { Visible: true } ||
         _stateAffairsLayer is { Visible: true } || _sovereignFinanceLayer is { Visible: true } || _ledgerLayer is { Visible: true } ||
@@ -617,8 +620,7 @@ public partial class DealOrForceGame
         // 4) Close shell popovers & panels (Escape NEVER closes the News Card).
         if (_shell.Messages.IsVisible) { _shell.Messages.Close(); return true; }
         if (_shell.MapBar.IsPopoverOpen) { _shell.MapBar.ClosePopover(); return true; }
-        if (_shell.GrandProjects.IsVisible) { CloseNewShellGrandProjects(); return true; }
-        if (_shell.EconomyWorkspace.IsVisible) { CloseNewShellEconomyWorkspace(); return true; }
+        if (CloseTopNewShellWorkspace()) return true;
         if (_shell.WorkPanel.IsVisible) { CloseNewShellWorkPanel(unpinnedOnly: false); return true; }
         if (CloseVisibleCampaignScreen()) return true;
         if (_splitMovePopup is { IsPopupOpen: true }) { _splitMovePopup.ClosePopup(); return true; }

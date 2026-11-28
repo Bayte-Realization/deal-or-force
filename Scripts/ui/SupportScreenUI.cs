@@ -130,8 +130,8 @@ public partial class DealOrForceGame
         _supportSummary = Title("", 12, Ui.Colour("text.body_soft")); _supportSummary.AutowrapMode = TextServer.AutowrapMode.WordSmart; _supportSummary.CustomMinimumSize = new Vector2(1, 18);
         rows.AddChild(_supportSummary);
         var help = Title(Platform.PlatformProfile.Current?.IsTouchPrimary == true
-            ? "On the map: tap a formation to select · long-press or use Order mode to move"
-            : "On the map: click selects · Shift adds · drag a box · right-click moves them there · Shift+right-click adds a waypoint · Esc lets go", 11, Ui.Colour("text.caption"));
+            ? Tr("On the map: tap a formation to select · long-press or use Order mode to move")
+            : Tr("On the map: click selects · Shift adds · drag a box · right-click moves them there · Shift+right-click adds a waypoint · Esc lets go"), 11, Ui.Colour("text.caption"));
         help.AutowrapMode = TextServer.AutowrapMode.WordSmart; help.CustomMinimumSize = new Vector2(1, 0);
         rows.AddChild(help);
 

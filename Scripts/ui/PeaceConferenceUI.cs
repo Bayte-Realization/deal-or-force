@@ -112,10 +112,10 @@ public partial class DealOrForceGame
         tools.AddThemeConstantOverride("separation", 6);
         rows.AddChild(tools);
         _peaceBrushButton = ActionButton("Brush", () => SetPeaceFraming(false), 120, 32);
-        Tip(_peaceBrushButton, "Paint province by province: the left button takes, the right gives back.");
+        Tip(_peaceBrushButton, PeaceBrushTooltip());
         tools.AddChild(_peaceBrushButton);
         _peaceFrameButton = ActionButton("Frame", () => SetPeaceFraming(true), 120, 32);
-        Tip(_peaceFrameButton, "Drag a rectangle: the left button takes everything inside it, the right gives it all back.");
+        Tip(_peaceFrameButton, PeaceFrameTooltip());
         tools.AddChild(_peaceFrameButton);
 
         var claims = new HBoxContainer();
@@ -126,7 +126,7 @@ public partial class DealOrForceGame
         var occupied = ActionButton("Claim held", ClaimOccupiedGround, 0, 34);
         occupied.Name = "ConferenceClaimHeld";
         occupied.TooltipText = Ui.Tip(Tr("Claim every province you currently occupy. The cheapest demand there is."));
-        foreach (var button in new[] { clear, occupied })
+        foreach (var button in new[] { clear, occupied, CreatePeaceConferenceAnnexButton() })
         { button.SizeFlagsHorizontal = SizeFlags.ExpandFill; claims.AddChild(button); }
 
         _peaceHint = Title(
@@ -477,16 +477,14 @@ public partial class DealOrForceGame
         if (_peaceDemand.HasOffers)
         {
             var bilateral = BilateralPeaceCommand.From(_peaceDemand);
-            _campaign.Commands.Enqueue(bilateral);
-            _campaign.Commands.ApplyAll(_campaign);
+            CommitImmediateCampaignCommand(bilateral, refreshHud: false, wakeGlobe: true);
             delivered = bilateral.Delivered;
             note = bilateral.Note;
         }
         else
         {
             var command = WrittenPeaceCommand.From(_peaceDemand);
-            _campaign.Commands.Enqueue(command);
-            _campaign.Commands.ApplyAll(_campaign);
+            CommitImmediateCampaignCommand(command, refreshHud: false, wakeGlobe: true);
             delivered = command.Delivered;
             note = command.Note;
         }
@@ -500,6 +498,8 @@ public partial class DealOrForceGame
             ClosePeaceConference();
             SetArmyFeedback(note);
             Refresh();
+            if (IsNewShellActive) RefreshNewShell(force: true);
+            _globe?.WakeGlobeRendering();
             return;
         }
         RefreshPeaceConference();

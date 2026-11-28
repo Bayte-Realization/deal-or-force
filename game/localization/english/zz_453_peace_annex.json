@@ -1,0 +1,7 @@
+{
+  "peace.annex.btn": "Annex",
+  "peace.annex.conference_tip": "Claim every province of the enemy war leader for total annexation. Clears release and subjugation terms.",
+  "peace.annex.war_detail_desc_fmt": "Annex all territory of {0} and end the war.",
+  "mobile.override.peace_brush_tip": "Paint province by province: tap to claim, hold or use Release mode to unclaim.",
+  "mobile.override.peace_frame_tip": "Drag a rectangle: claims everything inside it, or unclaims in Release mode."
+}

@@ -141,7 +141,7 @@ public static class FingerprintPartsTests
         c.Wars.Reverse();
         Check(CampaignFingerprint.Of(c) == baseline, "fingerprint is invariant to collection ordering");
 
-        // 8. 30-day Seed 1 baseline parity (PortAlpha 0.8.8.6, verified bit-exact with DOF_KERNELS_DISABLE=0/1)
+        // 8. 30-day Seed 1 baseline parity (PortAlpha 0.8.8.6, post-warfare-core combat/retreat/occupation/frontline fixes, verified bit-exact across runs)
         var s1 = Campaign.CreateBootstrap(1);
         MapRasterCatalog.ResetCatalog();
         HydrologyCatalog.ResetCatalog();
@@ -155,8 +155,8 @@ public static class FingerprintPartsTests
         for (var d = 0; d < 30; d++) s1.TickDay();
         var s1Day30 = CampaignFingerprint.Of(s1);
         var s1Day30Before = WithoutDoctrineCancelHash(s1);
-        Check(s1Day30Before == 17666617088186310097UL, $"seed 1 day 30 without 3 doctrine-cancel bindings restores exact prior baseline ({s1Day30Before})");
-        Check(s1Day30 == 5138919955600952812UL, $"seed 1 day 30 matches current baseline ({s1Day30})");
+        Check(s1Day30Before == 4409855344865599888UL, $"seed 1 day 30 without 3 doctrine-cancel bindings restores exact prior baseline ({s1Day30Before})");
+        Check(s1Day30 == 3952742365892073793UL, $"seed 1 day 30 matches current baseline ({s1Day30})");
     }
 
     private static ulong WithoutDoctrineCancelHash(Campaign campaign)

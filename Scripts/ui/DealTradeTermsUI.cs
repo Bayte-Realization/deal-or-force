@@ -55,10 +55,10 @@ public partial class DealOrForceGame
 
     private void BuildDealTradeStrip(VBoxContainer rows, Nation player, Nation target, DiplomaticRelation relation, TradeTerms start)
     {
-        var frame = new PanelContainer { Name = "DealSharedPanel", SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+        var frame = new PanelContainer { Name = "DealSharedPanel", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkBegin, ClipContents = true };
         frame.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 10));
         rows.AddChild(frame);
-        var strip = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+        var strip = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkBegin, ClipContents = true };
         strip.AddThemeConstantOverride("separation", 6);
         frame.AddChild(strip);
         strip.AddChild(Title(Tr("SHARED"), 13, Ui.Colour("text.accent")));
@@ -75,7 +75,7 @@ public partial class DealOrForceGame
         };
         strip.AddChild(_dealTradeOn);
         if (_dealTradeOn.Disabled) strip.AddChild(DealRefusal("A trade agreement is already in force. Revise it from the country page."));
-        _dealTradeBox = new VBoxContainer { Name = "DealTradeTerms", Visible = false, SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+        _dealTradeBox = new VBoxContainer { Name = "DealTradeTerms", Visible = false, SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkBegin, ClipContents = true };
         _dealTradeBox.AddThemeConstantOverride("separation", 6);
         strip.AddChild(_dealTradeBox);
 

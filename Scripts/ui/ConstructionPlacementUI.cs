@@ -32,31 +32,28 @@ public partial class DealOrForceGame
         _constructionPlacement = new PanelContainer { Name = "ConstructionPlacement", MouseFilter = MouseFilterEnum.Stop };
         _constructionPlacement.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
         _hudLayer.AddChild(_constructionPlacement);
-        // Below the top bar and alerts, outside the report's right-hand column.
-        _constructionPlacement.Position = new Vector2(120, 148);
-        _constructionPlacement.Size = new Vector2(620, 420);
+        var (_, panelSize, btnH) = ConfigureConstructionPlacementOverlay(_constructionPlacement);
         var rows = new VBoxContainer(); rows.AddThemeConstantOverride("separation", 8); _constructionPlacement.AddChild(rows);
         rows.AddChild(Title(Simulation.Loc.Format("Place construction: {0}", Tr(BuildingCatalog.Get(kind).Name)), 20, Ui.Colour("text.accent")));
         _constructionPlacementTerms = WrappedUltimatumText("", 14);
         _constructionPlacementTerms.Name = "ConstructionPlacementTerms"; rows.AddChild(_constructionPlacementTerms);
-        _constructionPlacementFeedback = WrappedUltimatumText(
-            "Hover over a region to inspect it before building. Click to queue one project; Escape or right-click finishes placement.", 14);
+        _constructionPlacementFeedback = WrappedUltimatumText(ConstructionPlacementInitialFeedback(), 14);
         _constructionPlacementFeedback.Name = "ConstructionPlacementFeedback"; rows.AddChild(_constructionPlacementFeedback);
         var scroll = new ScrollContainer { Name = "ConstructionPreviewScroll", HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 90) };
         rows.AddChild(scroll);
-        _constructionPlacementPreview = WrappedUltimatumText("Move the pointer over the map to compare sites. This is a regional project, not an exact building footprint.", 14);
+        _constructionPlacementPreview = WrappedUltimatumText(ConstructionPlacementIdlePreview(), 14);
         _constructionPlacementPreview.Name = "ConstructionPlacementPreview";
         _constructionPlacementPreview.SizeFlagsVertical = SizeFlags.ShrinkBegin; scroll.AddChild(_constructionPlacementPreview);
         var actions = new HBoxContainer(); rows.AddChild(actions);
-        var back = ActionButton("Building catalogue", () => { CancelConstructionPlacement(); OpenEconomyTab("Construction"); }, 0, 36);
+        var back = ActionButton("Building catalogue", () => { CancelConstructionPlacement(); OpenConstructionWorkspaceOrLegacy(); }, 0, btnH);
         back.Name = "ConstructionPlacementCatalogue";
         back.SizeFlagsHorizontal = SizeFlags.ExpandFill; actions.AddChild(back);
-        var cancel = ActionButton("Finish placement", CancelConstructionPlacement, 0, 36);
+        var cancel = ActionButton("Finish placement", CancelConstructionPlacement, 0, btnH);
         cancel.Name = "ConstructionPlacementFinish";
         cancel.SizeFlagsHorizontal = SizeFlags.ExpandFill; actions.AddChild(cancel);
         _constructionPlacement.AddChild(new DecisionDialogLayout { Panel = _constructionPlacement, PreservePlacement = true,
-            PlacementHeight = 420, AvoidLeft = _hudNavigationPanel, AvoidTop = _hudTopPanel });
+            PlacementHeight = (int)MathF.Round(panelSize.Y), AvoidLeft = _hudNavigationPanel, AvoidTop = _hudTopPanel });
         _constructionPlacement.AddChild(new ConstructionPreviewPoll { Name = "ConstructionPreviewPoll", Game = this });
         RefreshConstructionTerms();
         // Removing keyboard focus prevents Space on the old '+' from queuing again.
@@ -94,11 +91,11 @@ public partial class DealOrForceGame
         RefreshConstructionTerms();
         if (state is null)
         {
-            _constructionPlacementPreview.Text = Tr("Move the pointer over the map to compare sites. This is a regional project, not an exact building footprint.");
+            _constructionPlacementPreview.Text = ConstructionPlacementIdlePreview();
             return;
         }
         var refusal = ConstructionAdmission.Refusal(_campaign, player, state, kind);
-        var heading = state.DisplayName + "\n" + (refusal.Length == 0 ? Tr("Click to build here") : refusal);
+        var heading = state.DisplayName + "\n" + (refusal.Length == 0 ? ConstructionPlacementBuildHereLabel() : refusal);
         // Do not expose speculative economic data for a foreign country using the player's prices.
         var administered = state.NationMapIndex == player.MapIndex || state.HeldById == player.Id && HeldRegions.Administered(_campaign, state);
         _constructionPlacementPreview.Text = heading + (administered && !LakeRegions.IsWaterState(state)
@@ -141,8 +138,7 @@ public partial class DealOrForceGame
         // may not start for years (ConstructionQueue.Schedule).
         var queued = accepted ? ConstructionQueue.Schedule(_campaign, player).LastOrDefault() : default;
         _constructionPlacementFeedback.Text = accepted
-            ? Simulation.Loc.Format("Queued in {0}. Contract: {1}; {2}. Click another region or finish placement.",
-                pick.State.DisplayName, Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), ConstructionQueue.When(queued))
+            ? ConstructionPlacementQueuedText(pick.State.DisplayName, Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), ConstructionQueue.When(queued))
             : Tr("Order submitted. The host will validate the construction site.");
         PlayStrategicCue("ui_select");
         return true;

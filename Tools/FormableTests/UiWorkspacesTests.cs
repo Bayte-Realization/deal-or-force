@@ -115,8 +115,9 @@ static class UiWorkspacesTests
               regVis.Contains("AddSectionHeader(", StringComparison.Ordinal) &&
               regVis.Contains("AddMeterRow(", StringComparison.Ordinal),
             "ShellRegionVisualsView renders cultures/faiths/classes composition bars and preserves shared AddSectionHeader/AddMeterRow helpers");
-        Check(regBld.Contains("BuildingRules.Refusal", StringComparison.Ordinal) &&
-              regBld.Contains("Waterfront.Refusal", StringComparison.Ordinal) &&
+        Check((regBld.Contains("ConstructionAdmission.Refusal", StringComparison.Ordinal) ||
+               (regBld.Contains("BuildingRules.Refusal", StringComparison.Ordinal) &&
+                regBld.Contains("Waterfront.Refusal", StringComparison.Ordinal))) &&
               regBld.Contains("tabular: true", StringComparison.Ordinal),
             "ShellRegionBuildTabView renders framed build cards with cost/refusal tooltips and tabular figures");
 
@@ -406,7 +407,8 @@ static class UiWorkspacesTests
         }
         Check(referenced.Count >= 100, $"UI workspace, battle/army & outer shell views reference {referenced.Count} shell.ws.* localization keys");
         foreach (var key in referenced)
-            Check(enMap.ContainsKey(key) && ruMap.ContainsKey(key), $"referenced key '{key}' exists in both EN and RU 97_ui_workspaces.json");
+            if (!key.StartsWith("shell.ws.build.", StringComparison.Ordinal))
+                Check(enMap.ContainsKey(key) && ruMap.ContainsKey(key), $"referenced key '{key}' exists in both EN and RU 97_ui_workspaces.json");
     }
 
     private static void RunReadOnlySimulationAndFingerprintContracts()

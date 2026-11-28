@@ -439,13 +439,8 @@ public static class SeparatePeace
                 if (totallyOccupied)
                 {
                     if (enemyLeader.IsHuman && !c.NobodyPlays)
-                    {
-                        Offer(c, war, enemyLeader, member, SeparatePeaceTerms.Concede, fromMember: true);
-                    }
-                    else
-                    {
-                        Sign(c, war, memberId, SeparatePeaceTerms.Concede);
-                    }
+                        PeaceAnnexation.OfferTotallyOccupiedSeparatePeace(c, war, enemyLeader, member, cooldownKey, d.SeparatePeaceCooldownDays);
+                    else Sign(c, war, memberId, SeparatePeaceTerms.Concede);
                     continue;
                 }
 

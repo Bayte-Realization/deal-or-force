@@ -15,8 +15,10 @@ public static class BorderFronts
         var other = campaign.NationById(foreignId);
         if (map is null || own is null || other is null || own == other) return result;
         var control = campaign.ProvinceController ?? map.ProvinceToNation;
+        var friendly = MilitaryAccess.Controllers(campaign, nationId);
+        friendly.Remove((ushort)other.MapIndex);
         for (var p = 1; p <= map.ProvinceCount; p++)
-            if (!map.IsWater(p) && control[p] == own.MapIndex &&
+            if (!map.IsWater(p) && friendly.Contains(control[p]) &&
                 map.Neighbors[p].Any(n => !map.IsWater(n) && control[n] == other.MapIndex)) result.Add(p);
         return result;
     }
@@ -27,11 +29,19 @@ public static class BorderFronts
         var nation = campaign.NationById(nationId);
         if (map is null || nation is null || province <= 0 || province > map.ProvinceCount) return -1;
         var control = campaign.ProvinceController ?? map.ProvinceToNation;
+        var friendly = MilitaryAccess.Controllers(campaign, nationId);
         var owner = control[province];
-        if (owner != nation.MapIndex && !map.Neighbors[province].Any(n => control[n] == nation.MapIndex)) return -1;
-        var foreign = owner != nation.MapIndex && map.Neighbors[province].Any(n => control[n] == nation.MapIndex)
-            ? owner : map.Neighbors[province].Where(n => !map.IsWater(n) && control[n] != 0 && control[n] != nation.MapIndex)
-                .Select(n => control[n]).OrderBy(n => n).FirstOrDefault();
+        var isFriendly = friendly.Contains(owner);
+        var touchesFriendly = map.Neighbors[province].Any(n => !map.IsWater(n) && friendly.Contains(control[n]));
+        if (!isFriendly && !touchesFriendly) return -1;
+        var foreign = !isFriendly && touchesFriendly
+            ? owner
+            : map.Neighbors[province]
+                .Where(n => !map.IsWater(n) && control[n] != 0 && !friendly.Contains(control[n]))
+                .Select(n => control[n])
+                .OrderByDescending(c => WarCoalition.IsHostileControllerAnyWar(campaign, nationId, c))
+                .ThenBy(c => c)
+                .FirstOrDefault();
         return campaign.Nations.FirstOrDefault(n => n.MapIndex == foreign)?.Id ?? -1;
     }
 
@@ -69,25 +79,19 @@ public static class BorderFronts
             foreach (var enemy in war.EnemiesOf(nationId))
             {
                 if (enemy == nationId) continue;
-                // Order-free: the same enemies in another war order give the same stamp.
                 stamp += unchecked((enemy + 1L) * 0x1E3779B97F4A7C15L) >> 7;
                 count++;
             }
+            foreach (var ally in war.Side(war.IsAttacking(nationId)))
+                if (ally != nationId) stamp ^= ally;
         }
-        return stamp ^ ((long)count << 48);
+        return (stamp ^ DiplomaticRelation.RouteAccessMutationVersion) ^ ((long)count << 48);
     }
 
     private static readonly HashSet<int> WholeFrontEnemies = new();
     private static bool[] WholeFrontHostile = Array.Empty<bool>();
 
-    /// <summary>
-    /// The whole front: every land province this country holds that touches land held by
-    /// anybody it is at war with. Held, not owned - ground we occupy is ours to stand on, and
-    /// ground the enemy occupies is theirs to be faced across - which is what makes the line
-    /// follow the fighting rather than the pre-war border. Separate stretches (a border with
-    /// one enemy here, with another across a neutral country there) are all on it: the player
-    /// asked for the front against everybody, wherever there is one.
-    /// </summary>
+    /// <summary>Every land province held by this country or a friendly staging partner touching an enemy.</summary>
     public static HashSet<int> WholeFront(Campaign campaign, int nationId)
     {
         var result = new HashSet<int>();
@@ -97,30 +101,34 @@ public static class BorderFronts
         var control = campaign.ProvinceController ?? map.ProvinceToNation;
         FillEnemies(campaign, nationId, WholeFrontEnemies);
         if (WholeFrontEnemies.Count == 0) return result;
+        var friendly = MilitaryAccess.Controllers(campaign, nationId);
+        var hostile = FillHostileFlags(campaign, own.MapIndex);
+        for (var p = 1; p <= map.ProvinceCount; p++)
+            if (!map.IsWater(p) && friendly.Contains(control[p]) && TouchesHostile(map, control, hostile, p))
+                result.Add(p);
+        return result;
+    }
+
+    private static bool[] FillHostileFlags(Campaign campaign, int ownMapIndex)
+    {
         var largest = 0;
         foreach (var nation in campaign.Nations) largest = Math.Max(largest, nation.MapIndex);
         if (WholeFrontHostile.Length <= largest) WholeFrontHostile = new bool[largest + 1];
         Array.Clear(WholeFrontHostile);
         foreach (var id in WholeFrontEnemies)
-        {
-            var enemy = campaign.NationById(id);
-            // Map index 0 is nobody; an enemy without ground has no border to face.
-            if (enemy is not null && enemy.MapIndex > 0 && enemy.MapIndex != own.MapIndex)
+            if (campaign.NationById(id) is { MapIndex: > 0 } enemy && enemy.MapIndex != ownMapIndex)
                 WholeFrontHostile[enemy.MapIndex] = true;
-        }
-        var hostile = WholeFrontHostile;
-        for (var p = 1; p <= map.ProvinceCount; p++)
+        return WholeFrontHostile;
+    }
+
+    private static bool TouchesHostile(ProvinceTopology map, ushort[] control, bool[] hostile, int province)
+    {
+        foreach (var n in map.Neighbors[province])
         {
-            if (control[p] != own.MapIndex || map.IsWater(p)) continue;
-            foreach (var n in map.Neighbors[p])
-            {
-                var other = control[n];
-                if (other == 0 || other >= hostile.Length || !hostile[other] || map.IsWater(n)) continue;
-                result.Add(p);
-                break;
-            }
+            var other = control[n];
+            if (other > 0 && other < hostile.Length && hostile[other] && !map.IsWater(n)) return true;
         }
-        return result;
+        return false;
     }
 
     /// <summary>An enemy at war with this country holding land next to this province, or -1.</summary>
@@ -150,35 +158,25 @@ public static class BorderFronts
         return best;
     }
 
-    /// <summary>
-    /// The war a post on a whole front belongs to: the one whose own front for this country
-    /// has it on, so a division standing on the stretch that faces one enemy is counted in
-    /// the war against that enemy - and is handed back to the line, not stood down, when a
-    /// different war ends. Null when no war claims the province.
-    /// </summary>
+    /// <summary>The war a post on a whole front belongs to, or null when no war claims it.</summary>
     public static StrategicWar WarAt(Campaign campaign, int nationId, int province)
     {
         if (province <= 0) return null;
         var live = Warfare.LiveWars(campaign);
         for (var index = 0; index < live.Count; index++)
-        {
-            var war = live[index];
-            if (!war.Ended && war.Involves(nationId) && war.FriendlyFront(nationId).Contains(province)) return war;
-        }
+            if (!live[index].Ended && live[index].Involves(nationId) && live[index].FriendlyFront(nationId).Contains(province))
+                return live[index];
+        var map = campaign.ProvinceMap;
+        var control = campaign.ProvinceController ?? map?.ProvinceToNation;
+        if (map is null || control is null || province >= map.Neighbors.Length) return null;
+        foreach (var nb in map.Neighbors[province])
+            if (!map.IsWater(nb) && nb > 0 && nb < control.Length &&
+                WarCoalition.FindWarAgainstController(campaign, nationId, control[nb]) is { } found)
+                return found;
         return null;
     }
 
-    /// <summary>
-    /// Divisions a peace has just stood down, put back on the whole front they were drawn
-    /// onto if any of their country's wars still has one.
-    ///
-    /// The peace releases every division it counted as serving the war that ended, and a
-    /// division on the whole front is counted as serving whichever war its stretch faced.
-    /// Released, it would keep its place on the line with no order to hold it, and nothing
-    /// would ever give it one - the call-up of idle divisions skips any division on a drawn
-    /// line - so peace with one enemy would quietly strip the whole front of every division
-    /// that had been facing that enemy. The same rule applies to every country's divisions.
-    /// </summary>
+    /// <summary>Divisions stood down by peace returned to their whole front if any war still has one.</summary>
     public static void ReturnToWholeFronts(Campaign campaign, IReadOnlyList<Army> released)
     {
         foreach (var army in released)

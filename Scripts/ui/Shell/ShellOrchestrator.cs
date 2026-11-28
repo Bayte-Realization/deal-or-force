@@ -24,6 +24,7 @@ internal sealed class ShellOrchestrator
     public ShellStripView Strip { get; }
     public ShellWorkPanelView WorkPanel { get; }
     public ShellEconomyWorkspaceView EconomyWorkspace { get; }
+    public ShellConstructionWorkspaceView ConstructionWorkspace { get; }
     public GrandProjectsView GrandProjects { get; }
 
     private long _refreshHour = long.MinValue;
@@ -54,7 +55,8 @@ internal sealed class ShellOrchestrator
         WorkPanel = 1 << 3,
         Economy = 1 << 4,
         GrandProjects = 1 << 5,
-        AllHeavy = Corner | Alerts | Strip | WorkPanel | Economy | GrandProjects
+        Construction = 1 << 6,
+        AllHeavy = Corner | Alerts | Strip | WorkPanel | Economy | GrandProjects | Construction
     }
 
     private PendingView _pendingHeavy;
@@ -69,7 +71,7 @@ internal sealed class ShellOrchestrator
     public double LastRefreshMs { get; private set; }
 
     public bool HasTransientPopover =>
-        Messages.IsVisible || MapBar.IsPopoverOpen || EconomyWorkspace.IsVisible || GrandProjects.IsVisible;
+        Messages.IsVisible || MapBar.IsPopoverOpen || EconomyWorkspace.IsVisible || ConstructionWorkspace.IsVisible || GrandProjects.IsVisible;
 
     public ShellOrchestrator(ShellContext ctx)
     {
@@ -87,6 +89,7 @@ internal sealed class ShellOrchestrator
         Strip = new ShellStripView(ctx);
         WorkPanel = new ShellWorkPanelView(ctx);
         EconomyWorkspace = new ShellEconomyWorkspaceView(ctx);
+        ConstructionWorkspace = new ShellConstructionWorkspaceView(ctx);
         GrandProjects = new GrandProjectsView(ctx);
     }
 
@@ -109,6 +112,7 @@ internal sealed class ShellOrchestrator
         Strip.Build();
         WorkPanel.Build();
         EconomyWorkspace.Build();
+        ConstructionWorkspace.Build();
         GrandProjects.Build();
     }
 
@@ -134,11 +138,12 @@ internal sealed class ShellOrchestrator
     {
         if (hud is null || hud.Version <= 0) return true;
         if (Alerts.NeedsNewsRead(hud.ChronicleLatestSeq, Context.World)) return true;
-        if ((_pendingHeavy & (PendingView.Alerts | PendingView.WorkPanel | PendingView.Economy | PendingView.GrandProjects)) != 0)
+        if ((_pendingHeavy & (PendingView.Alerts | PendingView.WorkPanel | PendingView.Economy | PendingView.Construction | PendingView.GrandProjects)) != 0)
         {
             if (((_pendingHeavy & PendingView.Alerts) != 0 && !_modalObscured) ||
                 ((_pendingHeavy & PendingView.WorkPanel) != 0 && WorkPanel.IsVisible) ||
                 ((_pendingHeavy & PendingView.Economy) != 0 && EconomyWorkspace.IsVisible) ||
+                ((_pendingHeavy & PendingView.Construction) != 0 && ConstructionWorkspace.IsVisible) ||
                 ((_pendingHeavy & PendingView.GrandProjects) != 0 && GrandProjects.IsVisible))
                 return true;
         }
@@ -205,6 +210,7 @@ internal sealed class ShellOrchestrator
         Alerts.Layout(profile);
         MapBar.Layout(profile);
         EconomyWorkspace.Layout(profile);
+        ConstructionWorkspace.Layout(profile);
         GrandProjects.Layout(profile);
     }
 
@@ -341,46 +347,34 @@ internal sealed class ShellOrchestrator
                 break;
 
             var ready = _pendingHeavy & ~deferredLive;
-            if ((ready & PendingView.Corner) != 0)
-            {
-                _pendingHeavy &= ~PendingView.Corner;
-                Corner.Refresh();
-                didAny = true;
-            }
-            else if ((ready & PendingView.Strip) != 0)
-            {
-                _pendingHeavy &= ~PendingView.Strip;
-                Strip.Refresh();
-                didAny = true;
-            }
+            if ((ready & PendingView.Corner) != 0) { _pendingHeavy &= ~PendingView.Corner; Corner.Refresh(); didAny = true; }
+            else if ((ready & PendingView.Strip) != 0) { _pendingHeavy &= ~PendingView.Strip; Strip.Refresh(); didAny = true; }
             else if ((ready & PendingView.Alerts) != 0)
             {
                 if (!allowLiveReads && !_modalObscured) { deferredLive |= PendingView.Alerts; continue; }
-                _pendingHeavy &= ~PendingView.Alerts;
-                if (!_modalObscured) { Alerts.Refresh(); didAny = true; }
+                _pendingHeavy &= ~PendingView.Alerts; if (!_modalObscured) { Alerts.Refresh(); didAny = true; }
             }
             else if ((ready & PendingView.WorkPanel) != 0)
             {
                 if (!allowLiveReads && WorkPanel.IsVisible) { deferredLive |= PendingView.WorkPanel; continue; }
-                _pendingHeavy &= ~PendingView.WorkPanel;
-                if (WorkPanel.IsVisible) { WorkPanel.Refresh(); didAny = true; }
+                _pendingHeavy &= ~PendingView.WorkPanel; if (WorkPanel.IsVisible) { WorkPanel.Refresh(); didAny = true; }
             }
             else if ((ready & PendingView.Economy) != 0)
             {
                 if (!allowLiveReads && EconomyWorkspace.IsVisible) { deferredLive |= PendingView.Economy; continue; }
-                _pendingHeavy &= ~PendingView.Economy;
-                if (EconomyWorkspace.IsVisible) { EconomyWorkspace.Refresh(); didAny = true; }
+                _pendingHeavy &= ~PendingView.Economy; if (EconomyWorkspace.IsVisible) { EconomyWorkspace.Refresh(); didAny = true; }
+            }
+            else if ((ready & PendingView.Construction) != 0)
+            {
+                if (!allowLiveReads && ConstructionWorkspace.IsVisible) { deferredLive |= PendingView.Construction; continue; }
+                _pendingHeavy &= ~PendingView.Construction; if (ConstructionWorkspace.IsVisible) { ConstructionWorkspace.Refresh(); didAny = true; }
             }
             else if ((ready & PendingView.GrandProjects) != 0)
             {
                 if (!allowLiveReads && GrandProjects.IsVisible) { deferredLive |= PendingView.GrandProjects; continue; }
-                _pendingHeavy &= ~PendingView.GrandProjects;
-                if (GrandProjects.IsVisible) { GrandProjects.Refresh(); didAny = true; }
+                _pendingHeavy &= ~PendingView.GrandProjects; if (GrandProjects.IsVisible) { GrandProjects.Refresh(); didAny = true; }
             }
-            else
-            {
-                break;
-            }
+            else break;
         }
         return didAny;
     }
